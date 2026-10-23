@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Furlan — Cine aéreo de arquitectura</title>
+  <meta name="description" content="Producciones aéreas y FPV para propiedades de autor. Recorridos cinematográficos, fotografía aérea y piezas verticales para arquitectura y real estate de alta gama.">
+  <meta name="theme-color" content="#0f0f0d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230f0f0d'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23efeae2' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="preload" as="image" href="assets/seq/residencia-los-robles/poster.jpg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="is-loading" data-theme="night">
+
+  <!-- ============ PRELOADER ============ -->
+  <div class="loader" aria-hidden="true">
+    <div class="loader__inner">
+      <span class="loader__mark">Furlan</span>
+      <span class="loader__count"><span data-loader-count>00</span></span>
+      <span class="loader__label mono">Preparando secuencia</span>
+    </div>
+    <span class="loader__bar"><span data-loader-bar></span></span>
+  </div>
+
+  <!-- ============ NAV ============ -->
+  <header class="nav">
+    <a href="#top" class="nav__brand" aria-label="Furlan, inicio">
+      <span class="nav__name">Furlan</span>
+      <span class="nav__tag mono">Cine aéreo</span>
+    </a>
+    <nav class="nav__links" aria-label="Principal">
+      <a href="#obra" class="link">Obra</a>
+      <a href="#servicios" class="link">Servicios</a>
+      <a href="#metodo" class="link">Método</a>
+      <a href="#indice" class="link">Índice</a>
+      <a href="#contacto" class="link link--cta">Contacto</a>
+    </nav>
+    <button class="nav__toggle mono" aria-expanded="false" aria-controls="menu">
+      <span class="nav__toggle-open">Menú</span><span class="nav__toggle-close">Cerrar</span>
+    </button>
+  </header>
+
+  <div class="menu" id="menu" aria-hidden="true">
+    <nav class="menu__links">
+      <a href="#obra"><span class="mono">01</span>Obra</a>
+      <a href="#servicios"><span class="mono">02</span>Servicios</a>
+      <a href="#metodo"><span class="mono">03</span>Método</a>
+      <a href="#indice"><span class="mono">04</span>Índice</a>
+      <a href="#contacto"><span class="mono">05</span>Contacto</a>
+    </nav>
+    <div class="menu__foot mono">
+      <span>Buenos Aires — AR</span>
+      <a href="mailto:hola@furlan.film">hola@furlan.film</a>
+    </div>
+  </div>
+
+  <main id="top">
+
+    <!-- ============ FILM 01 · SECUENCIA SCROLL ============
+         Para agregar otra producción: duplicar esta <section>, cambiar data-src,
+         data-count y los textos. Las secuencias se generan con tools/build_frames.py -->
+    <section class="seq" id="film-01"
+             data-src="assets/seq/residencia-los-robles"
+             data-count="65"
+             data-fps="25"
+             data-theme-section="night">
+      <div class="seq__stage">
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Recorrido FPV por la Residencia Los Robles"></canvas>
+          <picture class="seq__poster">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/residencia-los-robles/poster-pt.jpg">
+            <img src="assets/seq/residencia-los-robles/poster.jpg" alt="" fetchpriority="high">
+          </picture>
+          <div class="seq__shade"></div>
+        </div>
+
+        <!-- Hero -->
+        <div class="hero" data-seq-hero>
+          <p class="hero__eyebrow mono"><span>Portfolio</span><span class="dot"></span><span>Producciones 2024 — 2026</span></p>
+          <h1 class="hero__title">
+            <span class="line"><span>Arquitectura</span></span>
+            <span class="line"><span><em>en movimiento</em></span></span>
+          </h1>
+          <div class="hero__foot">
+            <p class="hero__lede">Cine aéreo y FPV para propiedades de autor. Recorridos que entienden la casa antes de mostrarla.</p>
+            <span class="hero__scroll mono"><i></i>Recorrer</span>
+          </div>
+        </div>
+
+        <!-- Capítulos -->
+        <div class="chapter" data-range="0.14,0.46">
+          <span class="chapter__num mono">I — Llegada</span>
+          <p class="chapter__text">La fachada se presenta despacio, <em>como una primera frase.</em></p>
+        </div>
+        <div class="chapter" data-range="0.52,0.82">
+          <span class="chapter__num mono">II — Umbral</span>
+          <p class="chapter__text">Entre el jardín y los árboles, <em>la casa se abre.</em></p>
+        </div>
+
+        <!-- Cierre de la secuencia -->
+        <div class="seq__end" data-range="0.88,1.15">
+          <span class="mono">Film 01</span>
+          <p>Residencia Los Robles</p>
+          <span class="mono">Pilar, Buenos Aires — 2026</span>
+        </div>
+
+        <!-- HUD / visor -->
+        <div class="hud" aria-hidden="true">
+          <span class="hud__corner hud__corner--tl"></span>
+          <span class="hud__corner hud__corner--tr"></span>
+          <span class="hud__corner hud__corner--bl"></span>
+          <span class="hud__corner hud__corner--br"></span>
+          <div class="hud__meta mono">
+            <span class="hud__rec"><i></i>FPV · 4K</span>
+            <span data-hud-tc>00:00:00:00</span>
+            <span><span data-hud-fr>001</span> / 065</span>
+          </div>
+          <div class="hud__rail"><span data-hud-rail></span><i style="--p:.14"></i><i style="--p:.52"></i><i style="--p:.88"></i></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MANIFIESTO ============ -->
+    <section class="manifesto" data-theme-section="paper">
+      <div class="wrap">
+        <p class="label mono" data-reveal><span>(01)</span> Enfoque</p>
+        <p class="manifesto__text" data-words>
+          Filmamos propiedades como se filma arquitectura: con paciencia, luz natural y un recorrido pensado de antemano. Cada toma tiene una intención. Cada segundo, un motivo.
+        </p>
+        <div class="manifesto__cols">
+          <p data-reveal>No hacemos videos de inmobiliaria. Hacemos piezas que se sostienen solas: planos continuos, movimientos lentos y una lectura honesta de los materiales, la escala y la luz.</p>
+          <p data-reveal>Trabajamos con estudios de arquitectura, desarrolladoras y propietarios que entienden que la forma de mostrar una casa también dice algo de ella.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OBRA DESTACADA ============ -->
+    <section class="work" id="obra" data-theme-section="paper">
+      <div class="wrap work__grid">
+        <aside class="work__info">
+          <p class="label mono" data-reveal><span>(02)</span> Obra destacada</p>
+          <h2 class="work__title" data-split>Residencia <em>Los Robles</em></h2>
+          <p class="work__lede" data-reveal>Un único plano FPV que entra desde la calle, cruza el umbral entre los dos volúmenes y desemboca en la galería y la piscina. Sin cortes, a la altura de la mirada.</p>
+          <dl class="specs" data-reveal>
+            <div><dt class="mono">Ubicación</dt><dd>Pilar, Buenos Aires</dd></div>
+            <div><dt class="mono">Año</dt><dd>2026</dd></div>
+            <div><dt class="mono">Tipología</dt><dd>Vivienda unifamiliar · 420 m²</dd></div>
+            <div><dt class="mono">Rodaje</dt><dd>1 jornada · luz de media tarde</dd></div>
+            <div><dt class="mono">Equipo</dt><dd>Cinewhoop FPV 4K · Dron aéreo 5.1K</dd></div>
+            <div><dt class="mono">Entregables</dt><dd>Film 16:9 · 3 cortes 9:16 · 36 fotografías</dd></div>
+          </dl>
+          <a href="#film-01" class="btn" data-reveal><span>Ver el recorrido otra vez</span><i aria-hidden="true">↑</i></a>
+        </aside>
+
+        <div class="work__media">
+          <figure class="frame frame--tall" data-reveal="frame">
+            <div class="frame__img" data-parallax="0.08">
+              <picture>
+                <source media="(max-width: 760px)" srcset="assets/stills/residencia-los-robles/0092-v.webp">
+                <img src="assets/stills/residencia-los-robles/0092.webp" alt="Volúmenes blancos y portones de la fachada" loading="lazy">
+              </picture>
+            </div>
+            <figcaption class="mono"><span>FR 092</span><span>Fachada, portones pivotantes</span></figcaption>
+          </figure>
+          <figure class="frame frame--wide" data-reveal="frame">
+            <div class="frame__img" data-parallax="0.06">
+              <img src="assets/stills/residencia-los-robles/0185.webp" alt="Galería, piscina y jardín" loading="lazy">
+            </div>
+            <figcaption class="mono"><span>FR 185</span><span>Galería y piscina</span></figcaption>
+          </figure>
+          <figure class="frame frame--small" data-reveal="frame">
+            <div class="frame__img" data-parallax="0.1">
+              <picture>
+                <source media="(max-width: 760px)" srcset="assets/stills/residencia-los-robles/0118-v.webp">
+                <img src="assets/stills/residencia-los-robles/0118.webp" alt="Paso entre los dos volúmenes" loading="lazy">
+              </picture>
+            </div>
+            <figcaption class="mono"><span>FR 118</span><span>Umbral</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TIRA DE FOTOGRAMAS ============ -->
+    <section class="strip" data-theme-section="paper" aria-label="Fotogramas">
+      <div class="strip__track" data-strip>
+        <figure><img src="assets/stills/residencia-los-robles/0001.webp" alt="" loading="lazy"><figcaption class="mono">001</figcaption></figure>
+        <figure><img src="assets/stills/residencia-los-robles/0040.webp" alt="" loading="lazy"><figcaption class="mono">040</figcaption></figure>
+        <figure><img src="assets/stills/residencia-los-robles/0092.webp" alt="" loading="lazy"><figcaption class="mono">092</figcaption></figure>
+        <figure><img src="assets/stills/residencia-los-robles/0118.webp" alt="" loading="lazy"><figcaption class="mono">118</figcaption></figure>
+        <figure><img src="assets/stills/residencia-los-robles/0152.webp" alt="" loading="lazy"><figcaption class="mono">152</figcaption></figure>
+        <figure><img src="assets/stills/residencia-los-robles/0185.webp" alt="" loading="lazy"><figcaption class="mono">185</figcaption></figure>
+      </div>
+      <p class="strip__note mono wrap"><span>Seis fotogramas · un solo plano</span><span>00:00:07:10 total</span></p>
+    </section>
+
+    <!-- ============ SERVICIOS ============ -->
+    <section class="services" id="servicios" data-theme-section="night">
+      <div class="wrap">
+        <div class="services__head">
+          <p class="label mono" data-reveal><span>(03)</span> Servicios</p>
+          <h2 class="h2" data-split>Cuatro formas de <em>contar una propiedad</em></h2>
+        </div>
+        <ol class="svc" data-svc>
+          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0118.webp">
+            <span class="svc__n mono">01</span>
+            <h3 class="svc__t">Recorridos FPV</h3>
+            <p class="svc__d">Un plano secuencia continuo que atraviesa la propiedad: exterior, umbral e interior, sin cortes.</p>
+            <span class="svc__a" aria-hidden="true">→</span>
+          </li>
+          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0001.webp">
+            <span class="svc__n mono">02</span>
+            <h3 class="svc__t">Aéreas de presentación</h3>
+            <p class="svc__d">Contexto, entorno, orientación y escala. La casa en su lugar, antes del primer detalle.</p>
+            <span class="svc__a" aria-hidden="true">→</span>
+          </li>
+          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0152.webp">
+            <span class="svc__n mono">03</span>
+            <h3 class="svc__t">Fotografía aérea</h3>
+            <p class="svc__d">Cenitales y oblicuas editadas para catálogo, prensa y presentación a inversores.</p>
+            <span class="svc__a" aria-hidden="true">→</span>
+          </li>
+          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0092.webp">
+            <span class="svc__n mono">04</span>
+            <h3 class="svc__t">Piezas verticales</h3>
+            <p class="svc__d">Cortes 9:16 con ritmo propio para redes. Pensados en vertical desde el rodaje, no recortados.</p>
+            <span class="svc__a" aria-hidden="true">→</span>
+          </li>
+        </ol>
+      </div>
+      <div class="svc__preview" aria-hidden="true"><img alt=""></div>
+    </section>
+
+    <!-- ============ PRÓXIMA PRODUCCIÓN ============ -->
+    <section class="next" data-theme-section="night">
+      <div class="wrap" data-reveal="frame">
+        <div class="next__frame">
+          <span class="hud__corner hud__corner--tl"></span>
+          <span class="hud__corner hud__corner--tr"></span>
+          <span class="hud__corner hud__corner--bl"></span>
+          <span class="hud__corner hud__corner--br"></span>
+          <div class="next__top mono">
+            <span class="next__rec"><i></i>Film 02</span>
+            <span>En postproducción</span>
+          </div>
+          <div class="next__center">
+            <p class="mono">Próxima secuencia</p>
+            <h2 class="next__title" data-split>Casa <em>del Lago</em></h2>
+            <p class="next__meta mono">Nordelta, Tigre · Aérea + FPV · Estreno próximamente</p>
+          </div>
+          <div class="next__bottom mono">
+            <span data-next-tc>00:00:00:00</span>
+            <span>2.39 : 1</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CIFRAS ============ -->
+    <section class="stats" data-theme-section="paper">
+      <div class="wrap stats__grid">
+        <div class="stat" data-reveal><span class="stat__n"><span data-count="64">0</span>+</span><span class="stat__l mono">Propiedades filmadas</span></div>
+        <div class="stat" data-reveal><span class="stat__n"><span data-count="21">0</span></span><span class="stat__l mono">Barrios y countries</span></div>
+        <div class="stat" data-reveal><span class="stat__n">4K<sup>10-bit</sup></span><span class="stat__l mono">Captura y entrega</span></div>
+        <div class="stat" data-reveal><span class="stat__n"><span data-count="1">0</span></span><span class="stat__l mono">Plano, sin cortes</span></div>
+      </div>
+    </section>
+
+    <!-- ============ MÉTODO ============ -->
+    <section class="method" id="metodo" data-theme-section="paper">
+      <div class="wrap">
+        <div class="method__head">
+          <p class="label mono" data-reveal><span>(04)</span> Método</p>
+          <h2 class="h2" data-split>Cada recorrido se <em>diseña antes de volar</em></h2>
+        </div>
+        <div class="steps" data-steps>
+          <span class="steps__line"><span data-steps-line></span></span>
+          <article class="step">
+            <span class="step__dot"></span>
+            <span class="step__n mono">Paso 01</span>
+            <h3>Visita técnica</h3>
+            <p>Recorremos la propiedad, estudiamos orientación, horarios de luz, accesos y obstáculos.</p>
+          </article>
+          <article class="step">
+            <span class="step__dot"></span>
+            <span class="step__n mono">Paso 02</span>
+            <h3>Guion de vuelo</h3>
+            <p>Definimos el recorrido plano por plano: qué se ve, en qué orden y a qué velocidad.</p>
+          </article>
+          <article class="step">
+            <span class="step__dot"></span>
+            <span class="step__n mono">Paso 03</span>
+            <h3>Rodaje</h3>
+            <p>Una jornada en la franja de luz elegida. Varias pasadas por plano hasta lograr la toma limpia.</p>
+          </article>
+          <article class="step">
+            <span class="step__dot"></span>
+            <span class="step__n mono">Paso 04</span>
+            <h3>Color y entrega</h3>
+            <p>Estabilización, corrección de color y música. Entrega en 16:9 y 9:16 en cinco días hábiles.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ÍNDICE ============ -->
+    <section class="index" id="indice" data-theme-section="paper">
+      <div class="wrap">
+        <div class="index__head">
+          <p class="label mono" data-reveal><span>(05)</span> Índice de obras</p>
+          <p class="index__count mono" data-reveal>06 producciones</p>
+        </div>
+        <ul class="idx" data-reveal>
+          <li class="idx__row idx__row--live">
+            <a href="#film-01">
+              <span class="mono">01</span><span class="idx__name">Residencia Los Robles</span><span class="idx__loc">Pilar</span><span class="idx__type mono">FPV</span><span class="idx__year mono">2026</span><span class="idx__state mono">Ver film</span>
+            </a>
+          </li>
+          <li class="idx__row"><div><span class="mono">02</span><span class="idx__name">Casa del Lago</span><span class="idx__loc">Nordelta</span><span class="idx__type mono">Aérea + FPV</span><span class="idx__year mono">2026</span><span class="idx__state mono">Próximamente</span></div></li>
+          <li class="idx__row"><div><span class="mono">03</span><span class="idx__name">Pabellón Las Lomas</span><span class="idx__loc">San Isidro</span><span class="idx__type mono">Aérea</span><span class="idx__year mono">2025</span><span class="idx__state mono">Próximamente</span></div></li>
+          <li class="idx__row"><div><span class="mono">04</span><span class="idx__name">Casa Patio</span><span class="idx__loc">Canning</span><span class="idx__type mono">FPV</span><span class="idx__year mono">2025</span><span class="idx__state mono">Próximamente</span></div></li>
+          <li class="idx__row"><div><span class="mono">05</span><span class="idx__name">Estancia La Escondida</span><span class="idx__loc">Cañuelas</span><span class="idx__type mono">Aérea</span><span class="idx__year mono">2025</span><span class="idx__state mono">Próximamente</span></div></li>
+          <li class="idx__row"><div><span class="mono">06</span><span class="idx__name">Torre Alvear</span><span class="idx__loc">Recoleta</span><span class="idx__type mono">Aérea</span><span class="idx__year mono">2024</span><span class="idx__state mono">Próximamente</span></div></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ TESTIMONIO ============ -->
+    <section class="quote" data-theme-section="paper">
+      <div class="wrap">
+        <blockquote>
+          <p data-words>“Entendió la casa mejor que muchas fotos que tenemos de ella. El recorrido se siente exactamente como entrar.”</p>
+          <footer class="mono" data-reveal><span>M. Olivera</span><span>Arquitecta · Estudio Olivera Paz</span></footer>
+        </blockquote>
+      </div>
+    </section>
+
+    <!-- ============ CONTACTO ============ -->
+    <section class="contact" id="contacto" data-theme-section="night">
+      <div class="wrap">
+        <p class="label mono" data-reveal><span>(06)</span> Contacto</p>
+        <h2 class="contact__title" data-sheen>
+          <span class="line"><span>Hablemos de</span></span>
+          <span class="line"><span><em>su próxima propiedad.</em></span></span>
+        </h2>
+        <div class="contact__grid">
+          <a class="contact__mail" href="mailto:hola@furlan.film" data-reveal>hola@furlan.film<i aria-hidden="true">↗</i></a>
+          <ul class="contact__list mono" data-reveal>
+            <li><span>WhatsApp</span><a href="https://wa.me/5491100000000" target="_blank" rel="noopener">+54 9 11 0000 0000</a></li>
+            <li><span>Instagram</span><a href="https://instagram.com/" target="_blank" rel="noopener">@furlan.film</a></li>
+            <li><span>Base</span><span>Buenos Aires · Viajes a todo el país</span></li>
+          </ul>
+        </div>
+      </div>
+      <footer class="foot wrap mono">
+        <span>© 2026 Furlan</span>
+        <span>34°36′S 58°22′O · <span data-clock>--:--</span> BA</span>
+        <a href="#top" class="link">Volver arriba ↑</a>
+      </footer>
+    </section>
+
+  </main>
+
+  <div class="grain" aria-hidden="true"></div>
+
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
+  <script src="js/main.js" defer></script>
+</body>
+</html>
