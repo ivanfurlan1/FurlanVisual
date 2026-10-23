@@ -3,617 +3,671 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Furlan — Cine Aéreo de Arquitectura</title>
-  <meta name="description" content="Planos secuencia FPV y cine aéreo para arquitectura y residencias de autor. Recorridos continuos, fotografía de gran formato y piezas verticales cinematográficas.">
-  <meta name="theme-color" content="#080807">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080807'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='%23f5f2eb' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
+  <title>Furlan — Cine de Arquitectura</title>
+  <meta name="description" content="Estudio de cine de arquitectura. Planos secuencia FPV y cine aéreo para residencias de autor, estudios y desarrolladoras. Buenos Aires, Argentina.">
+  <meta name="theme-color" content="#0d0d0c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230d0d0c'/%3E%3Ctext x='16' y='23.5' font-family='Didot,Bodoni 72,Georgia,serif' font-size='21' fill='%23ece8e1' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500&family=Geist+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..600;1,6..96,400..600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="preload" as="image" href="assets/seq/residencia-los-robles/poster.jpg">
-  <link rel="stylesheet" href="css/styles.css?v=20261023d">
+  <link rel="stylesheet" href="css/styles.css?v=20261023-r2">
 </head>
 <body class="is-loading">
 
-  <!-- ============ PRELOADER ============ -->
+  <!-- =====================================================
+       PRELOADER — Telón
+       ===================================================== -->
   <div class="loader" aria-hidden="true">
-    <div class="loader__inner">
+    <div class="loader__center">
       <span class="loader__mark">Furlan</span>
-      <div class="loader__bar"><span data-loader-bar></span></div>
-      <span class="loader__count"><span data-loader-count>00</span>%</span>
+      <span class="loader__sub">Cine de arquitectura</span>
+    </div>
+    <div class="loader__foot">
+      <span>Buenos Aires</span>
+      <span class="loader__line"><i data-loader-bar></i></span>
+      <span class="loader__count"><span data-loader-count>000</span></span>
     </div>
   </div>
 
-  <!-- ============ CURSOR PERSONALIZADO ULTRA-FINO ============ -->
-  <div class="custom-cursor" aria-hidden="true"></div>
-  <div class="cursor-dot" aria-hidden="true"></div>
+  <!-- Cursor -->
+  <div class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
 
-  <!-- ============ BARRA DE NAVEGACIÓN ============ -->
+  <!-- Progreso de lectura -->
+  <div class="readline" aria-hidden="true"><i data-readline></i></div>
+
+  <!-- =====================================================
+       NAVEGACIÓN
+       ===================================================== -->
   <header class="nav">
-    <a href="#top" class="nav__brand" aria-label="Furlan, inicio" data-cursor="INICIO">
+    <a href="#top" class="nav__brand" aria-label="Furlan, volver al inicio">
       <span class="nav__name">Furlan</span>
-      <span class="nav__tag mono">Cine aéreo</span>
+      <span class="nav__tag">Cine de arquitectura</span>
     </a>
-    <nav class="nav__links" aria-label="Navegación principal">
-      <a href="#film-01" class="link">Los Robles</a>
-      <a href="#film-02" class="link">Casa del Lago</a>
-      <a href="#film-03" class="link">Casa Hudson</a>
-      <a href="#film-04" class="link">Balcón Hudson</a>
-      <a href="#obra" class="link">Obra</a>
-      <a href="#servicios" class="link">Servicios</a>
-      <a href="#contacto" class="link link--cta">Contacto</a>
+    <nav class="nav__links" aria-label="Secciones">
+      <a href="#estudio" class="ulink">Estudio</a>
+      <a href="#obra" class="ulink">Obra</a>
+      <a href="#servicios" class="ulink">Servicios</a>
+      <a href="#metodo" class="ulink">Método</a>
+      <a href="#contacto" class="ulink">Contacto</a>
     </nav>
     <div class="nav__actions">
-      <button class="nav__sound mono" id="soundToggle" type="button" aria-label="Activar atmósfera sonora" title="Atmósfera acústica sutil">
-        <span class="sound-wave"><span></span><span></span><span></span></span>
-        <span class="sound-label">Sonido</span>
+      <button class="nav__sound" id="soundToggle" type="button" aria-pressed="false" aria-label="Atmósfera sonora">
+        <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="nav__sound-label">Sonido</span>
       </button>
-      <button class="nav__toggle mono" aria-expanded="false" aria-controls="menu">
-        <span class="nav__toggle-open">Menú</span>
-        <span class="nav__toggle-close">Cerrar</span>
+      <button class="nav__index" type="button" aria-expanded="false" aria-controls="index">
+        <span class="nav__index-txt"><span>Índice</span><span>Cerrar</span></span>
+        <span class="nav__index-ico" aria-hidden="true"><i></i><i></i></span>
       </button>
     </div>
   </header>
 
-  <!-- Menú móvil desplegable -->
-  <div class="menu" id="menu" aria-hidden="true">
-    <nav class="menu__links">
-      <a href="#film-01"><span class="mono">01</span>Film 01 — Los Robles</a>
-      <a href="#enfoque"><span class="mono">02</span>Filosofía & Enfoque</a>
-      <a href="#film-02"><span class="mono">03</span>Film 02 — Casa del Lago</a>
-      <a href="#obra"><span class="mono">04</span>Obra destacada</a>
-      <a href="#film-03"><span class="mono">05</span>Film 03 — Casa Hudson</a>
-      <a href="#servicios"><span class="mono">06</span>Servicios</a>
-      <a href="#film-04"><span class="mono">07</span>Film 04 — Balcón Hudson</a>
-      <a href="#metodo"><span class="mono">08</span>Método</a>
-      <a href="#contacto"><span class="mono">09</span>Contacto</a>
-    </nav>
-    <div class="menu__foot mono">
-      <span>Buenos Aires, AR</span>
-      <a href="mailto:hola@furlan.film">hola@furlan.film</a>
+  <!-- =====================================================
+       ÍNDICE (overlay)
+       ===================================================== -->
+  <div class="index" id="index" aria-hidden="true">
+    <div class="index__inner">
+      <div class="index__col index__col--list">
+        <p class="eyebrow">Obras — 2024 / 2026</p>
+        <ol class="index__list">
+          <li><a href="#film-01" data-preview="assets/stills/residencia-los-robles/0152.webp">
+            <span class="index__n">I</span><span class="index__t">Residencia <em>Los Robles</em></span><span class="index__l">Pilar</span>
+          </a></li>
+          <li><a href="#film-02" data-preview="assets/stills/casa-del-lago/0134.webp">
+            <span class="index__n">II</span><span class="index__t">Casa del <em>Lago</em></span><span class="index__l">Nordelta</span>
+          </a></li>
+          <li><a href="#film-03" data-preview="assets/stills/casa-hudson/0040.webp">
+            <span class="index__n">III</span><span class="index__t">Casa <em>Hudson</em></span><span class="index__l">Hudson</span>
+          </a></li>
+          <li><a href="#film-04" data-preview="assets/stills/salida-balcon-hudson/0126.webp">
+            <span class="index__n">IV</span><span class="index__t">Balcón <em>Hudson</em></span><span class="index__l">Hudson</span>
+          </a></li>
+        </ol>
+      </div>
+      <div class="index__col index__col--preview" aria-hidden="true">
+        <figure class="index__preview">
+          <img src="assets/stills/residencia-los-robles/0152.webp" alt="" class="is-active">
+          <img src="assets/stills/casa-del-lago/0134.webp" alt="">
+          <img src="assets/stills/casa-hudson/0040.webp" alt="">
+          <img src="assets/stills/salida-balcon-hudson/0126.webp" alt="">
+        </figure>
+      </div>
+      <div class="index__foot">
+        <nav class="index__secs" aria-label="Secciones">
+          <a href="#estudio" class="ulink">Estudio</a>
+          <a href="#obra" class="ulink">Obra seleccionada</a>
+          <a href="#servicios" class="ulink">Servicios</a>
+          <a href="#archivo" class="ulink">Archivo</a>
+          <a href="#metodo" class="ulink">Método</a>
+          <a href="#contacto" class="ulink">Contacto</a>
+        </nav>
+        <a href="mailto:hola@furlan.film" class="ulink">hola@furlan.film</a>
+      </div>
     </div>
   </div>
 
   <main id="top">
 
-    <!-- ============ FILM 01 · RESIDENCIA LOS ROBLES (HERO + PROYECCIÓN) ============ -->
+    <!-- =====================================================
+         OBRA I · RESIDENCIA LOS ROBLES — Portada y proyección
+         ===================================================== -->
     <section class="seq seq--hero" id="film-01"
              data-src="assets/seq/residencia-los-robles"
              data-count="265"
              data-fps="25">
       <div class="seq__stage">
-        <!-- Resplandor ambiental de cine -->
-        <div class="seq__ambient-glow" aria-hidden="true"></div>
-
-        <!-- Marco Cinematográfico Bounded (Transición viva de hero a cinema viewport) -->
-        <div class="seq__media" data-cursor="EXPLORAR">
-          <canvas class="seq__canvas" aria-label="Recorrido FPV por la Residencia Los Robles"></canvas>
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Plano secuencia FPV por la Residencia Los Robles"></canvas>
           <picture class="seq__poster">
             <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/residencia-los-robles/poster-pt.jpg">
-            <img src="assets/seq/residencia-los-robles/poster.jpg" alt="Residencia Los Robles" fetchpriority="high">
+            <img src="assets/seq/residencia-los-robles/poster.jpg" alt="Residencia Los Robles, fachada" fetchpriority="high">
           </picture>
-          <!-- Capa oscura ahumada para el Hero -->
           <div class="seq__veil" aria-hidden="true"></div>
-          <!-- Capa de salida suave para el final de Film 01 -->
-          <div class="seq__transition-cover" aria-hidden="true"></div>
-          <div class="seq__vignette" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
         </div>
 
-        <!-- Portada Editorial (Hero flotando en primer plano) -->
+        <!-- Portada -->
         <div class="hero" data-seq-hero>
-          <div class="hero__top mono">
-            <span class="hero__tag">ESTUDIO DE CINE AÉREO</span>
-            <span class="hero__sep">/</span>
-            <span>BUENOS AIRES, AR</span>
+          <div class="hero__meta">
+            <span>Estudio de cine de arquitectura</span>
+            <span>Buenos Aires — Argentina</span>
+            <span>Obras 2024 — 2026</span>
+            <span class="hero__meta-r">Edición N.º 04</span>
           </div>
-          <div class="hero__center">
-            <h1 class="hero__title">
-              Arquitectura
-              <em>en movimiento</em>
-            </h1>
-            <p class="hero__lede">
-              Planos secuencia FPV y cine aéreo para arquitectura y residencias de autor. Recorridos continuos que interpretan la luz, la escala y la intimidad de cada espacio.
-            </p>
-          </div>
-          <div class="hero__foot mono">
-            <div class="hero__status">
-              <span class="hero__dot"></span>
-              <span>PRODUCCIONES ACTIVAS · 2024 — 2026</span>
-            </div>
-            <span class="hero__scroll">
-              <span>Deslizar para proyectar</span>
-              <i class="scroll-arrow" aria-hidden="true">↓</i>
-            </span>
+          <h1 class="hero__title" aria-label="Arquitectura en movimiento">
+            <span class="hero__line"><span>Arquitectura</span></span>
+            <span class="hero__line hero__line--2"><span><em>en movimiento</em></span></span>
+          </h1>
+          <div class="hero__foot">
+            <p class="hero__lede">Planos secuencia y cine aéreo para residencias de autor. Recorridos continuos que leen la luz, la escala y la intimidad de cada espacio.</p>
+            <span class="hero__scroll"><span>Desplazar</span><i aria-hidden="true"></i></span>
           </div>
         </div>
 
-        <!-- Chrome Cinematográfico de Film 01 -->
-        <div class="seq__chrome">
-          <div class="seq__header mono">
-            <div class="seq__title-group">
-              <span class="seq__index">FILM 01</span>
-              <span class="seq__divider">/</span>
-              <span class="seq__name">Residencia Los Robles</span>
-            </div>
-            <span class="seq__loc">Pilar, Buenos Aires</span>
+        <!-- Encuadre de proyección -->
+        <div class="seq__frame" aria-hidden="false">
+          <span class="seq__mark seq__mark--tl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--tr" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--bl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
+
+          <div class="seq__top">
+            <span class="seq__title"><span class="seq__no">I</span>Residencia <em>Los Robles</em></span>
+            <span class="seq__loc">Pilar, Buenos Aires — Plano secuencia FPV</span>
           </div>
 
-          <!-- Capítulos poéticos en pastilla de cristal -->
           <div class="seq__chapters">
-            <div class="chapter" data-range="0.16,0.38">
-              <span class="chapter__num mono">I — Llegada</span>
-              <p class="chapter__text">La fachada se presenta despacio, <em>como una primera frase.</em></p>
+            <div class="chapter" data-range="0.36,0.54">
+              <span class="chapter__n">I. Llegada</span>
+              <p class="chapter__t">La fachada se presenta despacio, <em>como una primera frase.</em></p>
             </div>
-            <div class="chapter" data-range="0.42,0.64">
-              <span class="chapter__num mono">II — Umbral</span>
-              <p class="chapter__text">Entre dos volúmenes de concreto, <em>la casa se abre.</em></p>
+            <div class="chapter" data-range="0.56,0.72">
+              <span class="chapter__n">II. Umbral</span>
+              <p class="chapter__t">Entre dos volúmenes blancos, <em>la casa se abre.</em></p>
             </div>
-            <div class="chapter" data-range="0.68,0.88">
-              <span class="chapter__num mono">III — El Agua</span>
-              <p class="chapter__text">Travertino, jardín y una línea de agua <em>bajo la luz de la tarde.</em></p>
+            <div class="chapter" data-range="0.74,0.88">
+              <span class="chapter__n">III. Agua</span>
+              <p class="chapter__t">Travertino, jardín y una lámina de agua <em>bajo la luz de la tarde.</em></p>
             </div>
           </div>
 
-          <!-- Línea de tiempo minimalista -->
-          <div class="seq__footer">
-            <span class="seq__tc mono" data-tc>00:00 / 00:10</span>
-            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo" tabindex="0">
-              <div class="scrub__track">
-                <div class="scrub__fill" data-scrub-fill></div>
-                <div class="scrub__dot" data-scrub-dot></div>
-              </div>
+          <div class="seq__bottom">
+            <span class="seq__tc" data-tc>00:00</span>
+            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+              <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__frame-count mono">FR <span data-hud-fr>001</span> / <span data-hud-total>265</span></span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 265</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ MANIFIESTO / ENFOQUE ============ -->
-    <section class="manifesto" id="enfoque">
+    <!-- =====================================================
+         ESTUDIO / MANIFIESTO
+         ===================================================== -->
+    <section class="statement paper" id="estudio">
       <div class="wrap">
-        <p class="label mono" data-reveal><span>(01)</span> Filosofía & Enfoque</p>
-        <p class="manifesto__text" data-words>
-          Filmamos propiedades como se proyecta la arquitectura: con paciencia, luz natural y un recorrido continuo. Cada movimiento tiene una intención; cada segundo, un motivo espacial.
-        </p>
-        <div class="manifesto__cols">
-          <p data-reveal>
-            No hacemos videos inmobiliarios ni efectos vertiginosos. Hacemos cine de arquitectura: planos continuos a la altura de la mirada, desplazamientos lentos y una lectura honesta de los materiales, la gravedad y la luz.
+        <header class="runhead" data-reveal>
+          <span>Estudio</span>
+          <span>Cine de arquitectura</span>
+          <span>01</span>
+        </header>
+
+        <div class="statement__grid">
+          <p class="eyebrow statement__label" data-reveal>Manifiesto</p>
+          <p class="statement__text" data-words>
+            Filmamos una casa del mismo modo en que se la proyecta: con paciencia, con luz natural y en un solo recorrido. Cada movimiento tiene una intención; cada segundo, una razón espacial.
           </p>
-          <p data-reveal>
-            Trabajamos junto a estudios de arquitectura, desarrolladoras y propietarios que entienden que el modo en que se documenta una obra también forma parte de su valor patrimonial.
-          </p>
+        </div>
+
+        <div class="principles">
+          <article class="principle" data-reveal>
+            <span class="principle__n">i.</span>
+            <h3 class="principle__t">Un solo plano</h3>
+            <p>Sin cortes ni efectos. El recorrido continuo es la forma más honesta de explicar cómo se habita un espacio.</p>
+          </article>
+          <article class="principle" data-reveal>
+            <span class="principle__n">ii.</span>
+            <h3 class="principle__t">La luz como guion</h3>
+            <p>Rodamos en la franja horaria que mejor describe los materiales. La hora del día se elige antes que la cámara.</p>
+          </article>
+          <article class="principle" data-reveal>
+            <span class="principle__n">iii.</span>
+            <h3 class="principle__t">Escala humana</h3>
+            <p>Volamos a la altura de la mirada. La arquitectura se entiende caminándola, no sobrevolándola.</p>
+          </article>
         </div>
       </div>
     </section>
 
-    <!-- ============ FILM 02 · PRELUDIO EDITORIAL ============ -->
-    <div class="film-prelude wrap" id="film-02-prelude">
-      <div class="film-prelude__head">
-        <div>
-          <p class="label mono" data-reveal><span>(02)</span> Film 02</p>
-          <h2 class="film-prelude__title" data-split>Casa del <em>Lago</em></h2>
-        </div>
-        <p class="film-prelude__desc" data-reveal>
-          Toma aérea en retroceso. La simetría clásica de estilo francés descubriéndose de forma continua sobre el horizonte de agua de Nordelta.
-        </p>
-      </div>
-    </div>
-
-    <!-- ============ FILM 02 · CASA DEL LAGO (134 FRAMES) ============ -->
-    <section class="seq seq--compact" id="film-02"
+    <!-- =====================================================
+         OBRA II · CASA DEL LAGO
+         ===================================================== -->
+    <section class="seq" id="film-02"
              data-src="assets/seq/casa-del-lago"
              data-count="134"
              data-fps="25">
       <div class="seq__stage">
-        <div class="seq__ambient-glow" aria-hidden="true"></div>
-        <div class="seq__media" data-cursor="EXPLORAR">
-          <canvas class="seq__canvas" aria-label="Cine aéreo en retroceso por Casa del Lago"></canvas>
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Toma aérea en retroceso sobre Casa del Lago"></canvas>
           <picture class="seq__poster">
             <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-del-lago/poster-pt.jpg">
-            <img src="assets/seq/casa-del-lago/poster.jpg" alt="Casa del Lago" fetchpriority="low">
+            <img src="assets/seq/casa-del-lago/poster.jpg" alt="Casa del Lago" loading="lazy">
           </picture>
-          <div class="seq__transition-cover" aria-hidden="true"></div>
-          <div class="seq__vignette" aria-hidden="true"></div>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
         </div>
 
-        <div class="seq__chrome">
-          <div class="seq__header mono">
-            <div class="seq__title-group">
-              <span class="seq__index">FILM 02</span>
-              <span class="seq__divider">/</span>
-              <span class="seq__name">Casa del Lago</span>
-            </div>
-            <span class="seq__loc">Nordelta, Tigre</span>
+        <div class="lead" data-seq-lead>
+          <span class="lead__no"><i></i>Obra II<i></i></span>
+          <h2 class="lead__title">Casa del <em>Lago</em></h2>
+          <p class="lead__desc">Un retroceso aéreo continuo. La simetría de inspiración francesa se descubre, plano a plano, frente al agua.</p>
+          <dl class="lead__meta">
+            <div><dt>Lugar</dt><dd>Nordelta, Tigre</dd></div>
+            <div><dt>Toma</dt><dd>Aérea en retroceso</dd></div>
+            <div><dt>Duración</dt><dd>00:05</dd></div>
+          </dl>
+        </div>
+
+        <div class="seq__frame">
+          <span class="seq__mark seq__mark--tl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--tr" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--bl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
+
+          <div class="seq__top">
+            <span class="seq__title"><span class="seq__no">II</span>Casa del <em>Lago</em></span>
+            <span class="seq__loc">Nordelta, Tigre — Aérea en retroceso</span>
           </div>
 
           <div class="seq__chapters">
-            <div class="chapter" data-range="0.12,0.46">
-              <span class="chapter__num mono">I — Retroceso</span>
-              <p class="chapter__text">Un vuelo en retirada que revela <em>la simetría francesa.</em></p>
+            <div class="chapter" data-range="0.36,0.60">
+              <span class="chapter__n">I. Retroceso</span>
+              <p class="chapter__t">Un vuelo en retirada que revela <em>la simetría de la fachada.</em></p>
             </div>
-            <div class="chapter" data-range="0.52,0.84">
-              <span class="chapter__num mono">II — El Lago</span>
-              <p class="chapter__text">La arquitectura clásica en diálogo <em>con el horizonte de agua.</em></p>
+            <div class="chapter" data-range="0.62,0.86">
+              <span class="chapter__n">II. Horizonte</span>
+              <p class="chapter__t">La arquitectura clásica, <em>en diálogo con el agua.</em></p>
             </div>
           </div>
 
-          <div class="seq__footer">
-            <span class="seq__tc mono" data-tc>00:00 / 00:05</span>
-            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo" tabindex="0">
-              <div class="scrub__track">
-                <div class="scrub__fill" data-scrub-fill></div>
-                <div class="scrub__dot" data-scrub-dot></div>
-              </div>
+          <div class="seq__bottom">
+            <span class="seq__tc" data-tc>00:00</span>
+            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+              <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__frame-count mono">FR <span data-hud-fr>001</span> / <span data-hud-total>134</span></span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 134</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ OBRA DESTACADA / MATERIALIDAD ============ -->
-    <section class="work" id="obra">
-      <div class="wrap work__grid">
-        <aside class="work__info">
-          <p class="label mono" data-reveal><span>(03)</span> Ficha Técnica</p>
-          <h2 class="work__title" data-split>Residencia <em>Los Robles</em></h2>
-          <p class="work__lede" data-reveal>
-            Un único plano FPV continuo que entra desde la calle arbolada, cruza el umbral de los dos volúmenes y desemboca en la galería y la piscina. Sin cortes, guiado por la luz natural de media tarde.
-          </p>
-          <dl class="specs" data-reveal>
-            <div><dt class="mono">Ubicación</dt><dd>Pilar, Buenos Aires</dd></div>
-            <div><dt class="mono">Año</dt><dd>2026</dd></div>
-            <div><dt class="mono">Tipología</dt><dd>Vivienda unifamiliar · 420 m²</dd></div>
-            <div><dt class="mono">Rodaje</dt><dd>1 jornada · luz de media tarde</dd></div>
-            <div><dt class="mono">Captura</dt><dd>Cinewhoop FPV 4K · Dron aéreo 5.1K</dd></div>
-            <div><dt class="mono">Entregables</dt><dd>Film máster 16:9 · 3 piezas 9:16 · 36 stills</dd></div>
-          </dl>
-          <a href="#film-01" class="btn" data-reveal data-cursor="PROYECTAR"><span>Ver proyección de nuevo</span><i aria-hidden="true">↑</i></a>
-        </aside>
+    <!-- =====================================================
+         OBRA SELECCIONADA · FICHA
+         ===================================================== -->
+    <section class="work paper" id="obra">
+      <div class="wrap">
+        <header class="runhead" data-reveal>
+          <span>Obra seleccionada</span>
+          <span>Residencia Los Robles</span>
+          <span>02</span>
+        </header>
 
-        <div class="work__media">
-          <figure class="frame frame--tall" data-reveal>
-            <div class="frame__img" data-parallax="0.08">
-              <img src="assets/stills/residencia-los-robles/0092.webp" alt="Volúmenes blancos y portones de la fachada" loading="lazy">
-            </div>
-            <figcaption class="mono"><span>FR 092</span><span>Fachada principal</span></figcaption>
+        <div class="work__head">
+          <h2 class="display" data-lines>
+            <span class="ln"><span>Residencia</span></span>
+            <span class="ln ln--in"><span><em>Los Robles</em></span></span>
+          </h2>
+          <p class="work__lede" data-reveal>Un único plano FPV que entra desde la calle arbolada, atraviesa el umbral entre los dos volúmenes y desemboca en la galería y el espejo de agua. Sin cortes. Guiado por la luz de media tarde.</p>
+        </div>
+
+        <figure class="work__hero rimg" data-cursor="Proyectar" data-goto="#film-01">
+          <div class="rimg__in" data-parallax="0.06"><img src="assets/stills/residencia-los-robles/0265.webp" alt="Galería, piscina y jardín de la Residencia Los Robles" loading="lazy"></div>
+          <figcaption><span>Fotograma 265</span><span>Galería y espejo de agua</span></figcaption>
+        </figure>
+
+        <div class="work__grid">
+          <figure class="work__tall rimg">
+            <div class="rimg__in" data-parallax="0.08"><img src="assets/stills/residencia-los-robles/0118-v.webp" alt="Paso entre los dos volúmenes" loading="lazy"></div>
+            <figcaption><span>Fotograma 118</span><span>Umbral</span></figcaption>
           </figure>
-          <figure class="frame frame--wide" data-reveal>
-            <div class="frame__img" data-parallax="0.06">
-              <img src="assets/stills/residencia-los-robles/0265.webp" alt="Galería, piscina y jardín" loading="lazy">
-            </div>
-            <figcaption class="mono"><span>FR 265</span><span>Galería y espejo de agua</span></figcaption>
-          </figure>
-          <figure class="frame frame--small" data-reveal>
-            <div class="frame__img" data-parallax="0.1">
-              <img src="assets/stills/residencia-los-robles/0118.webp" alt="Paso entre los dos volúmenes" loading="lazy">
-            </div>
-            <figcaption class="mono"><span>FR 118</span><span>Umbral interior/exterior</span></figcaption>
-          </figure>
+
+          <div class="work__side">
+            <!-- Rótulo técnico, como en un plano de arquitectura -->
+            <dl class="titleblock" data-reveal>
+              <div class="tb tb--wide"><dt>Proyecto</dt><dd>Residencia Los Robles</dd></div>
+              <div class="tb"><dt>Ubicación</dt><dd>Pilar, Buenos Aires</dd></div>
+              <div class="tb"><dt>Año</dt><dd>2026</dd></div>
+              <div class="tb"><dt>Tipología</dt><dd>Vivienda unifamiliar</dd></div>
+              <div class="tb"><dt>Superficie</dt><dd>420 m²</dd></div>
+              <div class="tb"><dt>Rodaje</dt><dd>Una jornada</dd></div>
+              <div class="tb"><dt>Luz</dt><dd>Media tarde</dd></div>
+              <div class="tb tb--wide"><dt>Captura</dt><dd>Cinewhoop FPV 4K · Aéreo 5.1K</dd></div>
+              <div class="tb tb--wide"><dt>Entregables</dt><dd>Film máster 16:9 · Tres piezas 9:16 · 36 fotogramas</dd></div>
+            </dl>
+
+            <figure class="work__small rimg">
+              <div class="rimg__in" data-parallax="0.05"><img src="assets/stills/residencia-los-robles/0092.webp" alt="Volúmenes blancos y portones de la fachada" loading="lazy"></div>
+              <figcaption><span>Fotograma 092</span><span>Fachada</span></figcaption>
+            </figure>
+
+            <a href="#film-01" class="arrowlink" data-reveal><span>Volver a proyectar la obra</span><i aria-hidden="true"></i></a>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ FILM 03 · PRELUDIO EDITORIAL ============ -->
-    <div class="film-prelude wrap" id="film-03-prelude">
-      <div class="film-prelude__head">
-        <div>
-          <p class="label mono" data-reveal><span>(04)</span> Film 03</p>
-          <h2 class="film-prelude__title" data-split>Casa <em>Hudson</em></h2>
-        </div>
-        <p class="film-prelude__desc" data-reveal>
-          Fachada e ingreso principal. Líneas contemporáneas y texturas sobrias en un recorrido envolvente hacia el umbral de entrada.
-        </p>
-      </div>
-    </div>
-
-    <!-- ============ FILM 03 · CASA HUDSON (109 FRAMES) ============ -->
-    <section class="seq seq--compact" id="film-03"
+    <!-- =====================================================
+         OBRA III · CASA HUDSON
+         ===================================================== -->
+    <section class="seq" id="film-03"
              data-src="assets/seq/casa-hudson"
              data-count="109"
              data-fps="25">
       <div class="seq__stage">
-        <div class="seq__ambient-glow" aria-hidden="true"></div>
-        <div class="seq__media" data-cursor="EXPLORAR">
-          <canvas class="seq__canvas" aria-label="Recorrido aéreo por Casa Hudson"></canvas>
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Recorrido por la fachada e ingreso de Casa Hudson"></canvas>
           <picture class="seq__poster">
             <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-hudson/poster-pt.jpg">
-            <img src="assets/seq/casa-hudson/poster.jpg" alt="Casa Hudson" fetchpriority="low">
+            <img src="assets/seq/casa-hudson/poster.jpg" alt="Casa Hudson" loading="lazy">
           </picture>
-          <div class="seq__transition-cover" aria-hidden="true"></div>
-          <div class="seq__vignette" aria-hidden="true"></div>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
         </div>
 
-        <div class="seq__chrome">
-          <div class="seq__header mono">
-            <div class="seq__title-group">
-              <span class="seq__index">FILM 03</span>
-              <span class="seq__divider">/</span>
-              <span class="seq__name">Casa Hudson</span>
-            </div>
-            <span class="seq__loc">Hudson, Buenos Aires</span>
+        <div class="lead" data-seq-lead>
+          <span class="lead__no"><i></i>Obra III<i></i></span>
+          <h2 class="lead__title">Casa <em>Hudson</em></h2>
+          <p class="lead__desc">Volumetría sobria y texturas nobles en un recorrido envolvente que conduce la mirada hacia el umbral.</p>
+          <dl class="lead__meta">
+            <div><dt>Lugar</dt><dd>Hudson, Buenos Aires</dd></div>
+            <div><dt>Toma</dt><dd>Fachada e ingreso</dd></div>
+            <div><dt>Duración</dt><dd>00:04</dd></div>
+          </dl>
+        </div>
+
+        <div class="seq__frame">
+          <span class="seq__mark seq__mark--tl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--tr" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--bl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
+
+          <div class="seq__top">
+            <span class="seq__title"><span class="seq__no">III</span>Casa <em>Hudson</em></span>
+            <span class="seq__loc">Hudson, Buenos Aires — Fachada e ingreso</span>
           </div>
 
           <div class="seq__chapters">
-            <div class="chapter" data-range="0.12,0.46">
-              <span class="chapter__num mono">I — Fachada y Volumetría</span>
-              <p class="chapter__text">Volumetría sobria y texturas <em>que dialogan con el entorno.</em></p>
+            <div class="chapter" data-range="0.36,0.60">
+              <span class="chapter__n">I. Fachada</span>
+              <p class="chapter__t">Volúmenes serenos y texturas <em>que dialogan con el jardín.</em></p>
             </div>
-            <div class="chapter" data-range="0.52,0.84">
-              <span class="chapter__num mono">II — El Ingreso</span>
-              <p class="chapter__text">El umbral principal <em>dando paso hacia el interior.</em></p>
+            <div class="chapter" data-range="0.62,0.86">
+              <span class="chapter__n">II. Ingreso</span>
+              <p class="chapter__t">El umbral principal, <em>abriéndose hacia el interior.</em></p>
             </div>
           </div>
 
-          <div class="seq__footer">
-            <span class="seq__tc mono" data-tc>00:00 / 00:04</span>
-            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo" tabindex="0">
-              <div class="scrub__track">
-                <div class="scrub__fill" data-scrub-fill></div>
-                <div class="scrub__dot" data-scrub-dot></div>
-              </div>
+          <div class="seq__bottom">
+            <span class="seq__tc" data-tc>00:00</span>
+            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+              <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__frame-count mono">FR <span data-hud-fr>001</span> / <span data-hud-total>109</span></span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 109</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ SERVICIOS / ESPECIALIDADES ============ -->
+    <!-- =====================================================
+         SERVICIOS
+         ===================================================== -->
     <section class="services" id="servicios">
       <div class="wrap">
-        <div class="services__head">
-          <p class="label mono" data-reveal><span>(05)</span> Servicios</p>
-          <h2 class="h2" data-split>Cuatro formas de <em>contar una propiedad</em></h2>
+        <header class="runhead runhead--dark" data-reveal>
+          <span>Servicios</span>
+          <span>Cuatro formas de contar una obra</span>
+          <span>03</span>
+        </header>
+
+        <div class="services__grid">
+          <div class="services__visual" aria-hidden="true">
+            <figure class="services__fig">
+              <img src="assets/stills/residencia-los-robles/0118-v.webp" alt="" class="is-active">
+              <img src="assets/stills/casa-del-lago/0134-v.webp" alt="">
+              <img src="assets/stills/residencia-los-robles/0185-v.webp" alt="">
+              <img src="assets/stills/salida-balcon-hudson/0035-v.webp" alt="">
+            </figure>
+            <span class="services__count"><span data-svc-n>01</span> / 04</span>
+          </div>
+
+          <div class="services__list">
+            <h2 class="display display--sm" data-lines>
+              <span class="ln"><span>Cuatro formas</span></span>
+              <span class="ln"><span>de contar <em>una obra</em></span></span>
+            </h2>
+            <ol class="svc">
+              <li class="svc__row is-active" data-reveal>
+                <span class="svc__n">01</span>
+                <div class="svc__body">
+                  <h3 class="svc__t">Recorrido FPV de autor</h3>
+                  <p class="svc__d">Un plano secuencia ininterrumpido que enlaza el exterior, el umbral y los ambientes más nobles de la casa.</p>
+                </div>
+              </li>
+              <li class="svc__row" data-reveal>
+                <span class="svc__n">02</span>
+                <div class="svc__body">
+                  <h3 class="svc__t">Cine aéreo de contexto</h3>
+                  <p class="svc__d">Entorno, orientación y escala del paisaje. La obra situada en su territorio antes de llegar al detalle.</p>
+                </div>
+              </li>
+              <li class="svc__row" data-reveal>
+                <span class="svc__n">03</span>
+                <div class="svc__body">
+                  <h3 class="svc__t">Fotografía de arquitectura</h3>
+                  <p class="svc__d">Fotogramas y tomas aéreas de alta resolución para monografías, prensa especializada y catálogos.</p>
+                </div>
+              </li>
+              <li class="svc__row" data-reveal>
+                <span class="svc__n">04</span>
+                <div class="svc__body">
+                  <h3 class="svc__t">Piezas verticales nativas</h3>
+                  <p class="svc__d">Cortes 9:16 pensados desde la coreografía del vuelo, sin perder encuadre ni intención.</p>
+                </div>
+              </li>
+            </ol>
+          </div>
         </div>
-        <ol class="svc">
-          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0118.webp" data-cursor="VER">
-            <span class="svc__n mono">01</span>
-            <h3 class="svc__t">Recorridos FPV de autor</h3>
-            <p class="svc__d">Un plano secuencia ininterrumpido que conecta el exterior, el umbral y los interiores más nobles de la propiedad.</p>
-            <span class="svc__a" aria-hidden="true">→</span>
-          </li>
-          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0001.webp" data-cursor="VER">
-            <span class="svc__n mono">02</span>
-            <h3 class="svc__t">Tomas aéreas de contexto</h3>
-            <p class="svc__d">Entorno, orientación solar y escala paisajística. La obra ubicada en su territorio antes de pasar al detalle.</p>
-            <span class="svc__a" aria-hidden="true">→</span>
-          </li>
-          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0152.webp" data-cursor="VER">
-            <span class="svc__n mono">03</span>
-            <h3 class="svc__t">Fotografía aérea de autor</h3>
-            <p class="svc__d">Composiciones cenitales y oblicuas de alta resolución para catálogos editoriales, prensa y monografías.</p>
-            <span class="svc__a" aria-hidden="true">→</span>
-          </li>
-          <li class="svc__row" data-img="assets/stills/residencia-los-robles/0092.webp" data-cursor="VER">
-            <span class="svc__n mono">04</span>
-            <h3 class="svc__t">Cortes verticales 9:16 nativos</h3>
-            <p class="svc__d">Piezas verticales diseñadas desde la coreografía del vuelo para redes y plataformas sin pérdida de encuadre.</p>
-            <span class="svc__a" aria-hidden="true">→</span>
-          </li>
-        </ol>
       </div>
-      <div class="svc__preview" aria-hidden="true"><img alt="Preview de servicio"></div>
     </section>
 
-    <!-- ============ FILM 04 · PRELUDIO EDITORIAL ============ -->
-    <div class="film-prelude wrap" id="film-04-prelude">
-      <div class="film-prelude__head">
-        <div>
-          <p class="label mono" data-reveal><span>(06)</span> Film 04</p>
-          <h2 class="film-prelude__title" data-split>Balcón <em>Hudson</em></h2>
-        </div>
-        <p class="film-prelude__desc" data-reveal>
-          De la intimidad de la suite principal a la inmensidad del horizonte. Un plano secuencia FPV interior-exterior de máxima precisión.
-        </p>
-      </div>
-    </div>
-
-    <!-- ============ FILM 04 · SALIDA BALCÓN HUDSON (126 FRAMES) ============ -->
-    <section class="seq seq--compact" id="film-04"
+    <!-- =====================================================
+         OBRA IV · BALCÓN HUDSON
+         ===================================================== -->
+    <section class="seq" id="film-04"
              data-src="assets/seq/salida-balcon-hudson"
              data-count="126"
              data-fps="25">
       <div class="seq__stage">
-        <div class="seq__ambient-glow" aria-hidden="true"></div>
-        <div class="seq__media" data-cursor="EXPLORAR">
-          <canvas class="seq__canvas" aria-label="Recorrido FPV balcón Hudson"></canvas>
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Plano secuencia desde la suite hacia el balcón, Casa Hudson"></canvas>
           <picture class="seq__poster">
             <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/salida-balcon-hudson/poster-pt.jpg">
-            <img src="assets/seq/salida-balcon-hudson/poster.jpg" alt="Salida Balcón Hudson" fetchpriority="low">
+            <img src="assets/seq/salida-balcon-hudson/poster.jpg" alt="Suite y balcón, Casa Hudson" loading="lazy">
           </picture>
-          <div class="seq__transition-cover" aria-hidden="true"></div>
-          <div class="seq__vignette" aria-hidden="true"></div>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
         </div>
 
-        <div class="seq__chrome">
-          <div class="seq__header mono">
-            <div class="seq__title-group">
-              <span class="seq__index">FILM 04</span>
-              <span class="seq__divider">/</span>
-              <span class="seq__name">Balcón Hudson</span>
-            </div>
-            <span class="seq__loc">Hudson, Buenos Aires</span>
+        <div class="lead" data-seq-lead>
+          <span class="lead__no"><i></i>Obra IV<i></i></span>
+          <h2 class="lead__title">Balcón <em>Hudson</em></h2>
+          <p class="lead__desc">De la intimidad de la suite a la apertura del horizonte. Un plano continuo de interior a exterior, a contraluz.</p>
+          <dl class="lead__meta">
+            <div><dt>Lugar</dt><dd>Hudson, Buenos Aires</dd></div>
+            <div><dt>Toma</dt><dd>Interior — exterior</dd></div>
+            <div><dt>Duración</dt><dd>00:05</dd></div>
+          </dl>
+        </div>
+
+        <div class="seq__frame">
+          <span class="seq__mark seq__mark--tl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--tr" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--bl" aria-hidden="true"></span>
+          <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
+
+          <div class="seq__top">
+            <span class="seq__title"><span class="seq__no">IV</span>Balcón <em>Hudson</em></span>
+            <span class="seq__loc">Hudson, Buenos Aires — Suite y horizonte</span>
           </div>
 
           <div class="seq__chapters">
-            <div class="chapter" data-range="0.12,0.46">
-              <span class="chapter__num mono">I — Suite</span>
-              <p class="chapter__text">La luz de la tarde <em>recorriendo el espacio íntimo.</em></p>
+            <div class="chapter" data-range="0.36,0.60">
+              <span class="chapter__n">I. Suite</span>
+              <p class="chapter__t">La luz de la tarde <em>recorriendo el espacio íntimo.</em></p>
             </div>
-            <div class="chapter" data-range="0.52,0.84">
-              <span class="chapter__num mono">II — Horizonte Abierto</span>
-              <p class="chapter__text">Salida al exterior hacia <em>un panorama despejado.</em></p>
+            <div class="chapter" data-range="0.62,0.86">
+              <span class="chapter__n">II. Horizonte</span>
+              <p class="chapter__t">La salida al exterior, <em>hacia un paisaje abierto.</em></p>
             </div>
           </div>
 
-          <div class="seq__footer">
-            <span class="seq__tc mono" data-tc>00:00 / 00:05</span>
-            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo" tabindex="0">
-              <div class="scrub__track">
-                <div class="scrub__fill" data-scrub-fill></div>
-                <div class="scrub__dot" data-scrub-dot></div>
-              </div>
+          <div class="seq__bottom">
+            <span class="seq__tc" data-tc>00:00</span>
+            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+              <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__frame-count mono">FR <span data-hud-fr>001</span> / <span data-hud-total>126</span></span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 126</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ============ TIRA DE FOTOGRAMAS ============ -->
-    <section class="strip" aria-label="Fotogramas de archivo">
-      <div class="strip__track" data-strip>
-        <figure><img src="assets/stills/residencia-los-robles/0001.webp" alt="Still 001" loading="lazy"><figcaption class="mono">001</figcaption></figure>
-        <figure><img src="assets/stills/residencia-los-robles/0040.webp" alt="Still 040" loading="lazy"><figcaption class="mono">040</figcaption></figure>
-        <figure><img src="assets/stills/residencia-los-robles/0092.webp" alt="Still 092" loading="lazy"><figcaption class="mono">092</figcaption></figure>
-        <figure><img src="assets/stills/residencia-los-robles/0118.webp" alt="Still 118" loading="lazy"><figcaption class="mono">118</figcaption></figure>
-        <figure><img src="assets/stills/residencia-los-robles/0152.webp" alt="Still 152" loading="lazy"><figcaption class="mono">152</figcaption></figure>
-        <figure><img src="assets/stills/residencia-los-robles/0265.webp" alt="Still 265" loading="lazy"><figcaption class="mono">265</figcaption></figure>
+    <!-- =====================================================
+         ARCHIVO — galería horizontal
+         ===================================================== -->
+    <section class="archive" id="archivo" aria-label="Archivo de fotogramas">
+      <div class="archive__pin">
+        <div class="archive__head wrap">
+          <header class="runhead runhead--dark">
+            <span>Archivo</span>
+            <span>Fotogramas de rodaje</span>
+            <span>04</span>
+          </header>
+        </div>
+        <div class="archive__track" data-archive>
+          <div class="archive__intro">
+            <h2 class="display display--sm">Cada fotograma, <em>una fotografía.</em></h2>
+            <p>Doce cuadros extraídos de los planos secuencia, sin retoque adicional. La misma luz, el mismo encuadre, detenidos.</p>
+          </div>
+          <figure class="arc arc--l"><img src="assets/stills/residencia-los-robles/0001.webp" alt="Residencia Los Robles, llegada" loading="lazy"><figcaption><span>I · 001</span><span>Los Robles</span></figcaption></figure>
+          <figure class="arc arc--v arc--up"><img src="assets/stills/residencia-los-robles/0152-v.webp" alt="Residencia Los Robles, galería" loading="lazy"><figcaption><span>I · 152</span><span>Los Robles</span></figcaption></figure>
+          <figure class="arc arc--m arc--down"><img src="assets/stills/casa-del-lago/0045.webp" alt="Casa del Lago, piscina" loading="lazy"><figcaption><span>II · 045</span><span>Casa del Lago</span></figcaption></figure>
+          <figure class="arc arc--v"><img src="assets/stills/casa-hudson/0080-v.webp" alt="Casa Hudson, puerta de ingreso" loading="lazy"><figcaption><span>III · 080</span><span>Casa Hudson</span></figcaption></figure>
+          <figure class="arc arc--l arc--up"><img src="assets/stills/residencia-los-robles/0240.webp" alt="Residencia Los Robles, espejo de agua" loading="lazy"><figcaption><span>I · 240</span><span>Los Robles</span></figcaption></figure>
+          <figure class="arc arc--s arc--down"><img src="assets/stills/salida-balcon-hudson/0035.webp" alt="Balcón Hudson, cortinas a contraluz" loading="lazy"><figcaption><span>IV · 035</span><span>Balcón Hudson</span></figcaption></figure>
+          <figure class="arc arc--v arc--up"><img src="assets/stills/casa-del-lago/0025-v.webp" alt="Casa del Lago, fachada" loading="lazy"><figcaption><span>II · 025</span><span>Casa del Lago</span></figcaption></figure>
+          <figure class="arc arc--m"><img src="assets/stills/casa-hudson/0140.webp" alt="Casa Hudson, escalera y comedor" loading="lazy"><figcaption><span>III · 140</span><span>Casa Hudson</span></figcaption></figure>
+          <figure class="arc arc--v arc--down"><img src="assets/stills/residencia-los-robles/0092-v.webp" alt="Residencia Los Robles, volumen" loading="lazy"><figcaption><span>I · 092</span><span>Los Robles</span></figcaption></figure>
+          <figure class="arc arc--l arc--up"><img src="assets/stills/salida-balcon-hudson/0126.webp" alt="Balcón Hudson, vista a la piscina" loading="lazy"><figcaption><span>IV · 126</span><span>Balcón Hudson</span></figcaption></figure>
+          <figure class="arc arc--s"><img src="assets/stills/casa-hudson/0001.webp" alt="Casa Hudson, llegada" loading="lazy"><figcaption><span>III · 001</span><span>Casa Hudson</span></figcaption></figure>
+          <figure class="arc arc--v arc--down"><img src="assets/stills/casa-del-lago/0134-v.webp" alt="Casa del Lago, jardín" loading="lazy"><figcaption><span>II · 134</span><span>Casa del Lago</span></figcaption></figure>
+          <div class="archive__end"><span>Fin del archivo</span></div>
+        </div>
+        <div class="archive__foot wrap">
+          <span class="archive__progress"><i data-archive-bar></i></span>
+          <span class="archive__hint">Desplazar</span>
+        </div>
       </div>
-      <p class="strip__note mono wrap">
-        <span>Seis fotogramas de un único plano secuencia continuo</span>
-        <span>00:00:10:15 total</span>
-      </p>
     </section>
 
-    <!-- ============ MÉTODO ============ -->
-    <section class="method" id="metodo">
+    <!-- =====================================================
+         MÉTODO
+         ===================================================== -->
+    <section class="method paper" id="metodo">
       <div class="wrap">
+        <header class="runhead" data-reveal>
+          <span>Método</span>
+          <span>De la visita al máster</span>
+          <span>05</span>
+        </header>
+
         <div class="method__head">
-          <p class="label mono" data-reveal><span>(07)</span> Método</p>
-          <h2 class="h2" data-split>Cada recorrido se <em>proyecta antes de volar</em></h2>
+          <h2 class="display" data-lines>
+            <span class="ln"><span>Cada recorrido se</span></span>
+            <span class="ln ln--in"><span><em>proyecta antes de volar</em></span></span>
+          </h2>
         </div>
-        <div class="steps">
-          <span class="steps__line"><span data-steps-line></span></span>
-          <article class="step">
-            <span class="step__dot"></span>
-            <span class="step__n mono">Fase 01</span>
-            <h3>Visita y estudio solar</h3>
-            <p>Inspección del sitio, estudio de orientación geográfica, incidencia de la luz natural y obstáculos.</p>
-          </article>
-          <article class="step">
-            <span class="step__dot"></span>
-            <span class="step__n mono">Fase 02</span>
-            <h3>Coreografía de vuelo</h3>
-            <p>Diseño de la trayectoria plano por plano: ejes de fuga, velocidades y revelado progresivo de los ambientes.</p>
-          </article>
-          <article class="step">
-            <span class="step__dot"></span>
-            <span class="step__n mono">Fase 03</span>
-            <h3>Rodaje milimétrico</h3>
-            <p>Jornada técnica en la franja lumínica ideal. Múltiples tomas calibradas hasta conseguir la trayectoria perfecta.</p>
-          </article>
-          <article class="step">
-            <span class="step__dot"></span>
-            <span class="step__n mono">Fase 04</span>
-            <h3>Color y masterización</h3>
-            <p>Corrección tonal cinematográfica, balance de travertinos y hormigón, y entrega multiformato en 4K.</p>
-          </article>
-        </div>
+
+        <ol class="steps">
+          <li class="step" data-reveal>
+            <span class="step__n">01</span>
+            <h3 class="step__t">Visita y estudio solar</h3>
+            <p>Recorremos el sitio, estudiamos la orientación y la incidencia de la luz, y definimos la hora exacta de rodaje.</p>
+          </li>
+          <li class="step" data-reveal>
+            <span class="step__n">02</span>
+            <h3 class="step__t">Coreografía de vuelo</h3>
+            <p>Diseñamos la trayectoria plano por plano: ejes, velocidades y el orden en que cada ambiente se revela.</p>
+          </li>
+          <li class="step" data-reveal>
+            <span class="step__n">03</span>
+            <h3 class="step__t">Rodaje</h3>
+            <p>Una jornada técnica en la franja de luz elegida. Repetimos la toma hasta que la trayectoria es exacta.</p>
+          </li>
+          <li class="step" data-reveal>
+            <span class="step__n">04</span>
+            <h3 class="step__t">Color y máster</h3>
+            <p>Etalonaje cinematográfico fiel a los materiales y entrega multiformato en 4K, horizontal y vertical.</p>
+          </li>
+        </ol>
       </div>
     </section>
 
-    <!-- ============ ÍNDICE DE OBRAS ============ -->
-    <section class="index" id="indice">
+    <!-- =====================================================
+         TESTIMONIO
+         ===================================================== -->
+    <section class="quote paper">
       <div class="wrap">
-        <div class="index__head">
-          <p class="label mono" data-reveal><span>(08)</span> Catálogo</p>
-          <p class="index__count mono" data-reveal>04 producciones activas</p>
-        </div>
-        <ul class="idx" data-reveal>
-          <li class="idx__row">
-            <a href="#film-01" data-cursor="PROYECTAR">
-              <span class="mono">01</span>
-              <span class="idx__name">Residencia Los Robles</span>
-              <span class="idx__loc">Pilar</span>
-              <span class="idx__type mono">FPV continuo</span>
-              <span class="idx__year mono">2026</span>
-              <span class="idx__state mono">Ver film</span>
-            </a>
-          </li>
-          <li class="idx__row">
-            <a href="#film-02" data-cursor="PROYECTAR">
-              <span class="mono">02</span>
-              <span class="idx__name">Casa del Lago</span>
-              <span class="idx__loc">Nordelta</span>
-              <span class="idx__type mono">Aérea retroceso</span>
-              <span class="idx__year mono">2026</span>
-              <span class="idx__state mono">Ver film</span>
-            </a>
-          </li>
-          <li class="idx__row">
-            <a href="#film-03" data-cursor="PROYECTAR">
-              <span class="mono">03</span>
-              <span class="idx__name">Casa Hudson</span>
-              <span class="idx__loc">Hudson</span>
-              <span class="idx__type mono">Fachada e ingreso</span>
-              <span class="idx__year mono">2026</span>
-              <span class="idx__state mono">Ver film</span>
-            </a>
-          </li>
-          <li class="idx__row">
-            <a href="#film-04" data-cursor="PROYECTAR">
-              <span class="mono">04</span>
-              <span class="idx__name">Salida Balcón Hudson</span>
-              <span class="idx__loc">Hudson</span>
-              <span class="idx__type mono">Suite y balcón</span>
-              <span class="idx__year mono">2026</span>
-              <span class="idx__state mono">Ver film</span>
-            </a>
-          </li>
-        </ul>
+        <figure class="quote__fig">
+          <span class="quote__mark" aria-hidden="true">“</span>
+          <blockquote>
+            <p data-words>Entendió la casa mejor que muchas de las fotografías que teníamos de ella. El recorrido transmite exactamente lo que se siente al entrar.</p>
+          </blockquote>
+          <figcaption data-reveal>
+            <span class="quote__name">M. Olivera</span>
+            <span class="quote__role">Arquitecta titular — Estudio Olivera Paz</span>
+          </figcaption>
+        </figure>
       </div>
     </section>
 
-    <!-- ============ TESTIMONIO ============ -->
-    <section class="quote">
-      <div class="wrap">
-        <blockquote>
-          <p data-words>
-            “Comprendió la arquitectura mejor que muchas fotos que teníamos de ella. El recorrido se percibe exactamente con la misma emoción que ingresar a la casa.”
-          </p>
-          <footer class="mono" data-reveal>
-            <span>M. Olivera</span>
-            <span>Arquitecta titular · Estudio Olivera Paz</span>
-          </footer>
-        </blockquote>
-      </div>
-    </section>
-
-    <!-- ============ CONTACTO ============ -->
+    <!-- =====================================================
+         CONTACTO
+         ===================================================== -->
     <section class="contact" id="contacto">
       <div class="wrap">
-        <p class="label mono" data-reveal><span>(09)</span> Contacto</p>
-        <h2 class="contact__title" data-reveal>
-          <span class="line"><span>Hablemos de</span></span>
-          <span class="line"><span><em>su próxima propiedad.</em></span></span>
+        <header class="runhead runhead--dark" data-reveal>
+          <span>Contacto</span>
+          <span>Nuevos proyectos — 2026 / 2027</span>
+          <span>06</span>
+        </header>
+
+        <h2 class="contact__title" data-lines>
+          <span class="ln"><span>Hablemos de</span></span>
+          <span class="ln ln--in"><span><em>su próxima obra.</em></span></span>
         </h2>
+
         <div class="contact__grid">
-          <a class="contact__mail" href="mailto:hola@furlan.film" data-reveal data-cursor="ESCRIBIR">
-            hola@furlan.film<i aria-hidden="true">↗</i>
+          <a class="contact__mail" href="mailto:hola@furlan.film" data-reveal data-cursor="Escribir">
+            <span class="contact__mail-txt">hola@furlan.film</span>
+            <i aria-hidden="true"></i>
           </a>
-          <ul class="contact__list mono" data-reveal>
-            <li><span>WhatsApp</span><a href="https://wa.me/5491100000000" target="_blank" rel="noopener">+54 9 11 0000 0000</a></li>
-            <li><span>Instagram</span><a href="https://instagram.com/furlan.film" target="_blank" rel="noopener">@furlan.film</a></li>
-            <li><span>Base</span><span>Buenos Aires · Proyectos en todo el país</span></li>
-          </ul>
+          <dl class="contact__list" data-reveal>
+            <div><dt>WhatsApp</dt><dd><a href="https://wa.me/5491100000000" target="_blank" rel="noopener" class="ulink">+54 9 11 0000 0000</a></dd></div>
+            <div><dt>Instagram</dt><dd><a href="https://instagram.com/furlan.film" target="_blank" rel="noopener" class="ulink">@furlan.film</a></dd></div>
+            <div><dt>Base</dt><dd>Buenos Aires — Proyectos en todo el país</dd></div>
+            <div><dt>Agenda</dt><dd>Rodajes con cuatro semanas de anticipación</dd></div>
+          </dl>
         </div>
       </div>
-      <footer class="foot wrap mono">
-        <span>© 2026 Furlan Architectural Cinema</span>
-        <span>34°36′S 58°22′O · <span data-clock>--:-- ART</span></span>
-        <a href="#top" class="link">Volver arriba ↑</a>
+
+      <footer class="foot">
+        <div class="wrap foot__row">
+          <span>© 2026 Furlan — Cine de arquitectura</span>
+          <span>34°36′S 58°22′O · <span data-clock>--:--</span> ART</span>
+          <a href="#top" class="ulink">Volver al inicio</a>
+        </div>
+        <div class="foot__mark" aria-hidden="true">Furlan</div>
       </footer>
     </section>
 
   </main>
 
-  <!-- Grano analógico ultra fino -->
   <div class="grain" aria-hidden="true"></div>
 
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
-  <script src="js/main.js?v=20261023d" defer></script>
+  <script src="js/main.js?v=20261023-r2" defer></script>
 </body>
 </html>

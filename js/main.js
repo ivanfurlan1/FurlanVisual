@@ -1,7 +1,6 @@
 /* =========================================================
-   FURLAN — CINE AÉREO DE ARQUITECTURA
-   Motor de interacción, visualización cinematográfica
-   y experiencia fluida de scroll.
+   FURLAN — CINE DE ARQUITECTURA
+   Motor de proyección, scroll y microinteracciones.
    ========================================================= */
 (() => {
   "use strict";
@@ -16,123 +15,102 @@
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
   const body = document.body;
+  const root = document.documentElement;
 
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   window.scrollTo(0, 0);
 
   let vw = innerWidth, vh = innerHeight;
+  root.style.setProperty("--vh", `${vh}px`);
 
   /* ---------------------------------------------------------
-     Scroll suave (Lenis en escritorio)
+     Scroll suave (Lenis, sólo con puntero fino)
      --------------------------------------------------------- */
   let lenis = null;
   if (window.Lenis && !reduce && finePointer) {
     lenis = new window.Lenis({
-      duration: 1.15,
+      duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      wheelMultiplier: 1.1,
-      touchMultiplier: 1.3,
+      wheelMultiplier: 1,
       smoothWheel: true,
     });
     lenis.stop();
   }
   const scrollY = () => (lenis ? lenis.scroll : window.scrollY);
 
-  function scrollToTarget(target) {
+  function scrollToTarget(target, opts = {}) {
     const y = typeof target === "number" ? target : target.getBoundingClientRect().top + scrollY();
-    if (lenis) lenis.scrollTo(y, { duration: 1.5 });
-    else window.scrollTo({ top: y, behavior: reduce ? "auto" : "smooth" });
+    if (lenis) lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
+    else window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
   }
 
   /* ---------------------------------------------------------
-     Cursor personalizado ultra-fino
+     Cursor
      --------------------------------------------------------- */
-  const cursorRing = $(".custom-cursor");
-  const cursorDot = $(".cursor-dot");
-  let mouseX = -100, mouseY = -100;
-  let ringX = -100, ringY = -100;
+  const cursor = $(".cursor");
+  const cursorLabel = $(".cursor__label");
+  let mx = -200, my = -200, cx = -200, cy = -200;
 
-  if (finePointer && cursorRing && cursorDot) {
-    body.classList.add("cursor-active");
+  if (finePointer && cursor) {
+    body.classList.add("has-cursor");
+    addEventListener("mousemove", (e) => { mx = e.clientX; my = e.clientY; }, { passive: true });
 
-    window.addEventListener("mousemove", (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      cursorDot.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
-    });
-
-    const updateCursor = () => {
-      ringX += (mouseX - ringX) * 0.16;
-      ringY += (mouseY - ringY) * 0.16;
-      cursorRing.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`;
-      requestAnimationFrame(updateCursor);
-    };
-    requestAnimationFrame(updateCursor);
-
-    $$("a, button, .seq__scrub, .svc__row").forEach((el) => {
+    const bindCursor = (el) => {
       el.addEventListener("mouseenter", () => {
-        body.classList.add("cursor-hover");
-        const action = el.dataset.cursor || "";
-        cursorRing.textContent = action;
+        const label = el.dataset.cursor;
+        if (label) {
+          cursorLabel.textContent = label;
+          body.classList.add("cursor-label");
+        } else {
+          body.classList.add("cursor-link");
+        }
       });
       el.addEventListener("mouseleave", () => {
-        body.classList.remove("cursor-hover");
-        cursorRing.textContent = "";
+        body.classList.remove("cursor-label", "cursor-link");
+      });
+    };
+    $$("a, button, .seq__scrub, [data-cursor]").forEach(bindCursor);
+  }
+
+  /* ---------------------------------------------------------
+     Texto palabra por palabra (tinta que aparece con el scroll)
+     --------------------------------------------------------- */
+  function splitWords(el) {
+    const nodes = Array.from(el.childNodes);
+    el.textContent = "";
+    nodes.forEach((n) => {
+      const isEl = n.nodeType === 1;
+      const text = n.textContent;
+      text.split(/\s+/).filter(Boolean).forEach((w) => {
+        const s = document.createElement("span");
+        s.className = "wd";
+        if (isEl) {
+          const inner = document.createElement(n.tagName.toLowerCase());
+          inner.textContent = w;
+          s.appendChild(inner);
+        } else {
+          s.textContent = w;
+        }
+        el.appendChild(s);
+        el.appendChild(document.createTextNode(" "));
       });
     });
   }
 
-  /* ---------------------------------------------------------
-     Partición de textos para revelado palabra por palabra
-     --------------------------------------------------------- */
-  function splitWords(el, wrap) {
-    const nodes = Array.from(el.childNodes);
-    el.textContent = "";
-    let i = 0;
-    const add = (word, tag) => {
-      if (!word) return;
-      const inner = tag ? document.createElement(tag) : null;
-      if (inner) inner.textContent = word;
-      el.appendChild(wrap(inner || document.createTextNode(word), i++));
-      el.appendChild(document.createTextNode(" "));
-    };
-    nodes.forEach((n) => {
-      if (n.nodeType === 3) n.textContent.split(/\s+/).forEach((w) => add(w));
-      else if (n.nodeType === 1) n.textContent.split(/\s+/).forEach((w) => add(w, n.tagName.toLowerCase()));
-    });
-    return i;
-  }
-
-  $$("[data-split]").forEach((el) => {
-    splitWords(el, (node, i) => {
-      const w = document.createElement("span");
-      const s = document.createElement("span");
-      w.className = "w";
-      s.style.setProperty("--i", i);
-      s.appendChild(node);
-      w.appendChild(s);
-      return w;
-    });
-  });
-
   const wordBlocks = $$("[data-words]").map((el) => {
-    splitWords(el, (node) => {
-      const s = document.createElement("span");
-      s.className = "wd";
-      s.appendChild(node);
-      return s;
-    });
-    return { el, words: $$(".wd", el), visible: false, last: -1 };
+    splitWords(el);
+    return { el, words: $$(".wd", el), last: -1 };
   });
 
   /* ---------------------------------------------------------
-     MOTOR DE SECUENCIAS CINEMATOGRÁFICAS
-     Marco acotado + transiciones ópticas orgánicas
+     MOTOR DE SECUENCIAS
+     Pantalla completa → encuadre de proyección.
+     Obra I: nítida con velo. Obras II–IV: nacen del negro,
+     desenfocadas, y se revelan mientras se reencuadran.
      --------------------------------------------------------- */
   class Sequence {
     constructor(el) {
       this.el = el;
-      this.id = el.id || "";
       this.isHero = el.classList.contains("seq--hero");
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
@@ -142,8 +120,10 @@
       this.stage = $(".seq__stage", el);
       this.media = $(".seq__media", el);
       this.canvas = $(".seq__canvas", el);
+      this.posterImg = $(".seq__poster img", el);
       this.ctx = this.canvas.getContext("2d", { alpha: false });
       this.hero = $("[data-seq-hero]", el);
+      this.lead = $("[data-seq-lead]", el);
 
       this.chapters = $$(".chapter", el).map((n) => ({
         n,
@@ -154,15 +134,14 @@
       this.frEl = $("[data-hud-fr]", el);
       this.scrub = $(".seq__scrub", el);
       this.scrubFill = $("[data-scrub-fill]", el);
-      this.scrubDot = $("[data-scrub-dot]", el);
 
       this.frames = [];
       this.cur = 0;
       this.lastCur = -1;
       this.lastFrame = -1;
       this.token = 0;
-      this.p = -1;
-      this.isScrubbing = false;
+      this.lastBlur = -1;
+      this.lastScrollPos = undefined;
 
       this.bindScrub();
       this.measure();
@@ -170,107 +149,103 @@
 
     bindScrub() {
       if (!this.scrub) return;
-
-      const handleScrub = (e) => {
+      const fromEvent = (e) => {
         const rect = this.scrub.getBoundingClientRect();
-        const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
-        if (clientX === undefined) return;
-        const pos = clamp((clientX - rect.left) / rect.width);
-        this.seekToProgress(pos);
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        if (x === undefined) return;
+        this.seekToProgress(clamp((x - rect.left) / rect.width));
       };
-
-      this.scrub.addEventListener("mousedown", (e) => {
-        this.isScrubbing = true;
-        handleScrub(e);
-        const onMove = (ev) => { if (this.isScrubbing) handleScrub(ev); };
-        const onUp = () => {
-          this.isScrubbing = false;
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
+      const start = (e, moveEv, endEv) => {
+        fromEvent(e);
+        const onMove = (ev) => fromEvent(ev);
+        const onEnd = () => {
+          removeEventListener(moveEv, onMove);
+          removeEventListener(endEv, onEnd);
         };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
+        addEventListener(moveEv, onMove, { passive: true });
+        addEventListener(endEv, onEnd);
+      };
+      this.scrub.addEventListener("mousedown", (e) => start(e, "mousemove", "mouseup"));
+      this.scrub.addEventListener("touchstart", (e) => start(e, "touchmove", "touchend"), { passive: true });
+      this.scrub.addEventListener("keydown", (e) => {
+        const step = e.shiftKey ? 0.1 : 0.04;
+        const cur = this.progress || 0;
+        if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToProgress(clamp(cur + step)); }
+        if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToProgress(clamp(cur - step)); }
       });
-
-      this.scrub.addEventListener("touchstart", (e) => {
-        this.isScrubbing = true;
-        handleScrub(e);
-        const onTouchMove = (ev) => { if (this.isScrubbing) handleScrub(ev); };
-        const onTouchEnd = () => {
-          this.isScrubbing = false;
-          window.removeEventListener("touchmove", onTouchMove);
-          window.removeEventListener("touchend", onTouchEnd);
-        };
-        window.addEventListener("touchmove", onTouchMove, { passive: true });
-        window.addEventListener("touchend", onTouchEnd);
-      }, { passive: true });
     }
 
     seekToProgress(progress) {
-      const pStart = this.isHero ? 0.04 : 0.02;
-      const pEnd = 0.94;
-      const targetP = pStart + progress * (pEnd - pStart);
-      const targetScroll = this.top + targetP * this.len;
-      if (lenis) {
-        lenis.scrollTo(targetScroll, { immediate: true });
-      } else {
-        window.scrollTo(0, targetScroll);
-      }
+      const targetP = progress * 0.9;
+      const y = this.top + targetP * this.len;
+      if (lenis) lenis.scrollTo(y, { immediate: true });
+      else window.scrollTo(0, y);
     }
 
     pickSet() {
-      if (vw / vh < 0.9) return "pt";
-      return "lg";
+      return vw / vh < 0.9 ? "pt" : "lg";
+    }
+
+    /* Tamaño del encuadre final (16:9 horizontal / 9:16 vertical) */
+    target() {
+      const portrait = vw / vh < 0.9 || vw <= 640;
+      let tw, th;
+      if (portrait) {
+        th = Math.min(vh * 0.64, 700);
+        tw = th * 9 / 16;
+        if (tw > vw * 0.8) { tw = vw * 0.8; th = tw * 16 / 9; }
+      } else {
+        tw = Math.min(vw * 0.8, 1240);
+        th = tw * 9 / 16;
+        const maxH = vh * 0.62;
+        if (th > maxH) { th = maxH; tw = th * 16 / 9; }
+      }
+      return { tw: Math.round(tw), th: Math.round(th) };
     }
 
     measure() {
-      const dpr = Math.min(devicePixelRatio || 1, 2);
-      const isPortrait = vw / vh < 0.9 || vw <= 768;
-
-      let w, h;
-      if (this.isHero) {
-        w = vw;
-        h = vh;
-      } else {
-        w = isPortrait ? Math.min(vw * 0.84, 380) : Math.min(vw * 0.86, 1120);
-        h = isPortrait ? Math.round(w * 16 / 9) : Math.round(w * 9 / 16);
-      }
-
-      const canvasW = Math.round(w * dpr);
-      const canvasH = Math.round(h * dpr);
-
-      if (this.canvas.width !== canvasW || this.canvas.height !== canvasH) {
-        this.canvas.width = canvasW;
-        this.canvas.height = canvasH;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.round(vw * dpr), h = Math.round(vh * dpr);
+      if (this.canvas.width !== w || this.canvas.height !== h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
         this.dirty = true;
       }
-
       this.top = this.el.offsetTop;
       this.len = Math.max(1, this.el.offsetHeight - vh);
 
+      const t = this.target();
+      this.tw = t.tw; this.th = t.th;
+      this.stage.style.setProperty("--tw", `${t.tw}px`);
+      this.stage.style.setProperty("--th", `${t.th}px`);
+
       const set = this.pickSet();
-      if (this.set && (set === "pt") !== (this.set === "pt")) {
+      if (this.set && set !== this.set) {
+        this.set = null;
         this.load(set);
       }
     }
 
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
-      [16, 8, 4, 2, 1].forEach((step) => {
-        for (let i = 0; i < n; i += step) {
-          if (!seen[i]) { seen[i] = 1; out.push(i); }
-        }
+      // Los primeros fotogramas, en orden estricto: arranque y reencuadre sin saltos.
+      const head = Math.min(45, n);
+      for (let i = 0; i < head; i++) { seen[i] = 1; out.push(i); }
+      // El resto, en pasadas progresivas para cubrir todo el film cuanto antes.
+      [6, 3, 1].forEach((step) => {
+        for (let i = head; i < n; i += step) if (!seen[i]) { seen[i] = 1; out.push(i); }
       });
       if (!seen[n - 1]) out.push(n - 1);
       return out;
     }
 
     load(set = this.pickSet(), onProgress) {
+      if (this.set === set && this.frames.length) return;
       this.set = set;
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const first = Math.min(6, Math.max(3, Math.ceil(this.count / 24)));
+      const first = Math.min(30, Math.max(16, Math.ceil(this.count / 10)));
       let qi = 0, done = 0;
       const parallel = vw < 900 ? 4 : 6;
 
@@ -284,7 +259,10 @@
           if (ok) this.frames[i] = img;
           done++;
           if (onProgress) onProgress(Math.min(1, done / first));
-          if (i === 0 && ok) this.el.classList.add("has-canvas");
+          if (i === 0 && ok) {
+            this.el.classList.add("has-canvas");
+            this.draw(0);
+          }
           this.dirty = true;
           next();
         };
@@ -307,15 +285,14 @@
 
     draw(pos) {
       const n = this.count;
-      const clampedPos = Math.max(0, Math.min(n - 1, pos));
-      const f0 = Math.floor(clampedPos);
+      const p = clamp(pos, 0, n - 1);
+      const f0 = Math.floor(p);
       const f1 = Math.min(n - 1, f0 + 1);
-      const blend = clampedPos - f0;
+      const blend = p - f0;
 
       const img0 = this.nearest(f0);
       if (!img0) return;
-
-      const c = this.canvas;
+      const c = this.canvas, ctx = this.ctx;
       const cw = c.width, ch = c.height;
       const iw = img0.naturalWidth, ih = img0.naturalHeight;
       if (!iw || !ih) return;
@@ -324,206 +301,248 @@
       const dw = iw * s, dh = ih * s;
       const x = (cw - dw) / 2, y = (ch - dh) / 2;
 
-      this.ctx.imageSmoothingEnabled = true;
-      this.ctx.imageSmoothingQuality = "high";
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.globalAlpha = 1;
+      ctx.drawImage(img0, x, y, dw, dh);
 
-      this.ctx.globalCompositeOperation = "source-over";
-      this.ctx.globalAlpha = 1.0;
-      this.ctx.drawImage(img0, x, y, dw, dh);
-
+      // Fundido entre fotogramas contiguos: movimiento continuo, sin escalones.
       if (f1 !== f0 && blend > 0.005) {
         const img1 = this.frames[f1];
-        if (img1 && img1.complete && img1.naturalWidth) {
-          const alpha = blend * blend * (3 - 2 * blend);
-          this.ctx.globalAlpha = alpha;
-          this.ctx.drawImage(img1, x, y, dw, dh);
+        if (img1 && img1.naturalWidth) {
+          ctx.globalAlpha = smooth(blend);
+          ctx.drawImage(img1, x, y, dw, dh);
+          ctx.globalAlpha = 1;
         }
       }
     }
 
-    update(y, dt) {
+    setBlur(px) {
+      const v = Math.round(px * 10) / 10;
+      if (v === this.lastBlur) return;
+      this.lastBlur = v;
+      const f = v > 0.05 ? `blur(${v}px)` : "none";
+      this.canvas.style.filter = f;
+      if (this.posterImg) this.posterImg.style.filter = f;
+    }
+
+    setText(el, o, ty, blur) {
+      el.style.opacity = o.toFixed(3);
+      el.style.transform = ty ? `translate3d(0, ${ty.toFixed(2)}vh, 0)` : "none";
+      el.style.filter = blur > 0.1 ? `blur(${blur.toFixed(1)}px)` : "none";
+      el.style.visibility = o <= 0.001 ? "hidden" : "visible";
+    }
+
+    update(dt) {
       const n = this.count;
       const isHero = this.isHero;
-      const currentY = scrollY();
-      const p = clamp((currentY - this.top) / this.len);
+      const y = scrollY();
+      const rawP = (y - this.top) / this.len;
+      const st = this.stage.style;
 
-      // Reproducción inmediata con el avance del scroll
-      const pStart = isHero ? 0.01 : 0.0;
-      const pEnd = 0.94;
+      // Fuera de pantalla (más de una pantalla de distancia): no trabajar.
+      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
 
-      let prog;
-      if (p <= pStart) {
-        prog = 0;
-      } else if (p >= pEnd) {
-        prog = 1;
-      } else {
-        prog = (p - pStart) / (pEnd - pStart);
+      /* ---- Antes de la secuencia: estado inicial absoluto ---- */
+      if (rawP <= 0) {
+        this.cur = 0;
+        this.progress = 0;
+        st.setProperty("--frame-w", `${vw}px`);
+        st.setProperty("--frame-h", `${vh}px`);
+        st.setProperty("--frame-veil", isHero ? "1" : "0");
+        st.setProperty("--cover-opacity", isHero ? "0" : "1");
+        st.setProperty("--frame-opacity", "1");
+        st.setProperty("--img-scale", isHero ? "1.05" : "1.1");
+        st.setProperty("--chrome-opacity", "0");
+        st.setProperty("--chrome-vis", "hidden");
+        this.setBlur(isHero ? 0 : 18);
+        if (this.hero) this.setText(this.hero, 1, 0, 0);
+        if (this.lead) this.setText(this.lead, 1, 0, 0);
+        if (this.scrubFill) this.scrubFill.style.width = "0%";
+        this.chapters.forEach(({ n: el }) => { el.style.opacity = "0"; });
+        if (this.lastCur !== 0 || this.dirty) {
+          this.draw(0);
+          this.lastCur = 0;
+          this.dirty = false;
+        }
+        return;
       }
 
-      const target = prog * (n - 1);
-      const lambda = (p >= pEnd || p <= pStart) ? 14 : 10;
-      const k = reduce ? 1 : (1 - Math.exp(-lambda * dt));
-
-      if (this.lastScrollPos === undefined) this.lastScrollPos = currentY;
-      const isUserScrolling = Math.abs(currentY - this.lastScrollPos) > 0.2;
-      this.lastScrollPos = currentY;
-
-      let effectiveTarget = target;
-      if (!isUserScrolling && Math.abs(target - this.cur) < 0.25) {
-        effectiveTarget = Math.round(target);
+      /* ---- Después de la secuencia ---- */
+      if (rawP >= 1) {
+        this.cur = n - 1;
+        this.progress = 1;
+        st.setProperty("--cover-opacity", "1");
+        st.setProperty("--frame-opacity", "0");
+        st.setProperty("--chrome-opacity", "0");
+        st.setProperty("--chrome-vis", "hidden");
+        this.setBlur(14);
+        if (this.scrubFill) this.scrubFill.style.width = "100%";
+        return;
       }
 
-      this.cur += (effectiveTarget - this.cur) * k;
-      if (Math.abs(effectiveTarget - this.cur) < 0.002) {
-        this.cur = effectiveTarget;
-      }
+      /* ---- Dentro de la secuencia ---- */
+      const p = rawP;
+      const pEnd = 0.9;
+      const prog = clamp(p / pEnd);
+      this.progress = prog;
+
+      const targetF = prog * (n - 1);
+      const k = reduce ? 1 : 1 - Math.exp(-14 * dt);
+
+      if (this.lastScrollPos === undefined) this.lastScrollPos = y;
+      const scrolling = Math.abs(y - this.lastScrollPos) > 0.2;
+      this.lastScrollPos = y;
+
+      let eff = targetF;
+      if (!scrolling && Math.abs(targetF - this.cur) < 0.25) eff = Math.round(targetF);
+      this.cur += (eff - this.cur) * k;
+      if (Math.abs(eff - this.cur) < 0.002) this.cur = eff;
 
       if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
         this.draw(this.cur);
         this.lastCur = this.cur;
         this.dirty = false;
 
-        const displayFrame = Math.round(this.cur);
-        if (displayFrame !== this.lastFrame) {
-          this.lastFrame = displayFrame;
-          const currentSec = Math.floor(displayFrame / this.fps);
-          if (this.tcEl) {
-            this.tcEl.textContent = `00:${pad(currentSec)} / 00:${pad(this.durationSec)}`;
-          }
-          if (this.frEl) {
-            this.frEl.textContent = pad(displayFrame + 1, 3);
-          }
+        const f = Math.round(this.cur);
+        if (f !== this.lastFrame) {
+          this.lastFrame = f;
+          const sec = Math.floor(f / this.fps);
+          const fr = f % this.fps;
+          if (this.tcEl) this.tcEl.textContent = `${pad(sec)}:${pad(fr)}`;
+          if (this.frEl) this.frEl.textContent = pad(f + 1, 3);
         }
-
-        const pct = (prog * 100).toFixed(2);
-        if (this.scrubFill) this.scrubFill.style.width = `${pct}%`;
-        if (this.scrubDot) this.scrubDot.style.left = `${pct}%`;
+        if (this.scrubFill) this.scrubFill.style.width = `${(prog * 100).toFixed(2)}%`;
+        if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(prog * 100)));
       }
 
-      if (Math.abs(p - this.p) < 0.0001) return;
-      this.p = p;
-      const st = this.stage.style;
+      /* Reencuadre: pantalla completa → encuadre (0 → 0.34) */
+      const morph = smooth(range(p, 0, 0.34));
+      const inv = 1 - morph;
+      const curW = this.tw + (vw - this.tw) * inv;
+      const curH = this.th + (vh - this.th) * inv;
+      st.setProperty("--frame-w", `${curW.toFixed(1)}px`);
+      st.setProperty("--frame-h", `${curH.toFixed(1)}px`);
+      st.setProperty("--img-scale", (1 + inv * (isHero ? 0.05 : 0.1)).toFixed(4));
 
+      /* Salida: el film se apaga y se desenfoca (0.88 → 0.98) */
+      const outro = smooth(range(p, 0.88, 0.98));
+
+      let cover, blur;
       if (isHero) {
-        // =======================================================
-        // FILM 01 (HERO + PROYECCIÓN)
-        // Comienza a pantalla completa bajo velo oscuro elegante.
-        // Se enmarca orgánicamente al hacer scroll hacia el viewport.
-        // Se desvanece suavemente al final entregando la siguiente sección.
-        // =======================================================
-        const heroMorph = smooth(range(p, 0.02, 0.16));
-        const invMorph = 1 - heroMorph;
-
-        const isPortrait = vw / vh < 0.9 || vw <= 768;
-        const targetW = isPortrait ? Math.min(vw * 0.84, 380) : Math.min(vw * 0.86, 1120);
-        const targetH = isPortrait ? Math.round(targetW * 16 / 9) : Math.round(targetW * 9 / 16);
-
-        const curW = targetW + (vw - targetW) * invMorph;
-        const curH = targetH + (vh - targetH) * invMorph;
-        const curRadius = heroMorph * 8;
-        const curVeil = (invMorph * 0.76).toFixed(3);
-
-        st.setProperty("--hero-w", `${curW.toFixed(1)}px`);
-        st.setProperty("--hero-h", `${curH.toFixed(1)}px`);
-        st.setProperty("--hero-radius", `${curRadius.toFixed(1)}px`);
-        st.setProperty("--hero-veil", curVeil);
-        st.setProperty("--hero-glow", (heroMorph * 0.6).toFixed(3));
-        st.setProperty("--hero-shadow", heroMorph > 0.05 ? "0 24px 80px -18px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(245, 242, 235, 0.08)" : "none");
-
-        // Desvanecimiento del texto hero
-        if (this.hero) {
-          const heroFade = range(p, 0.0, 0.10);
-          this.hero.style.opacity = (1 - smooth(heroFade)).toFixed(3);
-          this.hero.style.transform = `translate3d(0, ${(-heroFade * 8).toFixed(1)}vh, 0)`;
-          this.hero.style.visibility = heroFade >= 1 ? "hidden" : "visible";
-        }
-
-        // Chrome de Film 01 (aparece con el marco)
-        const chromeProg = range(p, 0.06, 0.16);
-        const outroProg = range(p, 0.90, 0.98);
-        const outroEffect = smooth(outroProg);
-        const chromeOpacity = Math.max(0, smooth(chromeProg) * (1 - outroEffect));
-        st.setProperty("--chrome-opacity", chromeOpacity.toFixed(3));
-
-        // Salida suave y rápida sin vacíos en negro
-        st.setProperty("--cover-opacity", (outroEffect * 0.9).toFixed(3));
-        st.setProperty("--fx-blur", `${(outroEffect * 14).toFixed(1)}px`);
-
+        st.setProperty("--frame-veil", inv.toFixed(3));
+        cover = outro;
+        blur = outro * 14;
       } else {
-        // =======================================================
-        // FILMS 02, 03, 04 (COMPACT CINEMA VIEWPORTS)
-        // Despertar ágil y sin esperas (en solo un 9% de scroll):
-        // la oscuridad y el desenfoque se disuelven de inmediato,
-        // mientras el marco y el título aparecen de sorpresa.
-        // Salida limpia al 90-98% sin quedarse en negro.
-        // =======================================================
-        const introProg = range(p, 0.0, 0.09);
-        const introSmooth = smooth(introProg);
+        // Nace del negro: la capa oscura se vuelve transparente y el desenfoque se disipa.
+        st.setProperty("--frame-veil", "0");
+        const reveal = smooth(range(p, 0.02, 0.34));
+        cover = Math.max(1 - reveal, outro);
+        blur = Math.max((1 - reveal) * 18, outro * 14);
+      }
+      st.setProperty("--cover-opacity", cover.toFixed(3));
+      st.setProperty("--frame-opacity", (1 - outro).toFixed(3));
+      this.setBlur(blur);
 
-        const outroProg = range(p, 0.91, 0.98);
-        const outroSmooth = smooth(outroProg);
-
-        const portalVisibility = Math.max(0, introSmooth * (1 - outroSmooth));
-        const portalScale = 0.97 + 0.03 * introSmooth - 0.02 * outroSmooth;
-
-        const darkCover = Math.max(1 - introSmooth, outroSmooth);
-        const blurAmount = darkCover * 14;
-
-        st.setProperty("--portal-opacity", portalVisibility.toFixed(3));
-        st.setProperty("--portal-scale", portalScale.toFixed(4));
-        st.setProperty("--chrome-opacity", portalVisibility.toFixed(3));
-        st.setProperty("--cover-opacity", (darkCover * 0.92).toFixed(3));
-        st.setProperty("--fx-blur", `${blurAmount.toFixed(1)}px`);
+      /* Textos frontales */
+      if (this.hero) {
+        const t = range(p, 0.015, 0.2);
+        this.setText(this.hero, 1 - smooth(t), -t * 6, t * 8);
+      }
+      if (this.lead) {
+        const t = range(p, 0.02, 0.22);
+        this.setText(this.lead, 1 - smooth(t), -t * 5, t * 8);
       }
 
-      // Capítulos poéticos
+      /* Rótulo, marcas y línea de tiempo */
+      const chrome = smooth(range(p, 0.24, 0.36)) * (1 - outro);
+      st.setProperty("--chrome-opacity", chrome.toFixed(3));
+      st.setProperty("--chrome-vis", chrome > 0.01 ? "visible" : "hidden");
+
+      /* Capítulos */
+      let shade = 0;
       this.chapters.forEach(({ n: el, r: [a, b] }) => {
         const t = (p - a) / (b - a);
         if (t <= 0 || t >= 1) {
-          if (el.style.opacity !== "0") {
-            el.style.opacity = "0";
-            el.style.pointerEvents = "none";
-          }
+          if (el.style.opacity !== "0") el.style.opacity = "0";
           return;
         }
-        const o = smooth(Math.min(range(t, 0, 0.22), 1 - range(t, 0.78, 1)));
-        const dir = t < 0.5 ? 1 : -1;
+        const o = smooth(Math.min(range(t, 0, 0.2), 1 - range(t, 0.8, 1)));
+        shade = Math.max(shade, o);
         el.style.opacity = o.toFixed(3);
-        el.style.transform = `translate3d(0, ${((1 - o) * 14 * dir).toFixed(1)}px, 0)`;
+        el.style.transform = `translate3d(0, ${((1 - o) * (t < 0.5 ? 12 : -8)).toFixed(1)}px, 0)`;
       });
+      st.setProperty("--shade", shade.toFixed(3));
     }
   }
 
   const sequences = $$(".seq").map((el) => new Sequence(el));
 
   /* ---------------------------------------------------------
-     PRELOADER
+     PRELOADER — contador suave con duración mínima
      --------------------------------------------------------- */
   const loaderCount = $("[data-loader-count]");
   const loaderBar = $("[data-loader-bar]");
-  let ready = false;
+  const tStart = performance.now();
+  let loadTarget = 0, loadShown = 0, ready = false;
+
+  function tickLoader(now) {
+    if (ready) return;
+    const minT = reduce ? 0 : 1700;
+    const timeCap = clamp((now - tStart) / minT);
+    const goal = Math.min(loadTarget, reduce ? 1 : timeCap);
+    loadShown += (goal - loadShown) * 0.08;
+    if (goal - loadShown < 0.002) loadShown = goal;
+    if (loaderCount) loaderCount.textContent = pad(Math.round(loadShown * 100), 3);
+    if (loaderBar) loaderBar.style.transform = `scaleX(${loadShown.toFixed(4)})`;
+    if (loadShown >= 0.999) return setReady();
+    requestAnimationFrame(tickLoader);
+  }
+  requestAnimationFrame(tickLoader);
 
   function setReady() {
     if (ready) return;
     ready = true;
     if (loaderCount) loaderCount.textContent = "100";
     if (loaderBar) loaderBar.style.transform = "scaleX(1)";
-    setTimeout(() => {
-      body.classList.add("is-ready");
-      body.classList.remove("is-loading");
-      if (lenis) lenis.start();
-      measureAll();
-    }, 350);
+    body.classList.add("is-ready");
+    body.classList.remove("is-loading");
+    if (lenis) lenis.start();
+    measureAll();
+    // Archivo: precarga diferida para que la galería horizontal no tenga saltos.
+    setTimeout(() => $$(".arc img").forEach((img) => { img.loading = "eager"; }), 2500);
   }
 
   if (sequences.length) {
-    sequences[0].load(undefined, () => {});
-    sequences.slice(1).forEach((s) => s.load());
+    sequences[0].load(undefined, (p) => { loadTarget = Math.max(loadTarget, p); });
+
+    const seqLoader = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const s = sequences.find((x) => x.el === en.target);
+        if (s && !s.set) s.load();
+        seqLoader.unobserve(en.target);
+      });
+    }, { rootMargin: "1400px 0px" });
+    sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
+  } else {
+    loadTarget = 1;
   }
-  setTimeout(setReady, 1800);
+  setTimeout(() => { loadTarget = 1; }, 6000);
 
   /* ---------------------------------------------------------
-     REVELADOS EN SCROLL (IntersectionObserver)
+     Portadas de obra: aparecen cuando el escenario se acerca
+     --------------------------------------------------------- */
+  const nearIO = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (en.isIntersecting) en.target.classList.add("is-near");
+      else if (en.boundingClientRect.top > 0) en.target.classList.remove("is-near");
+    });
+  }, { rootMargin: "0px 0px -30% 0px" });
+  sequences.filter((s) => !s.isHero).forEach((s) => nearIO.observe(s.el));
+
+  /* ---------------------------------------------------------
+     Revelados
      --------------------------------------------------------- */
   const revealIO = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
@@ -531,264 +550,276 @@
       en.target.classList.add("is-in");
       revealIO.unobserve(en.target);
     });
-  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.1 });
+  }, { rootMargin: "0px 0px -10% 0px", threshold: 0.08 });
 
-  $$("[data-reveal], [data-split]").forEach((el) => {
+  $$("[data-reveal], [data-lines], .rimg").forEach((el) => {
     const sib = el.parentElement ? $$(":scope > [data-reveal]", el.parentElement) : [];
     const idx = sib.indexOf(el);
-    if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 5) * 0.08}s`);
+    if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 6) * 0.09}s`);
     revealIO.observe(el);
   });
 
   /* ---------------------------------------------------------
-     LÍNEA DE MÉTODO Y SERVICIOS HOVER PREVIEW
+     Índice (overlay)
      --------------------------------------------------------- */
-  const stepsSection = $(".method");
-  const stepsLine = $("[data-steps-line]");
-  const stepItems = $$(".step");
+  const indexBtn = $(".nav__index");
+  const indexEl = $("#index");
+  const previewImgs = $$(".index__preview img");
 
-  function updateSteps() {
-    if (!stepsSection || !stepsLine) return;
-    const rect = stepsSection.getBoundingClientRect();
-    const p = clamp((vh * 0.7 - rect.top) / rect.height);
-    stepsLine.style.setProperty("--sl", smooth(p).toFixed(3));
-    stepItems.forEach((st, i) => {
-      const stepProg = clamp((p - i * 0.22) / 0.25);
-      st.style.setProperty("--on", smooth(stepProg).toFixed(3));
-      st.classList.toggle("is-on", stepProg > 0.5);
+  function setIndex(open) {
+    body.classList.toggle("index-open", open);
+    if (indexBtn) indexBtn.setAttribute("aria-expanded", String(open));
+    if (indexEl) indexEl.setAttribute("aria-hidden", String(!open));
+    if (lenis) open ? lenis.stop() : lenis.start();
+  }
+  if (indexBtn) indexBtn.addEventListener("click", () => setIndex(!body.classList.contains("index-open")));
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && body.classList.contains("index-open")) setIndex(false); });
+
+  $$(".index__list a").forEach((a, i) => {
+    a.addEventListener("mouseenter", () => {
+      previewImgs.forEach((img, j) => img.classList.toggle("is-active", j === i));
     });
+  });
+
+  /* ---------------------------------------------------------
+     Anclas
+     --------------------------------------------------------- */
+  function goTo(href) {
+    if (!href || href === "#") return;
+    const target = href === "#top" ? 0 : $(href);
+    if (target === null) return;
+    const wasOpen = body.classList.contains("index-open");
+    if (wasOpen) {
+      setIndex(false);
+      setTimeout(() => scrollToTarget(target, { immediate: true }), 650);
+    } else {
+      scrollToTarget(target);
+    }
   }
 
-  // Previsualización flotante en servicios
-  const svcPreview = $(".svc__preview");
+  $$("a[href^='#']").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      const href = a.getAttribute("href");
+      if (href && href.length > 1 && (href === "#top" || $(href))) {
+        e.preventDefault();
+        goTo(href);
+      }
+    });
+  });
+  $$("[data-goto]").forEach((el) => el.addEventListener("click", () => goTo(el.dataset.goto)));
+
+  /* ---------------------------------------------------------
+     Servicios: imagen asociada a la fila activa
+     --------------------------------------------------------- */
   const svcRows = $$(".svc__row");
-  let svcX = 0, svcY = 0, curSvcX = 0, curSvcY = 0;
+  const svcImgs = $$(".services__fig img");
+  const svcN = $("[data-svc-n]");
+  let svcActive = 0, svcHover = -1;
 
-  if (svcPreview && finePointer) {
-    svcRows.forEach((row) => {
-      row.addEventListener("mouseenter", () => {
-        const img = $("img", svcPreview);
-        const src = row.dataset.img;
-        if (img && src) img.src = src;
-        svcPreview.classList.add("is-on");
-      });
-      row.addEventListener("mouseleave", () => {
-        svcPreview.classList.remove("is-on");
-      });
+  function setSvc(i) {
+    if (i === svcActive) return;
+    svcActive = i;
+    svcRows.forEach((r, j) => r.classList.toggle("is-active", j === i));
+    svcImgs.forEach((img, j) => img.classList.toggle("is-active", j === i));
+    if (svcN) svcN.textContent = pad(i + 1);
+  }
+  if (finePointer) {
+    svcRows.forEach((row, i) => {
+      row.addEventListener("mouseenter", () => { svcHover = i; setSvc(i); });
+      row.addEventListener("mouseleave", () => { svcHover = -1; });
     });
-
-    window.addEventListener("mousemove", (e) => {
-      svcX = e.clientX + 25;
-      svcY = e.clientY - 120;
+  }
+  function updateSvc() {
+    if (!svcRows.length || svcHover >= 0) return;
+    const mid = vh * 0.5;
+    let best = svcActive, bestD = Infinity;
+    svcRows.forEach((r, i) => {
+      const b = r.getBoundingClientRect();
+      const d = Math.abs(b.top + b.height / 2 - mid);
+      if (d < bestD) { bestD = d; best = i; }
     });
-
-    const updateSvc = () => {
-      curSvcX += (svcX - curSvcX) * 0.14;
-      curSvcY += (svcY - curSvcY) * 0.14;
-      svcPreview.style.setProperty("--mx", `${curSvcX.toFixed(1)}px`);
-      svcPreview.style.setProperty("--my", `${curSvcY.toFixed(1)}px`);
-      requestAnimationFrame(updateSvc);
-    };
-    requestAnimationFrame(updateSvc);
+    setSvc(best);
   }
 
   /* ---------------------------------------------------------
-     ATMÓSFERA SONORA CINEMATOGRÁFICA (Web Audio API)
+     Archivo: galería horizontal fijada
+     --------------------------------------------------------- */
+  const archive = $(".archive");
+  const archTrack = $("[data-archive]");
+  const archBar = $("[data-archive-bar]");
+  let archDist = 0;
+
+  function measureArchive() {
+    if (!archive || !archTrack) return;
+    archDist = Math.max(0, archTrack.scrollWidth - vw);
+    archive.style.height = `${Math.round(archDist + vh)}px`;
+  }
+  function updateArchive() {
+    if (!archive || !archTrack) return;
+    const r = archive.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh) return;
+    const p = clamp(-r.top / Math.max(1, r.height - vh));
+    archTrack.style.setProperty("--ax", `${(-p * archDist).toFixed(1)}px`);
+    if (archBar) archBar.style.transform = `scaleX(${p.toFixed(4)})`;
+  }
+  $$(".arc img").forEach((img) => img.addEventListener("load", () => { measureArchive(); measureSeqs(); }));
+
+  /* ---------------------------------------------------------
+     Atmósfera sonora (Web Audio)
      --------------------------------------------------------- */
   const soundBtn = $("#soundToggle");
-  let audioCtx = null, droneMaster = null, filterNode = null, isAudioOn = false;
+  let audioCtx = null, master = null, filter = null, audioOn = false;
 
   function initAudio() {
     if (audioCtx) return;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    audioCtx = new AudioContext();
-
-    droneMaster = audioCtx.createGain();
-    droneMaster.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    droneMaster.connect(audioCtx.destination);
-
-    filterNode = audioCtx.createBiquadFilter();
-    filterNode.type = "lowpass";
-    filterNode.frequency.setValueAtTime(150, audioCtx.currentTime);
-    filterNode.Q.setValueAtTime(1.1, audioCtx.currentTime);
-    filterNode.connect(droneMaster);
-
-    const osc1 = audioCtx.createOscillator();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(55, audioCtx.currentTime);
-    const g1 = audioCtx.createGain(); g1.gain.value = 0.35;
-    osc1.connect(g1); g1.connect(filterNode);
-    osc1.start();
-
-    const osc2 = audioCtx.createOscillator();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(82.4, audioCtx.currentTime);
-    osc2.detune.setValueAtTime(2.0, audioCtx.currentTime);
-    const g2 = audioCtx.createGain(); g2.gain.value = 0.16;
-    osc2.connect(g2); g2.connect(filterNode);
-    osc2.start();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    master = audioCtx.createGain();
+    master.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    master.connect(audioCtx.destination);
+    filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(160, audioCtx.currentTime);
+    filter.Q.setValueAtTime(0.9, audioCtx.currentTime);
+    filter.connect(master);
+    [[55, 0.34, 0], [82.4, 0.15, 2], [110.2, 0.06, -3]].forEach(([f, g, det]) => {
+      const o = audioCtx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(f, audioCtx.currentTime);
+      o.detune.setValueAtTime(det, audioCtx.currentTime);
+      const gn = audioCtx.createGain();
+      gn.gain.value = g;
+      o.connect(gn); gn.connect(filter);
+      o.start();
+    });
   }
 
   function toggleAudio() {
     initAudio();
     if (!audioCtx) return;
     if (audioCtx.state === "suspended") audioCtx.resume();
-
-    isAudioOn = !isAudioOn;
-    if (soundBtn) {
-      soundBtn.classList.toggle("is-active", isAudioOn);
-      const label = $(".sound-label", soundBtn);
-      if (label) label.textContent = isAudioOn ? "Sonido On" : "Sonido";
-    }
-
+    audioOn = !audioOn;
+    soundBtn.classList.toggle("is-on", audioOn);
+    soundBtn.setAttribute("aria-pressed", String(audioOn));
     const now = audioCtx.currentTime;
-    if (isAudioOn) {
-      droneMaster.gain.cancelScheduledValues(now);
-      droneMaster.gain.setValueAtTime(droneMaster.gain.value, now);
-      droneMaster.gain.exponentialRampToValueAtTime(0.24, now + 1.2);
-    } else {
-      droneMaster.gain.cancelScheduledValues(now);
-      droneMaster.gain.setValueAtTime(droneMaster.gain.value, now);
-      droneMaster.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-    }
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
+    master.gain.exponentialRampToValueAtTime(audioOn ? 0.22 : 0.0001, now + (audioOn ? 1.6 : 0.9));
   }
-
   if (soundBtn) soundBtn.addEventListener("click", toggleAudio);
 
   /* ---------------------------------------------------------
-     RELOJ EN VIVO BUENOS AIRES
+     Reloj de Buenos Aires
      --------------------------------------------------------- */
   const clockEl = $("[data-clock]");
   function updateClock() {
     if (!clockEl) return;
     try {
-      const now = new Date();
-      const str = now.toLocaleTimeString("es-AR", {
+      clockEl.textContent = new Date().toLocaleTimeString("es-AR", {
         timeZone: "America/Argentina/Buenos_Aires",
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
       });
-      clockEl.textContent = `${str} ART`;
     } catch (_) {}
   }
   updateClock();
-  setInterval(updateClock, 10000);
+  setInterval(updateClock, 15000);
 
   /* ---------------------------------------------------------
-     GESTIÓN DE TAMAÑO Y REDIMENSIÓN
+     Medidas
      --------------------------------------------------------- */
+  function measureSeqs() {
+    sequences.forEach((s) => { s.measure(); s.dirty = true; });
+  }
   function measureAll() {
     vw = innerWidth; vh = innerHeight;
-    sequences.forEach((s) => s.measure());
-    sequences.forEach((s) => { s.p = -1; s.dirty = true; });
+    root.style.setProperty("--vh", `${vh}px`);
+    measureArchive();
+    measureSeqs();
   }
 
-  let rT;
+  let rT, lastW = vw;
   addEventListener("resize", () => {
     clearTimeout(rT);
-    rT = setTimeout(measureAll, 120);
+    rT = setTimeout(() => {
+      // En móvil, la barra del navegador cambia la altura: sólo re-medir si cambia el ancho o mucho la altura.
+      if (!finePointer && innerWidth === lastW && Math.abs(innerHeight - vh) < 120) return;
+      lastW = innerWidth;
+      measureAll();
+    }, 140);
   });
   addEventListener("load", measureAll);
   if (document.fonts) document.fonts.ready.then(measureAll);
 
-  // Menú móvil
-  const navToggle = $(".nav__toggle");
-  if (navToggle) {
-    navToggle.addEventListener("click", () => {
-      const open = body.classList.toggle("menu-open");
-      navToggle.setAttribute("aria-expanded", String(open));
-    });
-  }
-  $$(".menu__links a").forEach((a) => {
-    a.addEventListener("click", () => {
-      body.classList.remove("menu-open");
-      if (navToggle) navToggle.setAttribute("aria-expanded", "false");
-    });
-  });
-
-  // Scroll suave en anclas
-  $$("a[href^='#']").forEach((a) => {
-    a.addEventListener("click", (e) => {
-      const href = a.getAttribute("href");
-      if (!href || href === "#") return;
-      const target = href === "#top" ? 0 : $(href);
-      if (target !== null) {
-        e.preventDefault();
-        scrollToTarget(target);
-      }
-    });
-  });
-
   /* ---------------------------------------------------------
-     BUCLE PRINCIPAL (RAF)
+     Bucle principal
      --------------------------------------------------------- */
+  const readline = $("[data-readline]");
+  const parallaxEls = $$("[data-parallax]");
   let last = performance.now();
-  let lastY = -1;
+  let lastY = 0, navAcc = 0;
 
   function loop(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-
     if (lenis) lenis.raf(now);
-
     const y = scrollY();
 
-    body.classList.toggle("is-scrolled", y > 50);
+    // Cursor con inercia
+    if (finePointer && cursor) {
+      cx += (mx - cx) * 0.2;
+      cy += (my - cy) * 0.2;
+      cursor.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
+    }
 
-    // Palabras del manifiesto
-    wordBlocks.forEach((block) => {
-      const rect = block.el.getBoundingClientRect();
-      const inView = rect.top < vh && rect.bottom > 0;
-      if (!inView) return;
-      const p = clamp((vh * 0.85 - rect.top) / (rect.height + vh * 0.4));
-      const activeIdx = Math.floor(p * block.words.length);
-      if (activeIdx !== block.last) {
-        block.last = activeIdx;
-        block.words.forEach((w, i) => {
-          w.style.setProperty("--o", i <= activeIdx ? "1" : "0.14");
-        });
+    // Línea de lectura
+    if (readline) {
+      const max = Math.max(1, document.documentElement.scrollHeight - vh);
+      readline.style.transform = `scaleX(${clamp(y / max).toFixed(4)})`;
+    }
+
+    // Navegación: se retira al bajar, vuelve al subir
+    const dy = y - lastY;
+    navAcc = Math.sign(dy) === Math.sign(navAcc) ? navAcc + dy : dy;
+    if (y < 120) body.classList.remove("nav-hidden");
+    else if (navAcc > 40) body.classList.add("nav-hidden");
+    else if (navAcc < -30) body.classList.remove("nav-hidden");
+
+    // Tinta palabra por palabra
+    wordBlocks.forEach((b) => {
+      const r = b.el.getBoundingClientRect();
+      if (r.top > vh || r.bottom < 0) return;
+      const p = clamp((vh * 0.82 - r.top) / (r.height + vh * 0.3));
+      const idx = Math.floor(p * (b.words.length + 1)) - 1;
+      if (idx !== b.last) {
+        b.last = idx;
+        b.words.forEach((w, i) => w.style.setProperty("--o", i <= idx ? "1" : "0.14"));
       }
     });
 
-    // Parallax suave en fotogramas de obra
-    $$("[data-parallax]").forEach((img) => {
-      const factor = +img.dataset.parallax || 0.08;
-      const rect = img.getBoundingClientRect();
-      if (rect.top < vh && rect.bottom > 0) {
-        const offset = (rect.top - vh * 0.5) * factor;
-        img.style.setProperty("--py", `${offset.toFixed(1)}px`);
-      }
+    // Parallax interno de imágenes
+    parallaxEls.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > vh) return;
+      const f = +el.dataset.parallax || 0.06;
+      const off = (r.top + r.height / 2 - vh / 2) * -f;
+      const img = el.firstElementChild;
+      if (img) img.style.setProperty("--py", `${off.toFixed(1)}px`);
     });
 
-    // Tira horizontal en scroll
-    const stripTrack = $("[data-strip]");
-    if (stripTrack) {
-      const sRect = stripTrack.parentElement.getBoundingClientRect();
-      if (sRect.top < vh && sRect.bottom > 0) {
-        const sp = clamp((vh - sRect.top) / (vh + sRect.height));
-        const maxScroll = stripTrack.scrollWidth - stripTrack.clientWidth;
-        stripTrack.style.setProperty("--sx", `${(-sp * maxScroll * 0.7).toFixed(1)}px`);
-      }
+    sequences.forEach((s) => s.update(dt));
+    updateSvc();
+    updateArchive();
+
+    if (audioOn && filter) {
+      const target = Math.min(420, 160 + Math.abs(dy) * 1.6);
+      filter.frequency.setTargetAtTime(target, audioCtx.currentTime, 0.25);
     }
 
-    // Actualizar secuencias
-    sequences.forEach((s) => s.update(y, dt));
-
-    // Actualizar pasos del método
-    updateSteps();
-
-    // Modulación de audio
-    if (isAudioOn && filterNode && audioCtx) {
-      const dy = Math.abs(y - (lastY >= 0 ? lastY : y));
-      const targetFreq = Math.min(380, 150 + dy * 1.5);
-      filterNode.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.2);
-    }
     lastY = y;
-
     requestAnimationFrame(loop);
   }
-
   requestAnimationFrame(loop);
 })();
