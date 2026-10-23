@@ -1,7 +1,7 @@
 /* =========================================================
-   FURLAN — interacción y movimiento
-   Sin dependencias obligatorias. Lenis (scroll suave) es opcional:
-   si no carga, todo funciona con el scroll nativo.
+   FURLAN — CINE AÉREO DE ARQUITECTURA
+   Motor de interacción, visualización cinematográfica
+   y experiencia fluida de scroll.
    ========================================================= */
 (() => {
   "use strict";
@@ -23,15 +23,15 @@
   let vw = innerWidth, vh = innerHeight;
 
   /* ---------------------------------------------------------
-     Scroll suave (solo escritorio)
+     Scroll suave (Lenis en escritorio)
      --------------------------------------------------------- */
   let lenis = null;
   if (window.Lenis && !reduce && finePointer) {
     lenis = new window.Lenis({
-      duration: 1.1,
+      duration: 1.15,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      wheelMultiplier: 1.3,
-      touchMultiplier: 1.5,
+      wheelMultiplier: 1.1,
+      touchMultiplier: 1.3,
       smoothWheel: true,
     });
     lenis.stop();
@@ -39,13 +39,51 @@
   const scrollY = () => (lenis ? lenis.scroll : window.scrollY);
 
   function scrollToTarget(target) {
-    const y = target === 0 ? 0 : target.getBoundingClientRect().top + scrollY();
-    if (lenis) lenis.scrollTo(y, { duration: 1.8 });
+    const y = typeof target === "number" ? target : target.getBoundingClientRect().top + scrollY();
+    if (lenis) lenis.scrollTo(y, { duration: 1.5 });
     else window.scrollTo({ top: y, behavior: reduce ? "auto" : "smooth" });
   }
 
   /* ---------------------------------------------------------
-     Partición de textos
+     Cursor personalizado ultra-fino
+     --------------------------------------------------------- */
+  const cursorRing = $(".custom-cursor");
+  const cursorDot = $(".cursor-dot");
+  let mouseX = -100, mouseY = -100;
+  let ringX = -100, ringY = -100;
+
+  if (finePointer && cursorRing && cursorDot) {
+    body.classList.add("cursor-active");
+
+    window.addEventListener("mousemove", (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      cursorDot.style.transform = `translate3d(${mouseX}px, ${mouseY}px, 0)`;
+    });
+
+    const updateCursor = () => {
+      ringX += (mouseX - ringX) * 0.16;
+      ringY += (mouseY - ringY) * 0.16;
+      cursorRing.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`;
+      requestAnimationFrame(updateCursor);
+    };
+    requestAnimationFrame(updateCursor);
+
+    $$("a, button, .seq__scrub, .svc__row").forEach((el) => {
+      el.addEventListener("mouseenter", () => {
+        body.classList.add("cursor-hover");
+        const action = el.dataset.cursor || "";
+        cursorRing.textContent = action;
+      });
+      el.addEventListener("mouseleave", () => {
+        body.classList.remove("cursor-hover");
+        cursorRing.textContent = "";
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------
+     Partición de textos para revelado palabra por palabra
      --------------------------------------------------------- */
   function splitWords(el, wrap) {
     const nodes = Array.from(el.childNodes);
@@ -88,56 +126,140 @@
   });
 
   /* ---------------------------------------------------------
-     Secuencia de frames ligada al scroll
+     MOTOR DE SECUENCIAS CINEMATOGRÁFICAS
+     Marco acotado + transiciones ópticas orgánicas
      --------------------------------------------------------- */
   class Sequence {
     constructor(el) {
       this.el = el;
+      this.id = el.id || "";
+      this.isHero = el.classList.contains("seq--hero");
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
       this.fps = +el.dataset.fps || 25;
+      this.durationSec = Math.round(this.count / this.fps);
+
       this.stage = $(".seq__stage", el);
       this.media = $(".seq__media", el);
       this.canvas = $(".seq__canvas", el);
       this.ctx = this.canvas.getContext("2d", { alpha: false });
       this.hero = $("[data-seq-hero]", el);
-      this.layers = $$(".chapter, .seq__end", el).map((n) => ({ n, r: n.dataset.range.split(",").map(Number) }));
-      this.tc = $("[data-hud-tc]", el);
-      this.fr = $("[data-hud-fr]", el);
-      this.rail = $("[data-hud-rail]", el);
+
+      this.chapters = $$(".chapter", el).map((n) => ({
+        n,
+        r: n.dataset.range.split(",").map(Number),
+      }));
+
+      this.tcEl = $("[data-tc]", el);
+      this.frEl = $("[data-hud-fr]", el);
+      this.scrub = $(".seq__scrub", el);
+      this.scrubFill = $("[data-scrub-fill]", el);
+      this.scrubDot = $("[data-scrub-dot]", el);
+
       this.frames = [];
       this.cur = 0;
       this.lastCur = -1;
       this.lastFrame = -1;
       this.token = 0;
       this.p = -1;
+      this.isScrubbing = false;
+
+      this.bindScrub();
       this.measure();
+    }
+
+    bindScrub() {
+      if (!this.scrub) return;
+
+      const handleScrub = (e) => {
+        const rect = this.scrub.getBoundingClientRect();
+        const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+        if (clientX === undefined) return;
+        const pos = clamp((clientX - rect.left) / rect.width);
+        this.seekToProgress(pos);
+      };
+
+      this.scrub.addEventListener("mousedown", (e) => {
+        this.isScrubbing = true;
+        handleScrub(e);
+        const onMove = (ev) => { if (this.isScrubbing) handleScrub(ev); };
+        const onUp = () => {
+          this.isScrubbing = false;
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", onUp);
+        };
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+      });
+
+      this.scrub.addEventListener("touchstart", (e) => {
+        this.isScrubbing = true;
+        handleScrub(e);
+        const onTouchMove = (ev) => { if (this.isScrubbing) handleScrub(ev); };
+        const onTouchEnd = () => {
+          this.isScrubbing = false;
+          window.removeEventListener("touchmove", onTouchMove);
+          window.removeEventListener("touchend", onTouchEnd);
+        };
+        window.addEventListener("touchmove", onTouchMove, { passive: true });
+        window.addEventListener("touchend", onTouchEnd);
+      }, { passive: true });
+    }
+
+    seekToProgress(progress) {
+      const pStart = this.isHero ? 0.04 : 0.02;
+      const pEnd = 0.94;
+      const targetP = pStart + progress * (pEnd - pStart);
+      const targetScroll = this.top + targetP * this.len;
+      if (lenis) {
+        lenis.scrollTo(targetScroll, { immediate: true });
+      } else {
+        window.scrollTo(0, targetScroll);
+      }
     }
 
     pickSet() {
       if (vw / vh < 0.9) return "pt";
-      return vw * Math.min(devicePixelRatio || 1, 2) <= 1500 ? "md" : "lg";
+      return "lg";
     }
 
     measure() {
       const dpr = Math.min(devicePixelRatio || 1, 2);
-      const w = this.stage.clientWidth, h = this.stage.clientHeight;
-      if (this.canvas.width !== Math.round(w * dpr) || this.canvas.height !== Math.round(h * dpr)) {
-        this.canvas.width = Math.round(w * dpr);
-        this.canvas.height = Math.round(h * dpr);
+      const isPortrait = vw / vh < 0.9 || vw <= 768;
+
+      let w, h;
+      if (this.isHero) {
+        w = vw;
+        h = vh;
+      } else {
+        w = isPortrait ? Math.min(vw * 0.84, 380) : Math.min(vw * 0.86, 1120);
+        h = isPortrait ? Math.round(w * 16 / 9) : Math.round(w * 9 / 16);
+      }
+
+      const canvasW = Math.round(w * dpr);
+      const canvasH = Math.round(h * dpr);
+
+      if (this.canvas.width !== canvasW || this.canvas.height !== canvasH) {
+        this.canvas.width = canvasW;
+        this.canvas.height = canvasH;
         this.dirty = true;
       }
+
       this.top = this.el.offsetTop;
-      this.padPx = Math.min(48, Math.max(20, vw * 0.032)); // igual que --pad en CSS
-      this.len = Math.max(1, this.el.offsetHeight - h);
+      this.len = Math.max(1, this.el.offsetHeight - vh);
+
       const set = this.pickSet();
-      if (this.set && (set === "pt") !== (this.set === "pt")) this.load(set);
+      if (this.set && (set === "pt") !== (this.set === "pt")) {
+        this.load(set);
+      }
     }
 
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
       [16, 8, 4, 2, 1].forEach((step) => {
-        for (let i = 0; i < n; i += step) if (!seen[i]) { seen[i] = 1; out.push(i); }
+        for (let i = 0; i < n; i += step) {
+          if (!seen[i]) { seen[i] = 1; out.push(i); }
+        }
       });
       if (!seen[n - 1]) out.push(n - 1);
       return out;
@@ -147,9 +269,8 @@
       this.set = set;
       const token = ++this.token;
       this.frames = new Array(this.count);
-      this.drawnImg = null;
       const queue = this.order();
-      const first = Math.ceil(this.count / 8);
+      const first = Math.min(6, Math.max(3, Math.ceil(this.count / 24)));
       let qi = 0, done = 0;
       const parallel = vw < 900 ? 4 : 6;
 
@@ -186,97 +307,189 @@
 
     draw(pos) {
       const n = this.count;
-      const f0 = Math.max(0, Math.min(n - 1, Math.floor(pos)));
+      const clampedPos = Math.max(0, Math.min(n - 1, pos));
+      const f0 = Math.floor(clampedPos);
       const f1 = Math.min(n - 1, f0 + 1);
-      const blend = pos - f0;
+      const blend = clampedPos - f0;
 
       const img0 = this.nearest(f0);
       if (!img0) return;
 
-      const c = this.canvas, cw = c.width, ch = c.height;
+      const c = this.canvas;
+      const cw = c.width, ch = c.height;
+      const iw = img0.naturalWidth, ih = img0.naturalHeight;
+      if (!iw || !ih) return;
 
-      // Frame base (f0)
-      const iw0 = img0.naturalWidth, ih0 = img0.naturalHeight;
-      const s0 = Math.max(cw / iw0, ch / ih0);
-      const dw0 = iw0 * s0, dh0 = ih0 * s0;
-      const x0 = (cw - dw0) / 2, y0 = (ch - dh0) / 2;
+      const s = Math.max(cw / iw, ch / ih);
+      const dw = iw * s, dh = ih * s;
+      const x = (cw - dw) / 2, y = (ch - dh) / 2;
 
+      this.ctx.imageSmoothingEnabled = true;
+      this.ctx.imageSmoothingQuality = "high";
+
+      this.ctx.globalCompositeOperation = "source-over";
       this.ctx.globalAlpha = 1.0;
-      this.ctx.drawImage(img0, x0, y0, dw0, dh0);
+      this.ctx.drawImage(img0, x, y, dw, dh);
 
-      // Disolución sub-frame (f1) para continuidad analógica hiperfluida
-      if (blend > 0.005 && f1 !== f0) {
-        const img1 = this.nearest(f1);
-        if (img1 && img1 !== img0) {
-          const iw1 = img1.naturalWidth, ih1 = img1.naturalHeight;
-          const s1 = Math.max(cw / iw1, ch / ih1);
-          const dw1 = iw1 * s1, dh1 = ih1 * s1;
-          const x1 = (cw - dw1) / 2, y1 = (ch - dh1) / 2;
-          this.ctx.globalAlpha = blend;
-          this.ctx.drawImage(img1, x1, y1, dw1, dh1);
-          this.ctx.globalAlpha = 1.0;
+      if (f1 !== f0 && blend > 0.005) {
+        const img1 = this.frames[f1];
+        if (img1 && img1.complete && img1.naturalWidth) {
+          const alpha = blend * blend * (3 - 2 * blend);
+          this.ctx.globalAlpha = alpha;
+          this.ctx.drawImage(img1, x, y, dw, dh);
         }
       }
     }
 
     update(y, dt) {
-      const p = clamp((y - this.top) / this.len);
       const n = this.count;
+      const isHero = this.isHero;
+      const currentY = scrollY();
+      const p = clamp((currentY - this.top) / this.len);
 
-      // frame suavizado con aceleración y amortiguación reactiva
-      const target = p * (n - 1);
-      const k = reduce ? 1 : 1 - Math.pow(1 - 0.22, dt * 60);
-      this.cur += (target - this.cur) * k;
-      if (Math.abs(target - this.cur) < 0.002) this.cur = target;
+      // Reproducción inmediata con el avance del scroll
+      const pStart = isHero ? 0.01 : 0.0;
+      const pEnd = 0.94;
 
-      if (Math.abs(this.cur - this.lastCur) > 0.003 || this.dirty) {
+      let prog;
+      if (p <= pStart) {
+        prog = 0;
+      } else if (p >= pEnd) {
+        prog = 1;
+      } else {
+        prog = (p - pStart) / (pEnd - pStart);
+      }
+
+      const target = prog * (n - 1);
+      const lambda = (p >= pEnd || p <= pStart) ? 14 : 10;
+      const k = reduce ? 1 : (1 - Math.exp(-lambda * dt));
+
+      if (this.lastScrollPos === undefined) this.lastScrollPos = currentY;
+      const isUserScrolling = Math.abs(currentY - this.lastScrollPos) > 0.2;
+      this.lastScrollPos = currentY;
+
+      let effectiveTarget = target;
+      if (!isUserScrolling && Math.abs(target - this.cur) < 0.25) {
+        effectiveTarget = Math.round(target);
+      }
+
+      this.cur += (effectiveTarget - this.cur) * k;
+      if (Math.abs(effectiveTarget - this.cur) < 0.002) {
+        this.cur = effectiveTarget;
+      }
+
+      if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
         this.draw(this.cur);
         this.lastCur = this.cur;
         this.dirty = false;
+
         const displayFrame = Math.round(this.cur);
         if (displayFrame !== this.lastFrame) {
           this.lastFrame = displayFrame;
-          const s = Math.floor(displayFrame / this.fps), ff = displayFrame % this.fps;
-          if (this.tc) this.tc.textContent = `00:00:${pad(s)}:${pad(ff)}`;
-          if (this.fr) this.fr.textContent = pad(displayFrame + 1, 3);
+          const currentSec = Math.floor(displayFrame / this.fps);
+          if (this.tcEl) {
+            this.tcEl.textContent = `00:${pad(currentSec)} / 00:${pad(this.durationSec)}`;
+          }
+          if (this.frEl) {
+            this.frEl.textContent = pad(displayFrame + 1, 3);
+          }
         }
+
+        const pct = (prog * 100).toFixed(2);
+        if (this.scrubFill) this.scrubFill.style.width = `${pct}%`;
+        if (this.scrubDot) this.scrubDot.style.left = `${pct}%`;
       }
 
-      if (Math.abs(p - this.p) < 0.00005) return;
+      if (Math.abs(p - this.p) < 0.0001) return;
       this.p = p;
       const st = this.stage.style;
 
-      // hero (opcional: solo la primera secuencia lo tiene)
-      if (this.hero) {
-        const hp = range(p, 0, 0.08);
-        this.hero.style.opacity = 1 - smooth(hp);
-        this.hero.style.transform = `translate3d(0, ${-hp * 8}vh, 0)`;
-        this.hero.style.visibility = hp >= 1 ? "hidden" : "visible";
+      if (isHero) {
+        // =======================================================
+        // FILM 01 (HERO + PROYECCIÓN)
+        // Comienza a pantalla completa bajo velo oscuro elegante.
+        // Se enmarca orgánicamente al hacer scroll hacia el viewport.
+        // Se desvanece suavemente al final entregando la siguiente sección.
+        // =======================================================
+        const heroMorph = smooth(range(p, 0.02, 0.16));
+        const invMorph = 1 - heroMorph;
+
+        const isPortrait = vw / vh < 0.9 || vw <= 768;
+        const targetW = isPortrait ? Math.min(vw * 0.84, 380) : Math.min(vw * 0.86, 1120);
+        const targetH = isPortrait ? Math.round(targetW * 16 / 9) : Math.round(targetW * 9 / 16);
+
+        const curW = targetW + (vw - targetW) * invMorph;
+        const curH = targetH + (vh - targetH) * invMorph;
+        const curRadius = heroMorph * 8;
+        const curVeil = (invMorph * 0.76).toFixed(3);
+
+        st.setProperty("--hero-w", `${curW.toFixed(1)}px`);
+        st.setProperty("--hero-h", `${curH.toFixed(1)}px`);
+        st.setProperty("--hero-radius", `${curRadius.toFixed(1)}px`);
+        st.setProperty("--hero-veil", curVeil);
+        st.setProperty("--hero-glow", (heroMorph * 0.6).toFixed(3));
+        st.setProperty("--hero-shadow", heroMorph > 0.05 ? "0 24px 80px -18px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(245, 242, 235, 0.08)" : "none");
+
+        // Desvanecimiento del texto hero
+        if (this.hero) {
+          const heroFade = range(p, 0.0, 0.10);
+          this.hero.style.opacity = (1 - smooth(heroFade)).toFixed(3);
+          this.hero.style.transform = `translate3d(0, ${(-heroFade * 8).toFixed(1)}vh, 0)`;
+          this.hero.style.visibility = heroFade >= 1 ? "hidden" : "visible";
+        }
+
+        // Chrome de Film 01 (aparece con el marco)
+        const chromeProg = range(p, 0.06, 0.16);
+        const outroProg = range(p, 0.90, 0.98);
+        const outroEffect = smooth(outroProg);
+        const chromeOpacity = Math.max(0, smooth(chromeProg) * (1 - outroEffect));
+        st.setProperty("--chrome-opacity", chromeOpacity.toFixed(3));
+
+        // Salida suave y rápida sin vacíos en negro
+        st.setProperty("--cover-opacity", (outroEffect * 0.9).toFixed(3));
+        st.setProperty("--fx-blur", `${(outroEffect * 14).toFixed(1)}px`);
+
+      } else {
+        // =======================================================
+        // FILMS 02, 03, 04 (COMPACT CINEMA VIEWPORTS)
+        // Despertar ágil y sin esperas (en solo un 9% de scroll):
+        // la oscuridad y el desenfoque se disuelven de inmediato,
+        // mientras el marco y el título aparecen de sorpresa.
+        // Salida limpia al 90-98% sin quedarse en negro.
+        // =======================================================
+        const introProg = range(p, 0.0, 0.09);
+        const introSmooth = smooth(introProg);
+
+        const outroProg = range(p, 0.91, 0.98);
+        const outroSmooth = smooth(outroProg);
+
+        const portalVisibility = Math.max(0, introSmooth * (1 - outroSmooth));
+        const portalScale = 0.97 + 0.03 * introSmooth - 0.02 * outroSmooth;
+
+        const darkCover = Math.max(1 - introSmooth, outroSmooth);
+        const blurAmount = darkCover * 14;
+
+        st.setProperty("--portal-opacity", portalVisibility.toFixed(3));
+        st.setProperty("--portal-scale", portalScale.toFixed(4));
+        st.setProperty("--chrome-opacity", portalVisibility.toFixed(3));
+        st.setProperty("--cover-opacity", (darkCover * 0.92).toFixed(3));
+        st.setProperty("--fx-blur", `${blurAmount.toFixed(1)}px`);
       }
 
-      // empuje inicial, visor y cierre
-      const e = smooth(range(p, 0.88, 1));
-      st.setProperty("--zoom", (1.05 - 0.05 * smooth(range(p, 0, 0.20)) + e * 0.02).toFixed(4));
-      st.setProperty("--hud", (range(p, 0.04, 0.10) * (1 - range(p, 0.86, 0.92))).toFixed(3));
-      st.setProperty("--rail", p.toFixed(4));
-      st.setProperty("--dim", (e * 0.45).toFixed(3));
-      const padPx = this.padPx || 24;
-      st.setProperty("--inset-x", `${(e * Math.max(padPx, vw * 0.03)).toFixed(1)}px`);
-      st.setProperty("--inset-y", `${(e * Math.max(56, vh * 0.1)).toFixed(1)}px`);
-      st.setProperty("--radius", `${(e * 4).toFixed(2)}px`);
-
-      // capítulos
-      this.layers.forEach(({ n: el, r: [a, b] }) => {
+      // Capítulos poéticos
+      this.chapters.forEach(({ n: el, r: [a, b] }) => {
         const t = (p - a) / (b - a);
         if (t <= 0 || t >= 1) {
-          if (el.style.opacity !== "0") el.style.opacity = "0";
+          if (el.style.opacity !== "0") {
+            el.style.opacity = "0";
+            el.style.pointerEvents = "none";
+          }
           return;
         }
         const o = smooth(Math.min(range(t, 0, 0.22), 1 - range(t, 0.78, 1)));
         const dir = t < 0.5 ? 1 : -1;
         el.style.opacity = o.toFixed(3);
-        el.style.transform = `translate3d(0, ${((1 - o) * 26 * dir).toFixed(1)}px, 0)`;
-        el.style.filter = o > 0.98 ? "none" : `blur(${((1 - o) * 8).toFixed(1)}px)`;
+        el.style.transform = `translate3d(0, ${((1 - o) * 14 * dir).toFixed(1)}px, 0)`;
       });
     }
   }
@@ -284,18 +497,17 @@
   const sequences = $$(".seq").map((el) => new Sequence(el));
 
   /* ---------------------------------------------------------
-     Loader
+     PRELOADER
      --------------------------------------------------------- */
   const loaderCount = $("[data-loader-count]");
   const loaderBar = $("[data-loader-bar]");
-  let loadTarget = 0, loadShown = 0, ready = false;
-  const t0 = performance.now();
+  let ready = false;
 
   function setReady() {
     if (ready) return;
     ready = true;
-    loaderCount.textContent = "100";
-    loaderBar.style.transform = "scaleX(1)";
+    if (loaderCount) loaderCount.textContent = "100";
+    if (loaderBar) loaderBar.style.transform = "scaleX(1)";
     setTimeout(() => {
       body.classList.add("is-ready");
       body.classList.remove("is-loading");
@@ -305,262 +517,278 @@
   }
 
   if (sequences.length) {
-    sequences[0].load(undefined, (v) => { loadTarget = v; });
+    sequences[0].load(undefined, () => {});
     sequences.slice(1).forEach((s) => s.load());
-  } else loadTarget = 1;
-  setTimeout(setReady, 7000); // red lenta: no retener al visitante
+  }
+  setTimeout(setReady, 1800);
 
   /* ---------------------------------------------------------
-     Revelados al entrar en pantalla
+     REVELADOS EN SCROLL (IntersectionObserver)
      --------------------------------------------------------- */
   const revealIO = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
       if (!en.isIntersecting) return;
       en.target.classList.add("is-in");
       revealIO.unobserve(en.target);
-      if (en.target.matches(".stat")) countUp(en.target);
     });
-  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.1 });
 
-  $$("[data-reveal], [data-split], [data-sheen]").forEach((el) => {
-    // pequeño escalonado entre hermanos
+  $$("[data-reveal], [data-split]").forEach((el) => {
     const sib = el.parentElement ? $$(":scope > [data-reveal]", el.parentElement) : [];
     const idx = sib.indexOf(el);
     if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 5) * 0.08}s`);
     revealIO.observe(el);
   });
 
-  function countUp(stat) {
-    const el = $("[data-count]", stat);
-    if (!el) return;
-    const to = +el.dataset.count, start = performance.now(), dur = 1800;
-    const tick = (now) => {
-      const t = clamp((now - start) / dur);
-      el.textContent = Math.round(to * (1 - Math.pow(1 - t, 4)));
-      if (t < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+  /* ---------------------------------------------------------
+     LÍNEA DE MÉTODO Y SERVICIOS HOVER PREVIEW
+     --------------------------------------------------------- */
+  const stepsSection = $(".method");
+  const stepsLine = $("[data-steps-line]");
+  const stepItems = $$(".step");
+
+  function updateSteps() {
+    if (!stepsSection || !stepsLine) return;
+    const rect = stepsSection.getBoundingClientRect();
+    const p = clamp((vh * 0.7 - rect.top) / rect.height);
+    stepsLine.style.setProperty("--sl", smooth(p).toFixed(3));
+    stepItems.forEach((st, i) => {
+      const stepProg = clamp((p - i * 0.22) / 0.25);
+      st.style.setProperty("--on", smooth(stepProg).toFixed(3));
+      st.classList.toggle("is-on", stepProg > 0.5);
+    });
   }
 
-  /* ---------------------------------------------------------
-     Tema claro / oscuro según la sección
-     --------------------------------------------------------- */
-  const themeIO = new IntersectionObserver((entries) => {
-    entries.forEach((en) => {
-      if (en.isIntersecting) body.dataset.theme = en.target.dataset.themeSection;
-    });
-  }, { rootMargin: "-50% 0px -50% 0px" });
-  $$("[data-theme-section]").forEach((s) => themeIO.observe(s));
+  // Previsualización flotante en servicios
+  const svcPreview = $(".svc__preview");
+  const svcRows = $$(".svc__row");
+  let svcX = 0, svcY = 0, curSvcX = 0, curSvcY = 0;
 
-  /* ---------------------------------------------------------
-     Elementos ligados al scroll (solo si están visibles)
-     --------------------------------------------------------- */
-  const visible = new WeakMap();
-  const visIO = new IntersectionObserver((entries) => {
-    entries.forEach((en) => visible.set(en.target, en.isIntersecting));
-  }, { rootMargin: "20% 0px 20% 0px" });
-
-  wordBlocks.forEach((b) => visIO.observe(b.el));
-  const parallax = $$("[data-parallax]");
-  parallax.forEach((el) => visIO.observe(el));
-  const strip = $("[data-strip]");
-  const stripSec = strip && strip.closest("section");
-  if (stripSec) visIO.observe(stripSec);
-  const steps = $("[data-steps]");
-  const stepItems = steps ? $$(".step", steps) : [];
-  if (steps) visIO.observe(steps);
-  const nextFrame = $(".next__frame");
-  const nextTc = $("[data-next-tc]");
-  if (nextFrame) visIO.observe(nextFrame);
-  const sheen = $("[data-sheen]");
-  if (sheen) visIO.observe(sheen);
-
-  function scrollLinked() {
-    // palabras que se encienden
-    wordBlocks.forEach((b) => {
-      if (!visible.get(b.el)) return;
-      const r = b.el.getBoundingClientRect();
-      const p = clamp((vh * 0.82 - r.top) / (r.height + vh * 0.3));
-      const lit = p * (b.words.length + 4) - 2;
-      if (Math.abs(lit - b.last) < 0.02) return;
-      b.last = lit;
-      b.words.forEach((w, i) => {
-        w.style.setProperty("--o", (0.14 + 0.86 * clamp(lit - i)).toFixed(3));
-      });
-    });
-
-    // parallax de imágenes
-    parallax.forEach((el) => {
-      if (!visible.get(el)) return;
-      const r = el.getBoundingClientRect();
-      const c = (r.top + r.height / 2 - vh / 2) / vh;
-      el.style.setProperty("--py", `${(-c * (+el.dataset.parallax) * 100).toFixed(2)}%`);
-    });
-
-    // tira horizontal
-    if (stripSec && visible.get(stripSec)) {
-      const r = stripSec.getBoundingClientRect();
-      const t = clamp((vh - r.top) / (vh + r.height));
-      const max = strip.scrollWidth - vw + 40;
-      strip.style.setProperty("--sx", `${(-t * max).toFixed(1)}px`);
-    }
-
-    // método: línea que se dibuja
-    if (steps && visible.get(steps)) {
-      const r = steps.getBoundingClientRect();
-      const vertical = vw <= 760;
-      const p = vertical
-        ? clamp((vh * 0.72 - r.top) / r.height)
-        : clamp((vh * 0.85 - r.top) / (vh * 0.5));
-      steps.style.setProperty("--sl", p.toFixed(4));
-      stepItems.forEach((s) => {
-        const at = vertical ? s.offsetTop / r.height : s.offsetLeft / r.width;
-        const on = p >= at + 0.01 || p >= 0.999;
-        s.classList.toggle("is-on", on);
-        s.style.setProperty("--on", on ? 1 : 0);
-      });
-    }
-
-    // próxima producción: reflejo que cruza
-    if (nextFrame && visible.get(nextFrame)) {
-      const r = nextFrame.getBoundingClientRect();
-      const t = clamp((vh - r.top) / (vh + r.height));
-      nextFrame.style.setProperty("--nx", `${(-80 + t * 160).toFixed(1)}%`);
-    }
-
-    // reflejo sobre el título de contacto
-    if (sheen && visible.get(sheen)) {
-      const r = sheen.getBoundingClientRect();
-      const t = clamp((vh - r.top) / (vh + r.height * 0.4));
-      sheen.style.setProperty("--sh", `${(-20 + t * 140).toFixed(1)}%`);
-    }
-  }
-
-  /* ---------------------------------------------------------
-     Servicios: vista previa que sigue al cursor
-     --------------------------------------------------------- */
-  const svc = $("[data-svc]");
-  const preview = $(".svc__preview");
-  const pv = { x: 0, y: 0, tx: 0, ty: 0, on: false };
-  if (svc && preview && finePointer) {
-    const pimg = $("img", preview);
-    $$(".svc__row", svc).forEach((row) => {
-      const pre = new Image(); pre.src = row.dataset.img;
+  if (svcPreview && finePointer) {
+    svcRows.forEach((row) => {
       row.addEventListener("mouseenter", () => {
-        if (pimg.getAttribute("src") !== row.dataset.img) pimg.src = row.dataset.img;
-        preview.classList.add("is-on"); pv.on = true;
+        const img = $("img", svcPreview);
+        const src = row.dataset.img;
+        if (img && src) img.src = src;
+        svcPreview.classList.add("is-on");
+      });
+      row.addEventListener("mouseleave", () => {
+        svcPreview.classList.remove("is-on");
       });
     });
-    svc.addEventListener("mouseleave", () => { preview.classList.remove("is-on"); pv.on = false; });
-    svc.addEventListener("mousemove", (e) => {
-      pv.tx = e.clientX; pv.ty = e.clientY;
-      if (!pv.init) { pv.x = pv.tx; pv.y = pv.ty; pv.init = true; }
+
+    window.addEventListener("mousemove", (e) => {
+      svcX = e.clientX + 25;
+      svcY = e.clientY - 120;
     });
-  }
-  function updatePreview(dt) {
-    if (!preview || !pv.init) return;
-    const k = 1 - Math.pow(1 - 0.12, dt * 60);
-    const dx = (pv.tx - pv.x) * k;
-    pv.x += dx; pv.y += (pv.ty - pv.y) * k;
-    const w = preview.offsetWidth, h = preview.offsetHeight;
-    preview.style.setProperty("--mx", `${(pv.x - w / 2).toFixed(1)}px`);
-    preview.style.setProperty("--my", `${(pv.y - h / 2).toFixed(1)}px`);
-    preview.style.setProperty("--rot", `${clamp(dx * 0.35, -5, 5).toFixed(2)}deg`);
+
+    const updateSvc = () => {
+      curSvcX += (svcX - curSvcX) * 0.14;
+      curSvcY += (svcY - curSvcY) * 0.14;
+      svcPreview.style.setProperty("--mx", `${curSvcX.toFixed(1)}px`);
+      svcPreview.style.setProperty("--my", `${curSvcY.toFixed(1)}px`);
+      requestAnimationFrame(updateSvc);
+    };
+    requestAnimationFrame(updateSvc);
   }
 
   /* ---------------------------------------------------------
-     Menú móvil y anclas
+     ATMÓSFERA SONORA CINEMATOGRÁFICA (Web Audio API)
      --------------------------------------------------------- */
-  const toggle = $(".nav__toggle");
-  const menu = $("#menu");
-  function setMenu(open) {
-    body.classList.toggle("menu-open", open);
-    toggle.setAttribute("aria-expanded", open);
-    menu.setAttribute("aria-hidden", !open);
-    if (lenis) open ? lenis.stop() : lenis.start();
-    body.style.overflow = open ? "hidden" : "";
-  }
-  toggle.addEventListener("click", () => setMenu(!body.classList.contains("menu-open")));
+  const soundBtn = $("#soundToggle");
+  let audioCtx = null, droneMaster = null, filterNode = null, isAudioOn = false;
 
-  $$('a[href^="#"]').forEach((a) => {
-    a.addEventListener("click", (e) => {
-      const id = a.getAttribute("href");
-      const target = id === "#top" || id === "#film-01" ? 0 : $(id);
-      if (target === null) return;
-      e.preventDefault();
-      const wasOpen = body.classList.contains("menu-open");
-      if (wasOpen) setMenu(false);
-      setTimeout(() => scrollToTarget(target), wasOpen ? 450 : 0);
-    });
-  });
+  function initAudio() {
+    if (audioCtx) return;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    audioCtx = new AudioContext();
 
-  /* ---------------------------------------------------------
-     Nav: transparente sobre el film, sólida y discreta después
-     --------------------------------------------------------- */
-  const nav = $(".nav");
-  let navAcc = 0;
-  function updateNav(y, dy) {
-    const firstSeq = sequences[0];
-    const inFilm = firstSeq ? y < firstSeq.top + firstSeq.len + vh * 0.5 : y < 40;
-    nav.classList.toggle("is-solid", !inFilm);
-    if (inFilm || body.classList.contains("menu-open")) { nav.classList.remove("is-hidden"); navAcc = 0; return; }
-    navAcc = Math.sign(dy) === Math.sign(navAcc) ? navAcc + dy : dy;
-    if (navAcc > 60) nav.classList.add("is-hidden");
-    else if (navAcc < -30) nav.classList.remove("is-hidden");
+    droneMaster = audioCtx.createGain();
+    droneMaster.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    droneMaster.connect(audioCtx.destination);
+
+    filterNode = audioCtx.createBiquadFilter();
+    filterNode.type = "lowpass";
+    filterNode.frequency.setValueAtTime(150, audioCtx.currentTime);
+    filterNode.Q.setValueAtTime(1.1, audioCtx.currentTime);
+    filterNode.connect(droneMaster);
+
+    const osc1 = audioCtx.createOscillator();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(55, audioCtx.currentTime);
+    const g1 = audioCtx.createGain(); g1.gain.value = 0.35;
+    osc1.connect(g1); g1.connect(filterNode);
+    osc1.start();
+
+    const osc2 = audioCtx.createOscillator();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(82.4, audioCtx.currentTime);
+    osc2.detune.setValueAtTime(2.0, audioCtx.currentTime);
+    const g2 = audioCtx.createGain(); g2.gain.value = 0.16;
+    osc2.connect(g2); g2.connect(filterNode);
+    osc2.start();
   }
 
-  /* ---------------------------------------------------------
-     Reloj de Buenos Aires
-     --------------------------------------------------------- */
-  const clock = $("[data-clock]");
-  const fmt = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Argentina/Buenos_Aires" });
-  const tickClock = () => { if (clock) clock.textContent = fmt.format(new Date()); };
-  tickClock(); setInterval(tickClock, 15000);
+  function toggleAudio() {
+    initAudio();
+    if (!audioCtx) return;
+    if (audioCtx.state === "suspended") audioCtx.resume();
+
+    isAudioOn = !isAudioOn;
+    if (soundBtn) {
+      soundBtn.classList.toggle("is-active", isAudioOn);
+      const label = $(".sound-label", soundBtn);
+      if (label) label.textContent = isAudioOn ? "Sonido On" : "Sonido";
+    }
+
+    const now = audioCtx.currentTime;
+    if (isAudioOn) {
+      droneMaster.gain.cancelScheduledValues(now);
+      droneMaster.gain.setValueAtTime(droneMaster.gain.value, now);
+      droneMaster.gain.exponentialRampToValueAtTime(0.24, now + 1.2);
+    } else {
+      droneMaster.gain.cancelScheduledValues(now);
+      droneMaster.gain.setValueAtTime(droneMaster.gain.value, now);
+      droneMaster.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    }
+  }
+
+  if (soundBtn) soundBtn.addEventListener("click", toggleAudio);
 
   /* ---------------------------------------------------------
-     Medidas y bucle principal
+     RELOJ EN VIVO BUENOS AIRES
+     --------------------------------------------------------- */
+  const clockEl = $("[data-clock]");
+  function updateClock() {
+    if (!clockEl) return;
+    try {
+      const now = new Date();
+      const str = now.toLocaleTimeString("es-AR", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      clockEl.textContent = `${str} ART`;
+    } catch (_) {}
+  }
+  updateClock();
+  setInterval(updateClock, 10000);
+
+  /* ---------------------------------------------------------
+     GESTIÓN DE TAMAÑO Y REDIMENSIÓN
      --------------------------------------------------------- */
   function measureAll() {
     vw = innerWidth; vh = innerHeight;
     sequences.forEach((s) => s.measure());
     sequences.forEach((s) => { s.p = -1; s.dirty = true; });
   }
+
   let rT;
-  addEventListener("resize", () => { clearTimeout(rT); rT = setTimeout(measureAll, 120); });
+  addEventListener("resize", () => {
+    clearTimeout(rT);
+    rT = setTimeout(measureAll, 120);
+  });
   addEventListener("load", measureAll);
   if (document.fonts) document.fonts.ready.then(measureAll);
 
+  // Menú móvil
+  const navToggle = $(".nav__toggle");
+  if (navToggle) {
+    navToggle.addEventListener("click", () => {
+      const open = body.classList.toggle("menu-open");
+      navToggle.setAttribute("aria-expanded", String(open));
+    });
+  }
+  $$(".menu__links a").forEach((a) => {
+    a.addEventListener("click", () => {
+      body.classList.remove("menu-open");
+      if (navToggle) navToggle.setAttribute("aria-expanded", "false");
+    });
+  });
+
+  // Scroll suave en anclas
+  $$("a[href^='#']").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      const href = a.getAttribute("href");
+      if (!href || href === "#") return;
+      const target = href === "#top" ? 0 : $(href);
+      if (target !== null) {
+        e.preventDefault();
+        scrollToTarget(target);
+      }
+    });
+  });
+
+  /* ---------------------------------------------------------
+     BUCLE PRINCIPAL (RAF)
+     --------------------------------------------------------- */
   let last = performance.now();
   let lastY = -1;
-  let tcStart = 0;
+
   function loop(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+
     if (lenis) lenis.raf(now);
 
-    // loader
-    if (!ready) {
-      loadShown += (loadTarget - loadShown) * 0.08;
-      const v = Math.round(loadShown * 100);
-      loaderCount.textContent = pad(Math.min(99, v));
-      loaderBar.style.transform = `scaleX(${loadShown.toFixed(3)})`;
-      if (loadTarget >= 1 && loadShown > 0.985 && now - t0 > 1200) setReady();
-    }
-
     const y = scrollY();
-    sequences.forEach((s) => s.update(y, dt));
-    if (y !== lastY) { scrollLinked(); updateNav(y, y - lastY); lastY = y; }
-    updatePreview(dt);
 
-    // timecode "en postproducción"
-    if (nextTc && visible.get(nextFrame)) {
-      if (!tcStart) tcStart = now;
-      const f = Math.floor(((now - tcStart) / 1000) * 25);
-      const s = Math.floor(f / 25);
-      nextTc.textContent = `00:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}:${pad(f % 25)}`;
+    body.classList.toggle("is-scrolled", y > 50);
+
+    // Palabras del manifiesto
+    wordBlocks.forEach((block) => {
+      const rect = block.el.getBoundingClientRect();
+      const inView = rect.top < vh && rect.bottom > 0;
+      if (!inView) return;
+      const p = clamp((vh * 0.85 - rect.top) / (rect.height + vh * 0.4));
+      const activeIdx = Math.floor(p * block.words.length);
+      if (activeIdx !== block.last) {
+        block.last = activeIdx;
+        block.words.forEach((w, i) => {
+          w.style.setProperty("--o", i <= activeIdx ? "1" : "0.14");
+        });
+      }
+    });
+
+    // Parallax suave en fotogramas de obra
+    $$("[data-parallax]").forEach((img) => {
+      const factor = +img.dataset.parallax || 0.08;
+      const rect = img.getBoundingClientRect();
+      if (rect.top < vh && rect.bottom > 0) {
+        const offset = (rect.top - vh * 0.5) * factor;
+        img.style.setProperty("--py", `${offset.toFixed(1)}px`);
+      }
+    });
+
+    // Tira horizontal en scroll
+    const stripTrack = $("[data-strip]");
+    if (stripTrack) {
+      const sRect = stripTrack.parentElement.getBoundingClientRect();
+      if (sRect.top < vh && sRect.bottom > 0) {
+        const sp = clamp((vh - sRect.top) / (vh + sRect.height));
+        const maxScroll = stripTrack.scrollWidth - stripTrack.clientWidth;
+        stripTrack.style.setProperty("--sx", `${(-sp * maxScroll * 0.7).toFixed(1)}px`);
+      }
     }
+
+    // Actualizar secuencias
+    sequences.forEach((s) => s.update(y, dt));
+
+    // Actualizar pasos del método
+    updateSteps();
+
+    // Modulación de audio
+    if (isAudioOn && filterNode && audioCtx) {
+      const dy = Math.abs(y - (lastY >= 0 ? lastY : y));
+      const targetFreq = Math.min(380, 150 + dy * 1.5);
+      filterNode.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.2);
+    }
+    lastY = y;
 
     requestAnimationFrame(loop);
   }
+
   requestAnimationFrame(loop);
 })();
