@@ -535,7 +535,8 @@
 
     measure() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = Math.round(vw * dpr), h = Math.round(vh * dpr);
+      const w = Math.min(1920, Math.round(vw * dpr));
+      const h = Math.min(1680, Math.round(vh * dpr));
       if (this.canvas.width !== w || this.canvas.height !== h) {
         this.canvas.width = w;
         this.canvas.height = h;
@@ -607,21 +608,17 @@
 
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
-      // Paso 1: Fotograma inicial y final
       out.push(0); seen[0] = 1;
-      // Para secuencias largas (>250 fotogramas como Greenville y Anacleto),
-      // el paso inicial es cada 6 para garantizar cobertura instantánea sin saturar la red
-      const step1 = n > 250 ? 6 : 3;
-      for (let i = step1; i < n; i += step1) {
+      // Paso 1: Cobertura densa inicial cada 2 fotogramas (paso 2 = 12fps continuo de inmediato)
+      for (let i = 2; i < n; i += 2) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      // Paso 2: Cobertura intermedia cada 3 frames
-      for (let i = 3; i < n; i += 3) {
+      // Paso 2: Intercalar fotogramas impares restantes para fluidez completa
+      for (let i = 1; i < n; i += 2) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
-      // Paso 3: Resto de fotogramas para máxima fluidez a 60fps
-      for (let i = 1; i < n; i++) {
+      for (let i = 0; i < n; i++) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       return out;
@@ -633,8 +630,7 @@
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const step1 = this.count > 250 ? 6 : 3;
-      const first = Math.min(50, Math.ceil(this.count / step1));
+      const first = Math.min(40, Math.ceil(this.count / 2));
       let qi = 0, done = 0;
       const parallel = 4;
 
@@ -652,7 +648,9 @@
             this.el.classList.add("has-canvas");
             this.draw(0);
           }
-          this.dirty = true;
+          if (Math.abs(i - Math.round(this.cur)) <= 2) {
+            this.dirty = true;
+          }
           next();
         };
         img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
@@ -684,16 +682,17 @@
 
     draw(pos) {
       const n = this.count;
-      const p = clamp(pos, 0, n - 1);
-      const f0 = Math.floor(p);
-      const f1 = Math.min(n - 1, f0 + 1);
-      const blend = p - f0;
+      const f = Math.round(clamp(pos, 0, n - 1));
 
-      const img0 = this.nearest(f0);
-      if (!img0) return;
+      const img = this.nearest(f);
+      if (!img || !img.naturalWidth) return;
+      if (this.lastDrawnImg === img && !this.dirty) return;
+
       const c = this.canvas, ctx = this.ctx;
       const cw = c.width, ch = c.height;
-      const iw = img0.naturalWidth, ih = img0.naturalHeight;
+      if (!cw || !ch) return;
+
+      const iw = img.naturalWidth, ih = img.naturalHeight;
       if (!iw || !ih) return;
 
       if (!this.hasCanvasClass) {
@@ -706,21 +705,10 @@
       const x = (cw - dw) / 2, y = (ch - dh) / 2;
 
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
-      ctx.globalAlpha = 1;
-      ctx.drawImage(img0, x, y, dw, dh);
-
-      // Fundido entre fotogramas contiguos: movimiento continuo, sin escalones.
-      if (f1 !== f0 && blend > 0.005) {
-        const img1 = this.frames[f1] || this.nearest(f1);
-        if (img1 && img1 !== img0 && img1.naturalWidth) {
-          ctx.globalAlpha = smooth(blend);
-          ctx.drawImage(img1, x, y, dw, dh);
-          ctx.globalAlpha = 1;
-        }
-      }
-
-// Lupa óptica removida a pedido del usuario
+      ctx.imageSmoothingQuality = "low";
+      ctx.drawImage(img, x, y, dw, dh);
+      this.lastDrawnImg = img;
+      this.dirty = false;
     }
 
     loadRanda() {
@@ -781,36 +769,24 @@
     drawRanda(pos) {
       if (!this.randaCanvases) return;
       const n = this.randaCount;
-      const p = clamp(pos, 0, n - 1);
-      const f0 = Math.floor(p);
-      const f1 = Math.min(n - 1, f0 + 1);
-      const blend = p - f0;
+      const f = Math.round(clamp(pos, 0, n - 1));
+
+      if (!this.lastRandaImgs) this.lastRandaImgs = [];
 
       [1, 2].forEach((num, idx) => {
         const c = this.randaCanvases[idx];
         const ctx = this.randaCtxs[idx];
         if (!c || !ctx) return;
 
-        const img0 = this.nearestRanda(num, f0);
-        if (!img0) return;
+        const img = this.nearestRanda(num, f);
+        if (!img || !img.naturalWidth) return;
+        if (this.lastRandaImgs[idx] === img) return;
+
         const cw = c.width, ch = c.height;
-        const iw = img0.naturalWidth, ih = img0.naturalHeight;
-        if (!iw || !ih) return;
-
         ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "medium";
-        ctx.globalAlpha = 1;
-        ctx.drawImage(img0, 0, 0, cw, ch);
-
-        if (f1 !== f0 && blend > 0.005) {
-          const arr = num === 1 ? this.randa1Frames : this.randa2Frames;
-          const img1 = (arr && arr[f1]) || this.nearestRanda(num, f1);
-          if (img1 && img1 !== img0 && img1.naturalWidth) {
-            ctx.globalAlpha = smooth(blend);
-            ctx.drawImage(img1, 0, 0, cw, ch);
-            ctx.globalAlpha = 1;
-          }
-        }
+        ctx.imageSmoothingQuality = "low";
+        ctx.drawImage(img, 0, 0, cw, ch);
+        this.lastRandaImgs[idx] = img;
       });
     }
 
@@ -1463,7 +1439,6 @@
       if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
         this.draw(this.cur);
         this.lastCur = this.cur;
-        this.dirty = false;
 
         const f = Math.round(this.cur);
         if (f !== this.lastFrame) {
@@ -1474,10 +1449,14 @@
           if (this.frEl) this.frEl.textContent = pad(f + 1, 3);
           if (this.fsTc) this.fsTc.textContent = `00:${pad(sec)}`;
         }
-        const pct = `${(prog * 100).toFixed(2)}%`;
-        if (this.scrubFill) this.scrubFill.style.width = pct;
-        if (this.fsBar) this.fsBar.style.width = pct;
-        if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(prog * 100)));
+        const pctVal = Math.round(prog * 1000) / 10;
+        if (pctVal !== this.lastPctVal) {
+          this.lastPctVal = pctVal;
+          const pct = `${pctVal}%`;
+          if (this.scrubFill) this.scrubFill.style.width = pct;
+          if (this.fsBar) this.fsBar.style.width = pct;
+          if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(pctVal)));
+        }
       }
 
       /* =======================================================
@@ -2062,14 +2041,16 @@
       const f = Math.round(clamp(pos, 0, this.count - 1));
       const img = this.nearest(f);
       if (!img || !img.naturalWidth) return;
+      if (this.lastDrawnImg === img) return;
 
       const c = this.canvas, ctx = this.ctx;
       const cw = c.width, ch = c.height;
       if (!cw || !ch) return;
 
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
+      ctx.imageSmoothingQuality = "low";
       ctx.drawImage(img, 0, 0, cw, ch);
+      this.lastDrawnImg = img;
     }
 
     update(dt) {
@@ -2458,7 +2439,7 @@
       const cropY = Math.max(0, Math.round((ih - cropH) / 2));
 
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
+      ctx.imageSmoothingQuality = "low";
       ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cw, ch);
     }
 
@@ -2466,7 +2447,9 @@
       if (!this.canvas || !this.ctx) return;
       const img = this.getChoreoFrame(pos);
       if (!img || !img.naturalWidth) return;
+      if (this.lastDrawnImg === img) return;
       this.drawImageCover(this.ctx, img, this.canvas.width, this.canvas.height);
+      this.lastDrawnImg = img;
     }
 
     drawBlueprint(p) {
@@ -2976,7 +2959,7 @@
         if (s && !s.set) s.load();
         seqLoader.unobserve(en.target);
       });
-    }, { rootMargin: "900px 0px" });
+    }, { rootMargin: "1600px 0px" });
     sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
 
     if (choreoEl) {
@@ -2987,7 +2970,7 @@
             choreoObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: "900px 0px" });
+      }, { rootMargin: "1600px 0px" });
       choreoObs.observe(choreoEl);
     }
     if (formatEl) {
@@ -3841,20 +3824,18 @@
     draw(pos) {
       if (!this.ctx || !this.canvas) return;
       const n = this.count;
-      const p = clamp(pos, 0, n - 1);
-      const f0 = Math.floor(p);
-      const f1 = Math.min(n - 1, f0 + 1);
-      const blend = p - f0;
+      const f = Math.round(clamp(pos, 0, n - 1));
 
-      const img0 = this.nearest(f0);
-      if (!img0 || !img0.naturalWidth) return;
+      const img = this.nearest(f);
+      if (!img || !img.naturalWidth) return;
+      if (this.lastDrawnImg === img && !this.dirty) return;
 
       const cw = this.canvas.width;
       const ch = this.canvas.height;
       if (!cw || !ch) return;
 
-      const iw = img0.naturalWidth;
-      const ih = img0.naturalHeight;
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
       if (!iw || !ih) return;
 
       const s = Math.max(cw / iw, ch / ih);
@@ -3865,18 +3846,10 @@
 
       const ctx = this.ctx;
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
-      ctx.globalAlpha = 1;
-      ctx.drawImage(img0, x, y, dw, dh);
-
-      if (f1 !== f0 && blend > 0.01) {
-        const img1 = this.frames[f1] || this.nearest(f1);
-        if (img1 && img1 !== img0 && img1.naturalWidth) {
-          ctx.globalAlpha = blend;
-          ctx.drawImage(img1, x, y, dw, dh);
-          ctx.globalAlpha = 1;
-        }
-      }
+      ctx.imageSmoothingQuality = "low";
+      ctx.drawImage(img, x, y, dw, dh);
+      this.lastDrawnImg = img;
+      this.dirty = false;
 
       if (!this.hasCanvas) {
         this.hasCanvas = true;
