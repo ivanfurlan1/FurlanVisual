@@ -1318,45 +1318,65 @@
 
         // Auto-reproducción suave y continua dentro del tramo fijado
         if (inActiveZone && !this.autoPlayPaused) {
-          const userScrollingUp = (lenis && lenis.velocity < -0.15);
-          if (!userScrollingUp) {
-            // Ralentización cinematográfica suave hacia el final de la secuencia (ease-out):
-            let speedFactor = 1.0;
-            const isAnacleto = this.el.id === "film-04";
-            if (isAnacleto) {
-              // Para Anacleto: desaceleración sutil solo en el último tramo (rawP > 0.88), manteniéndose ágil y dinámico
-              if (rawP > 0.88) {
-                const tDecel = clamp((rawP - 0.88) / (1.0 - 0.88), 0, 1);
-                speedFactor = Math.max(0.65, 1.0 - Math.pow(tDecel, 1.2) * 0.35);
-              }
-            } else if (rawP > 0.74) {
-              // Para Cartografía de Vuelo (#trazado): curva suave natural
-              const tDecel = clamp((rawP - 0.74) / (1.0 - 0.74), 0, 1);
-              speedFactor = Math.max(0.32, 1.0 - Math.pow(tDecel, 1.35) * 0.68);
+          // Ralentización cinematográfica suave hacia el final de la secuencia (ease-out):
+          let speedFactor = 1.0;
+          const isAnacleto = this.el.id === "film-04";
+          if (isAnacleto) {
+            // Para Anacleto: desaceleración sutil y elegante en el tramo final (rawP > 0.85)
+            if (rawP > 0.85) {
+              const tDecel = clamp((rawP - 0.85) / (1.0 - 0.85), 0, 1);
+              speedFactor = Math.max(0.60, 1.0 - Math.pow(tDecel, 1.25) * 0.40);
             }
+          } else if (rawP > 0.74) {
+            // Para Cartografía de Vuelo (#trazado): curva suave natural
+            const tDecel = clamp((rawP - 0.74) / (1.0 - 0.74), 0, 1);
+            speedFactor = Math.max(0.32, 1.0 - Math.pow(tDecel, 1.35) * 0.68);
+          }
 
-            // Duración matemática para reproducción automática
-            const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
-            const naturalSec = (this.count / (this.fps || 24));
-            // Anacleto se reproduce a velocidad enérgica y rápida (~6.5s) eliminando lentitud
-            const baseDuration = isAnacleto ? 6.5 : (naturalSec * spanProg);
-            const autoSpeed = (this.len / Math.max(4, baseDuration)) * speedFactor;
-            const autoDy = autoSpeed * dtSec;
+          // Duración calibrada para reproducción automática:
+          // Anacleto (~10.2s): ritmo fluido, natural y equilibrado (ni lento ni acelerado en exceso)
+          const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
+          const naturalSec = (this.count / (this.fps || 24));
+          const baseDuration = isAnacleto ? 10.2 : (naturalSec * spanProg);
+          const autoSpeed = (this.len / Math.max(4, baseDuration)) * speedFactor;
+          const autoDy = autoSpeed * dtSec;
 
-            if (lenis) {
-              // Avance directo sin quedar atrapado en el damping de 1.2s de Lenis,
-              // garantizando los 24/25 FPS nativos en modo automático
-              const isUserInteracting = Math.abs(lenis.velocity) > 0.08;
-              if (!isUserInteracting) {
-                const nextY = Math.min(this.top + this.len, y + autoDy);
-                lenis.scrollTo(nextY, { immediate: true });
-              } else if (lenis.velocity >= -0.15) {
-                lenis.targetScroll = Math.min(this.top + this.len, (lenis.targetScroll || y) + autoDy);
+          if (lenis) {
+            // Transición unificada sin cortes ni detenciones intermedias:
+            // 1. Si el usuario gira la rueda hacia atrás (arriba), retrocede de forma inmediata.
+            // 2. Si el usuario gira la rueda hacia adelante (abajo) o venía con inercia de entrada,
+            //    esa aceleración se suma suavemente pero NUNCA cae por debajo de autoDy.
+            //    Al soltar el scroll, la desaceleración empalma de forma continua con la velocidad de crucero,
+            //    sin frenar a cero ni esperar tiempos muertos.
+            const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
+            const userDiff = targetY - y;
+
+            if (userDiff < -2) {
+              // El usuario está desplazando deliberadamente hacia atrás (reversa)
+              const userRevLead = -userDiff;
+              const revDy = userRevLead * (1 - Math.exp(-18 * dtSec));
+              const nextY = Math.max(this.top, y - revDy);
+              const remainingRev = Math.max(0, userRevLead - revDy);
+              lenis.scrollTo(nextY, { immediate: true });
+              if (remainingRev > 0.5) {
+                lenis.targetScroll = nextY - remainingRev;
               }
             } else {
-              if (window.scrollY < this.top + this.len) {
-                window.scrollBy(0, autoDy);
+              // Avance continuo: la velocidad es SIEMPRE al menos autoDy.
+              // Si el usuario scrolleó hacia abajo, se suma el impulso con amortiguación suave.
+              const userForwardLead = Math.max(0, userDiff);
+              const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
+              const totalDy = autoDy + userDy;
+              const nextY = Math.min(this.top + this.len, y + totalDy);
+              const remainingLead = Math.max(0, userForwardLead - userDy);
+              lenis.scrollTo(nextY, { immediate: true });
+              if (remainingLead > 0.5) {
+                lenis.targetScroll = nextY + remainingLead;
               }
+            }
+          } else {
+            if (window.scrollY < this.top + this.len) {
+              window.scrollBy(0, autoDy);
             }
           }
         }

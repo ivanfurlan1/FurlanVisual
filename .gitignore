@@ -1,0 +1,33 @@
+# =======================================================
+# Git Ignore - Portfolio Cine Aéreo
+# =======================================================
+
+# Respaldos locales y archivos comprimidos (no subir a GitHub)
+*.zip
+BACKUP/
+
+# Material original en crudo (edición / export)
+frames_origen/
+
+# Carpetas temporales y de pruebas
+temp_*/
+temp_prev/
+temp_18/
+assets/seq/residencia-los-robles/
+assets/seq/salida-balcon-hudson/
+assets/seq/betina/
+
+# Archivos de sistema y miniaturas
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Entornos y editores
+.vscode/
+.idea/
+
+# Python cache / logs
+__pycache__/
+*.pyc
+*.log
