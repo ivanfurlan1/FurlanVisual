@@ -174,7 +174,7 @@
       this.isTrace = el.classList.contains("seq--trace");
       this.isKinetic = el.classList.contains("seq--kinetic");
       this.isFiesta = el.id === "film-02" || el.classList.contains("seq--fiesta");
-      this.isHybrid = el.dataset.mode === "hybrid" || el.classList.contains("seq--trace") || el.id === "trazado" || el.id === "film-04";
+      this.isHybrid = el.dataset.mode === "hybrid" || el.classList.contains("seq--trace") || el.id === "trazado" || el.id === "film-04" || el.id === "film-03" || el.id === "nocturno";
       this.autoPlayPaused = false;
       this.autoPlaySuspended = false;
       this.lastTrackedY = undefined;
@@ -401,9 +401,9 @@
 
       this.tcEl = $("[data-tc]", el);
       this.frEl = $("[data-hud-fr]", el);
-      this.scrub = $(".seq__scrub", el);
-      this.scrubTrack = $(".seq__track", el);
-      this.scrubFill = $("[data-scrub-fill]", el);
+      this.scrub = $(".seq__scrub", el) || $(".seq-fs__scrub", el);
+      this.scrubTrack = $(".seq__track", el) || $(".seq-fs__bar", el);
+      this.scrubFill = $("[data-scrub-fill]", el) || $("[data-fs-bar]", el);
       this.outroCard = $("[data-seq-outro]", el);
       if (this.outroCard) {
         this.gleamAngle = 45;
@@ -444,9 +444,16 @@
       this.isLoupeVisible = false;
 
       if (this.isHybrid && !this.isTrace && this.media) {
-        this.media.addEventListener("click", () => {
+        this.media.addEventListener("click", (e) => {
+          if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq-fs__yt-wrap, .seq-fs__scrub, .seq__scrub")) return;
           this.togglePlayPause();
         });
+        if (this.stage && this.isFullscreen) {
+          this.stage.addEventListener("click", (e) => {
+            if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq-fs__yt-wrap, .seq-fs__scrub, .seq__scrub")) return;
+            this.togglePlayPause();
+          });
+        }
       }
       this.bindScrub();
       this.measure();
@@ -1327,11 +1334,15 @@
       if (this.isHybrid) {
         const dtSec = Math.min(dt || 0.016, 0.04);
         const isAnacleto = this.el.id === "film-04";
+        const isHudson = this.el.id === "film-03";
+        const isNocturno = this.el.id === "nocturno";
+        const isTrace = this.el.id === "trazado" || this.isTrace;
 
         // Umbral de activación: ni bien la sección ocupa la pantalla completa
-        // Para Anacleto y secuencias híbridas, estar al 97.5% en pantalla (viewportEntry >= 0.975 o rawP >= -0.03)
+        // Para Anacleto, Casa Hudson, Nocturno y secuencias híbridas:
+        // estar al 97.5% en pantalla (viewportEntry >= 0.975 o rawP >= -0.03)
         // garantiza el arranque inmediato y espontáneo desde el primer instante sin tener que dar "un poquitito más"
-        const isFullyInView = viewportEntry >= 0.975 || rawP >= (isAnacleto ? -0.03 : -0.015);
+        const isFullyInView = viewportEntry >= 0.975 || rawP >= -0.03;
         const inActiveZone = isFullyInView && rawP < 1.0;
 
         const hasMinFrames = this.frames && (this.frames[0] || this.nearest(0));
@@ -1339,8 +1350,8 @@
         if (inActiveZone && !this.autoPlayPaused && hasMinFrames) {
           // Ralentización cinematográfica suave hacia el final de la secuencia (ease-out):
           let speedFactor = 1.0;
-          if (isAnacleto) {
-            // Para Anacleto: desaceleración sutil y elegante en el tramo final (rawP > 0.85)
+          if (isAnacleto || isHudson || isNocturno) {
+            // Desaceleración sutil y elegante en el tramo final (rawP > 0.85)
             if (rawP > 0.85) {
               const tDecel = clamp((rawP - 0.85) / (1.0 - 0.85), 0, 1);
               speedFactor = Math.max(0.60, 1.0 - Math.pow(tDecel, 1.25) * 0.40);
@@ -1352,10 +1363,21 @@
           }
 
           // Duración calibrada para reproducción automática:
-          // Anacleto (~10.2s): ritmo fluido, natural y equilibrado (ni lento ni acelerado en exceso)
+          // Ritmo fluido, natural y equilibrado para cada metraje:
           const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
           const naturalSec = (this.count / (this.fps || 24));
-          const baseDuration = isAnacleto ? 10.2 : (naturalSec * spanProg);
+          let baseDuration;
+          if (isAnacleto) {
+            baseDuration = 10.2; // Anacleto (~10.2s)
+          } else if (isHudson) {
+            baseDuration = 11.2; // Casa Hudson (~11.2s): cadencia cinematográfica noble
+          } else if (isNocturno) {
+            baseDuration = 9.6;  // Perspectiva Pantalla Completa (~9.6s): ritmo envolvente continuo
+          } else if (isTrace) {
+            baseDuration = 12.5; // El Plano / Cartografía (~12.5s)
+          } else {
+            baseDuration = naturalSec * spanProg;
+          }
           const autoSpeed = (this.len / Math.max(4, baseDuration)) * speedFactor;
           const autoDy = autoSpeed * dtSec;
 
@@ -1525,11 +1547,12 @@
         st.setProperty("--frame-h", `${vh}px`);
         st.setProperty("--img-scale", "1.02");
 
-        const outro = this.isHybrid ? 0 : smooth(range(p, 0.88, 0.99));
+        const isTraceSec = this.isTrace;
+        const outro = isTraceSec ? 0 : smooth(range(p, 0.90, 1.02));
         // Ni bien comienza a reproducirse la secuencia, disolver desenfoque y blanco/negro
-        const wake = this.isHybrid
+        const wake = isTraceSec
           ? (this.entranceComplete ? 1 : smooth(viewportEntry))
-          : smooth(range(p, -0.18, 0.04));
+          : smooth(range(p, -0.12, 0.04));
         const cover = Math.max((1 - wake) * 0.20, outro * 0.32);
         const blur = Math.max((1 - wake) * 12, outro * 6);
         const gray = 1 - wake;
@@ -1539,8 +1562,8 @@
         this.setVisualFilter(blur, gray);
 
         // Contra-desplazamiento de entrada + compactación inicial que se abre al fijarse
-        const entryShiftY = this.isHybrid ? 0 : -(1 - smooth(viewportEntry)) * (vh * 0.18);
-        const compactLayout = this.isHybrid ? 0 : 1 - smooth(range(p, -0.06, 0.16));
+        const entryShiftY = isTraceSec ? 0 : -(1 - smooth(viewportEntry)) * (vh * 0.18);
+        const compactLayout = isTraceSec ? 0 : 1 - smooth(range(p, -0.06, 0.16));
         const headCompactY = compactLayout * (vh * 0.07);
         const footCompactY = -compactLayout * (vh * 0.07);
         st.setProperty("--fs-entry-y", `${entryShiftY.toFixed(1)}px`);
@@ -3086,11 +3109,21 @@
       sequences[1].load(undefined, (p) => { p1 = p; updateBoth(); });
     }
 
-    // Precarga anticipada de Anacleto (Obra IV) en segundo plano para que esté lista al llegar
+    // Precarga anticipada en segundo plano de las secuencias con autorreproducción para que estén listas al llegar
+    setTimeout(() => {
+      const hudson = sequences.find((s) => s.el && (s.el.id === "film-03" || (s.src && s.src.includes("casa-hudson"))));
+      if (hudson && !hudson.set) hudson.load();
+    }, 1200);
+
     setTimeout(() => {
       const anacleto = sequences.find((s) => s.el && (s.el.id === "film-04" || (s.src && s.src.includes("anacleto"))));
       if (anacleto && !anacleto.set) anacleto.load();
-    }, 1500);
+    }, 2400);
+
+    setTimeout(() => {
+      const nocturno = sequences.find((s) => s.el && (s.el.id === "nocturno" || (s.src && s.src.includes("fincas"))));
+      if (nocturno && !nocturno.set) nocturno.load();
+    }, 3600);
 
     const obsRoot = (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
     const seqLoader = new IntersectionObserver((entries) => {
@@ -3307,7 +3340,11 @@
   }
 
   /* ---------------------------------------------------------
-     Repertorio: carrusel horizontal continuo de secuencias vivas
+     Repertorio: Catálogo estático de secuencias arquitectónicas
+     - Modo Sala de Proyección (Theater / Spotlight) en Desktop
+     - Reproducción inline optimizada en Mobile
+     - Carga on-demand con progreso en tiempo real
+     - "Ver film completo" al finalizar la toma
      --------------------------------------------------------- */
   class RepertorioCard {
     constructor(el) {
@@ -3315,13 +3352,29 @@
       this.src = el.dataset.src;
       this.count = parseInt(el.dataset.count, 10) || 100;
       this.version = el.dataset.version || "";
-      this.step = parseInt(el.dataset.step, 10) || 2;
+      this.step = parseInt(el.dataset.step, 10) || 1;
       this.fps = parseInt(el.dataset.fps, 10) || 24;
+      this.videoUrl = el.dataset.cardVideo || el.dataset.videoTrigger || "";
+      this.videoTitle = el.dataset.videoTitle || "Film cinematográfico";
+      this.badge = el.dataset.badge || "SEQ · 01";
+      this.title = el.dataset.title || "Film arquitectónico";
+      this.sub = el.dataset.sub || "";
+      this.take = el.dataset.take || "";
+
+      this.screen = $(".rep-card__screen", el);
       this.canvas = $(".rep-card__canvas", el);
       this.poster = $(".rep-card__poster", el);
       this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
       this.tcEl = $("[data-card-tc]", el);
       this.fillEl = $("[data-card-fill]", el);
+      this.statusTxt = $("[data-status-text]", el);
+      this.playBtn = $(".rep-card__play-btn-main", el);
+      this.endOverlay = $(".rep-card__end-overlay", el);
+      this.fullFilmBtn = $("[data-rep-full-film]", el);
+      this.replayBtn = $("[data-rep-replay]", el);
+      this.cardLoader = $("[data-card-loader]", el);
+      this.cardLoaderTxt = $("[data-card-loader-txt]", el);
+      this.cardSpinBar = $("[data-card-spinner-bar]", el);
 
       this.frames = [];
       this.totalFrames = Math.ceil(this.count / this.step);
@@ -3331,25 +3384,147 @@
         this.frameIndices.push(rawIdx);
       }
 
-      this.currentPos = Math.random() * this.totalFrames;
+      this.currentPos = 0;
       this.loaded = false;
       this.loading = false;
+      this.buffered = false;
       this.hasDrawn = false;
       this.lastIdx = -1;
+      this.isPlaying = false;
+      this.isEnded = false;
+      this.progress = 0;
+      this.loadedCount = 0;
+      // Umbral de streaming buffer: ~15 a 18 fotogramas (aprox 0.6s de video) para arranque ultra veloz
+      this.bufferTarget = Math.min(18, Math.max(10, Math.floor(this.totalFrames * 0.15)));
+      this._listeners = new Set();
 
       if (this.canvas) {
         this.canvas.width = 640;
         this.canvas.height = 360;
       }
+
+      this.bindEvents();
     }
 
-    loadFrames() {
-      if (this.loaded || this.loading) return;
+    bindEvents() {
+      // Clic en el botón central de Play
+      if (this.playBtn) {
+        this.playBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.handlePlayClick();
+        });
+      }
+
+      // Clic en la pantalla de la tarjeta
+      if (this.screen) {
+        this.screen.addEventListener("click", (e) => {
+          if (e.target.closest("[data-rep-full-film]") || e.target.closest("[data-rep-replay]")) return;
+          this.handlePlayClick();
+        });
+      }
+
+      // Replay en móvil / inline
+      if (this.replayBtn) {
+        this.replayBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.replayInline();
+        });
+      }
+
+      // Ver film completo en móvil / inline
+      if (this.fullFilmBtn) {
+        this.fullFilmBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (this.videoUrl) {
+            openVideoModal(this.videoUrl, this.videoTitle);
+          }
+        });
+      }
+    }
+
+    handlePlayClick() {
+      // En horizontal / desktop (ancho > 768px): abrir modo teatro ampliado y centrado
+      if (window.innerWidth > 768 && repTheater) {
+        repTheater.open(this);
+        return;
+      }
+
+      // En vertical / móvil (ancho <= 768px): reproducir inline dentro de la tarjeta
+      if (this.isEnded) {
+        this.replayInline();
+      } else if (this.isPlaying) {
+        this.pauseInline();
+      } else {
+        this.playInline();
+      }
+    }
+
+    loadFrames(optOrProg, onComplete, onBuffer) {
+      let opt = {};
+      if (typeof optOrProg === "function") {
+        opt = { onProgress: optOrProg, onComplete, onBuffer };
+      } else if (optOrProg && typeof optOrProg === "object") {
+        opt = optOrProg;
+      }
+
+      // Si ya está 100% cargado
+      if (this.loaded) {
+        if (opt.onProgress) opt.onProgress(100, this.totalFrames, this.totalFrames);
+        if (opt.onBuffer) opt.onBuffer();
+        if (opt.onComplete) opt.onComplete();
+        return;
+      }
+
+      // Si el buffer ya está listo y el llamador pide aviso de buffer
+      if (this.buffered && opt.onBuffer) {
+        opt.onBuffer();
+      }
+
+      // Registrar callbacks de este llamador
+      this._listeners.add(opt);
+
+      // Si ya está descargando, enviar el porcentaje actual garantizado
+      if (this.loading) {
+        if (opt.onProgress) opt.onProgress(this.progress, this.loadedCount, this.totalFrames);
+        return;
+      }
+
       this.loading = true;
-      let loadedCount = 0;
-      const total = this.frameIndices.length;
+      this.el.classList.add("is-loading");
+
       let qIdx = 0;
-      const parallel = 2;
+      const total = this.frameIndices.length;
+      const parallel = 8;
+
+      const notifyProgress = (pct) => {
+        this._listeners.forEach((l) => {
+          if (l.onProgress) {
+            try { l.onProgress(pct, this.loadedCount, total); } catch(e) {}
+          }
+        });
+        if (this.cardLoaderTxt) this.cardLoaderTxt.textContent = `${pct}%`;
+        if (this.cardSpinBar) {
+          const circumference = 2 * Math.PI * 14; // ~88
+          const offset = circumference - (pct / 100) * circumference;
+          this.cardSpinBar.style.strokeDashoffset = offset.toFixed(1);
+        }
+      };
+
+      const notifyBuffer = () => {
+        this._listeners.forEach((l) => {
+          if (l.onBuffer) {
+            try { l.onBuffer(); } catch(e) {}
+          }
+        });
+      };
+
+      const notifyComplete = () => {
+        this._listeners.forEach((l) => {
+          if (l.onComplete) {
+            try { l.onComplete(); } catch(e) {}
+          }
+        });
+      };
 
       const loadNext = () => {
         if (qIdx >= total) return;
@@ -3357,33 +3532,134 @@
         const rawIdx = this.frameIndices[i];
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => {
+
+        const onFrameReady = () => {
           this.frames[i] = img;
-          loadedCount++;
-          if (loadedCount >= 1 && !this.hasDrawn) {
+          this.loadedCount++;
+          const calcPct = Math.min(100, Math.round((this.loadedCount / total) * 100));
+          // Progreso monotónico: jamás retrocede
+          this.progress = Math.max(this.progress, calcPct);
+          notifyProgress(this.progress);
+
+          if (this.loadedCount >= 1 && !this.hasDrawn) {
             this.el.classList.add("has-canvas");
             this.draw(i);
             this.hasDrawn = true;
           }
-          if (loadedCount >= total) {
+
+          // Desbloquear reproducción tan pronto como se complete el buffer inicial
+          if (!this.buffered && (this.loadedCount >= this.bufferTarget || this.loadedCount >= total)) {
+            this.buffered = true;
+            this.el.classList.remove("is-loading");
+            notifyBuffer();
+          }
+
+          if (this.loadedCount >= total) {
             this.loaded = true;
+            this.buffered = true;
             this.loading = false;
+            this.progress = 100;
+            this.el.classList.remove("is-loading");
+            notifyProgress(100);
+            notifyComplete();
+            this._listeners.clear();
           }
           loadNext();
+        };
+
+        img.onload = () => {
+          if (img.decode) {
+            img.decode().then(onFrameReady).catch(onFrameReady);
+          } else {
+            onFrameReady();
+          }
         };
         img.onerror = () => {
-          loadedCount++;
-          if (loadedCount >= total) {
+          this.loadedCount++;
+          const calcPct = Math.min(100, Math.round((this.loadedCount / total) * 100));
+          this.progress = Math.max(this.progress, calcPct);
+          notifyProgress(this.progress);
+          if (!this.buffered && (this.loadedCount >= this.bufferTarget || this.loadedCount >= total)) {
+            this.buffered = true;
+            notifyBuffer();
+          }
+          if (this.loadedCount >= total) {
             this.loaded = true;
+            this.buffered = true;
             this.loading = false;
+            this.progress = 100;
+            this.el.classList.remove("is-loading");
+            notifyProgress(100);
+            notifyComplete();
+            this._listeners.clear();
           }
           loadNext();
         };
+
         const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
         img.src = `${this.src}/md/${pad(rawIdx, 4)}.webp${vParam}`;
       };
 
       for (let k = 0; k < parallel; k++) loadNext();
+    }
+
+    playInline() {
+      // Pausar cualquier otra tarjeta activa
+      if (repCards && repCards.length) {
+        repCards.forEach((c) => {
+          if (c !== this && c.isPlaying) c.pauseInline();
+        });
+      }
+
+      if (this.buffered) {
+        this.startInlinePlayback();
+        if (!this.loaded) {
+          this.loadFrames();
+        }
+      } else {
+        this.loadFrames({
+          onBuffer: () => {
+            this.startInlinePlayback();
+          }
+        });
+      }
+    }
+
+    startInlinePlayback() {
+      this.isPlaying = true;
+      this.isEnded = false;
+      this.el.classList.remove("is-loading");
+      this.el.classList.add("is-playing");
+      this.el.classList.remove("is-ended");
+      if (this.statusTxt) this.statusTxt.textContent = "REC · EN VIVO";
+      const curIdx = Math.floor(this.currentPos);
+      this.draw(curIdx);
+    }
+
+    pauseInline() {
+      this.isPlaying = false;
+      this.el.classList.remove("is-playing");
+      if (this.statusTxt) this.statusTxt.textContent = "EN PAUSA";
+    }
+
+    replayInline() {
+      this.currentPos = 0;
+      this.lastIdx = -1;
+      this.isEnded = false;
+      this.el.classList.remove("is-ended");
+      this.updateProgress(0);
+      this.playInline();
+    }
+
+    onInlineFinished() {
+      this.isPlaying = false;
+      this.isEnded = true;
+      this.currentPos = this.totalFrames - 1;
+      this.draw(this.totalFrames - 1);
+      this.updateProgress(1);
+      this.el.classList.remove("is-playing");
+      this.el.classList.add("is-ended");
+      if (this.statusTxt) this.statusTxt.textContent = "TOMA COMPLETADA";
     }
 
     draw(frameIndex) {
@@ -3409,16 +3685,22 @@
       this.ctx.drawImage(img, x, y, dw, dh);
     }
 
-    update(dt, scrollVelocity, isVisible) {
-      if (!isVisible) return;
-      if (!this.loading && !this.loaded) {
-        this.loadFrames();
+    updateProgress(progress) {
+      if (this.fillEl) {
+        this.fillEl.style.transform = `scaleX(${progress.toFixed(3)})`;
       }
+    }
+
+    update(dt) {
+      if (!this.isPlaying || this.isEnded) return;
 
       const playbackSpeed = this.fps / this.step;
-      const scrubFactor = scrollVelocity * 0.45;
-      this.currentPos = (this.currentPos + dt * playbackSpeed + scrubFactor) % this.totalFrames;
-      if (this.currentPos < 0) this.currentPos += this.totalFrames;
+      this.currentPos += dt * playbackSpeed;
+
+      if (this.currentPos >= this.totalFrames - 1) {
+        this.onInlineFinished();
+        return;
+      }
 
       const curIdx = Math.floor(this.currentPos);
       if (curIdx !== this.lastIdx) {
@@ -3432,32 +3714,337 @@
           this.tcEl.textContent = `00:${pad(totalSec, 2)}:${pad(remFr, 2)}`;
         }
 
-        if (this.fillEl) {
-          const progress = this.currentPos / this.totalFrames;
-          this.fillEl.style.transform = `scaleX(${progress.toFixed(3)})`;
-        }
+        const progress = this.currentPos / (this.totalFrames - 1);
+        this.updateProgress(progress);
       }
     }
   }
 
+  /* ---------------------------------------------------------
+     Repertorio Theater (Desktop Spotlight / Sala de Proyección)
+     --------------------------------------------------------- */
+  class RepertorioTheater {
+    constructor() {
+      this.el = $("#repTheater");
+      if (!this.el) return;
+      this.backdrop = $("[data-theater-close]", this.el);
+      this.stage = $("[data-theater-stage]", this.el);
+      this.canvas = $(".rep-theater__canvas", this.el);
+      this.poster = $("[data-theater-poster]", this.el);
+      this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
+      this.badgeEl = $("[data-theater-badge]", this.el);
+      this.titleEl = $("[data-theater-title]", this.el);
+      this.subEl = $("[data-theater-sub]", this.el);
+      this.loaderEl = $("[data-theater-loader]", this.el);
+      this.loaderTxt = $("[data-theater-loader-txt]", this.el);
+      this.spinBar = $("[data-theater-spin-bar]", this.el);
+      this.hudStatus = $("[data-theater-status]", this.el);
+      this.hudTc = $("[data-theater-tc]", this.el);
+      this.endOverlay = $("[data-theater-end]", this.el);
+      this.endTitle = $("[data-theater-end-title]", this.el);
+      this.endSub = $("[data-theater-end-sub]", this.el);
+      this.fullFilmBtn = $("[data-theater-full-film]", this.el);
+      this.pillBtn = $("[data-theater-pill-film]", this.el);
+      this.replayBtn = $("[data-theater-replay]", this.el);
+      this.fillEl = $("[data-theater-fill]", this.el);
+      this.stateIcon = $("[data-theater-state-icon]", this.el);
+
+      this.currentCard = null;
+      this.isOpen = false;
+      this.isPlaying = false;
+      this.isEnded = false;
+      this.currentPos = 0;
+      this.lastIdx = -1;
+      this._iconTimer = null;
+      this.sessionToken = 0;
+
+      if (this.canvas) {
+        this.canvas.width = 1280;
+        this.canvas.height = 720;
+      }
+
+      this.bindEvents();
+    }
+
+    bindEvents() {
+      // Botones de cierre y backdrop
+      $$("[data-theater-close]", this.el).forEach((btn) => {
+        btn.addEventListener("click", () => this.close());
+      });
+
+      // Clic en la pantalla: pausar / reanudar
+      if (this.stage) {
+        this.stage.addEventListener("click", (e) => {
+          if (
+            e.target.closest("[data-theater-full-film]") ||
+            e.target.closest("[data-theater-replay]") ||
+            e.target.closest("[data-theater-pill-film]") ||
+            e.target.closest("[data-theater-close]")
+          ) return;
+
+          if (this.isEnded) {
+            this.replay();
+          } else if (this.isPlaying) {
+            this.pause();
+          } else if (this.currentCard && this.currentCard.buffered) {
+            this.play();
+          }
+        });
+      }
+
+      // Repetir secuencia en modo teatro
+      if (this.replayBtn) {
+        this.replayBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.replay();
+        });
+      }
+
+      // Ver film completo: botón final o botón píldora durante la reproducción
+      const openFullFilm = (e) => {
+        if (e) e.stopPropagation();
+        if (this.currentCard && this.currentCard.videoUrl) {
+          const url = this.currentCard.videoUrl;
+          const title = this.currentCard.videoTitle;
+          this.close();
+          openVideoModal(url, title);
+        }
+      };
+
+      if (this.fullFilmBtn) {
+        this.fullFilmBtn.addEventListener("click", openFullFilm);
+      }
+      if (this.pillBtn) {
+        this.pillBtn.addEventListener("click", openFullFilm);
+      }
+
+      // Tecla Escape para salir de sala
+      addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && this.isOpen) {
+          this.close();
+        }
+      });
+    }
+
+    open(card) {
+      if (!card || !this.el) return;
+      this.currentCard = card;
+      const token = ++this.sessionToken;
+      this.isOpen = true;
+      this.isEnded = false;
+      this.isPlaying = false;
+      this.currentPos = 0;
+      this.lastIdx = -1;
+
+      // Actualizar encabezados
+      if (this.badgeEl) this.badgeEl.textContent = card.badge || "SEQ · 01";
+      if (this.titleEl) this.titleEl.textContent = card.title || "Film arquitectónico";
+      if (this.subEl) this.subEl.textContent = card.sub || "";
+      if (this.endTitle) this.endTitle.textContent = card.title || "";
+      if (this.endSub) this.endSub.textContent = card.take || "";
+
+      // Mostrar poster de portada de inmediato
+      if (this.poster && card.poster) {
+        this.poster.src = card.poster.src;
+        this.poster.style.opacity = "1";
+      }
+
+      // Reset HUD / Barra
+      if (this.fillEl) this.fillEl.style.transform = "scaleX(0)";
+      if (this.hudTc) this.hudTc.textContent = "00:00:00";
+      this.el.classList.remove("is-playing", "is-ended", "is-paused");
+      this.el.classList.add("is-open");
+      this.el.setAttribute("aria-hidden", "false");
+      body.classList.add("modal-open");
+      if (lenis) lenis.stop();
+
+      this.resizeCanvas();
+
+      // Si el buffer ya está listo, iniciar inmediatamente sin tiempo de espera
+      if (card.buffered) {
+        this.setLoader(false);
+        this.play();
+        if (!card.loaded) {
+          card.loadFrames();
+        }
+      } else {
+        if (this.hudStatus) this.hudStatus.textContent = "CARGANDO";
+        this.setLoader(true, card.progress);
+        card.loadFrames({
+          onProgress: (percent) => {
+            if (this.currentCard !== card || token !== this.sessionToken) return;
+            // Solo actualizar la pantalla de carga si aún NO comenzó la reproducción
+            if (!this.isPlaying && !card.buffered) {
+              this.setLoader(true, percent);
+            }
+          },
+          onBuffer: () => {
+            if (this.currentCard !== card || token !== this.sessionToken) return;
+            this.setLoader(false);
+            this.play();
+          },
+          onComplete: () => {
+            if (this.currentCard !== card || token !== this.sessionToken) return;
+            this.setLoader(false);
+          }
+        });
+      }
+    }
+
+    resizeCanvas() {
+      if (!this.canvas) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = this.canvas.getBoundingClientRect();
+      const w = Math.round((rect.width > 50 ? rect.width : 1100) * dpr);
+      const h = Math.round((rect.height > 50 ? rect.height : 620) * dpr);
+      if (this.canvas.width !== w || this.canvas.height !== h) {
+        this.canvas.width = w;
+        this.canvas.height = h;
+      }
+    }
+
+    setLoader(show, percent) {
+      if (!this.loaderEl) return;
+      // El loader solo puede mostrarse si NO se está reproduciendo ni ha finalizado la toma
+      if (show && !this.isPlaying && !this.isEnded) {
+        this.loaderEl.classList.add("is-visible");
+        const safePct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+        if (this.loaderTxt) this.loaderTxt.textContent = `Cargando secuencia · ${safePct}%`;
+        if (this.spinBar) {
+          const circumference = 2 * Math.PI * 18; // ~113.1
+          const offset = circumference - (safePct / 100) * circumference;
+          this.spinBar.style.strokeDashoffset = offset.toFixed(1);
+        }
+      } else {
+        this.loaderEl.classList.remove("is-visible");
+      }
+    }
+
+    play() {
+      this.isPlaying = true;
+      this.isEnded = false;
+      this.setLoader(false);
+      this.el.classList.remove("is-paused", "is-ended");
+      this.el.classList.add("is-playing");
+      if (this.hudStatus) this.hudStatus.textContent = "REC · EN VIVO";
+      if (this.poster) this.poster.style.opacity = "0";
+      this.triggerStateIcon("play");
+      const curIdx = Math.floor(this.currentPos);
+      this.draw(curIdx);
+    }
+
+    pause() {
+      this.isPlaying = false;
+      this.el.classList.remove("is-playing");
+      this.el.classList.add("is-paused");
+      if (this.hudStatus) this.hudStatus.textContent = "EN PAUSA";
+      this.triggerStateIcon("pause");
+    }
+
+    replay() {
+      this.currentPos = 0;
+      this.lastIdx = -1;
+      this.isEnded = false;
+      this.el.classList.remove("is-ended");
+      if (this.fillEl) this.fillEl.style.transform = "scaleX(0)";
+      this.play();
+    }
+
+    onFinished() {
+      this.isPlaying = false;
+      this.isEnded = true;
+      this.el.classList.remove("is-playing", "is-paused");
+      this.el.classList.add("is-ended");
+      if (this.hudStatus) this.hudStatus.textContent = "TOMA COMPLETADA";
+      if (this.fillEl) this.fillEl.style.transform = "scaleX(1)";
+    }
+
+    triggerStateIcon(type) {
+      if (!this.stateIcon) return;
+      this.stateIcon.className = `rep-theater__state-icon is-${type} is-flashing`;
+      clearTimeout(this._iconTimer);
+      this._iconTimer = setTimeout(() => {
+        if (this.stateIcon) this.stateIcon.classList.remove("is-flashing");
+      }, 550);
+    }
+
+    draw(frameIndex) {
+      if (!this.ctx || !this.canvas || !this.currentCard) return;
+      let img = this.currentCard.frames[frameIndex];
+      if (!img) {
+        for (let d = 1; d < this.currentCard.totalFrames; d++) {
+          if (this.currentCard.frames[frameIndex - d]) { img = this.currentCard.frames[frameIndex - d]; break; }
+          if (this.currentCard.frames[frameIndex + d]) { img = this.currentCard.frames[frameIndex + d]; break; }
+        }
+      }
+      if (!img || !img.naturalWidth) return;
+
+      const cw = this.canvas.width;
+      const ch = this.canvas.height;
+      if (!cw || !ch) return;
+
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      const s = Math.max(cw / iw, ch / ih);
+      const dw = iw * s, dh = ih * s;
+      const x = (cw - dw) / 2, y = (ch - dh) / 2;
+
+      this.ctx.drawImage(img, x, y, dw, dh);
+    }
+
+    update(dt) {
+      if (!this.isOpen || !this.isPlaying || this.isEnded || !this.currentCard) return;
+
+      const playbackSpeed = this.currentCard.fps / this.currentCard.step;
+      this.currentPos += dt * playbackSpeed;
+
+      if (this.currentPos >= this.currentCard.totalFrames - 1) {
+        this.onFinished();
+        return;
+      }
+
+      const curIdx = Math.floor(this.currentPos);
+      if (curIdx !== this.lastIdx) {
+        this.draw(curIdx);
+        this.lastIdx = curIdx;
+
+        if (this.hudTc) {
+          const rawFrame = this.currentCard.frameIndices[curIdx] || 1;
+          const totalSec = Math.floor(rawFrame / this.currentCard.fps);
+          const remFr = rawFrame % this.currentCard.fps;
+          this.hudTc.textContent = `00:${pad(totalSec, 2)}:${pad(remFr, 2)}`;
+        }
+
+        if (this.fillEl) {
+          const progress = this.currentPos / (this.currentCard.totalFrames - 1);
+          this.fillEl.style.transform = `scaleX(${progress.toFixed(3)})`;
+        }
+      }
+    }
+
+    close() {
+      if (!this.isOpen) return;
+      this.sessionToken++;
+      this.isOpen = false;
+      this.isPlaying = false;
+      this.isEnded = false;
+      this.setLoader(false);
+      this.el.classList.remove("is-open", "is-playing", "is-ended", "is-paused");
+      this.el.setAttribute("aria-hidden", "true");
+      body.classList.remove("modal-open");
+      if (lenis) lenis.start();
+    }
+  }
+
   const repertorio = $(".repertorio");
-  const repTrack = $("[data-repertorio-track]");
   const repCards = $$("[data-rep-card]").map((el) => new RepertorioCard(el));
-  const repTrackFill = $("[data-rep-track-fill]");
-  const repActiveIdx = $("[data-rep-active-idx]");
-  let isMobileRep = false;
-  let repDist = 0, repInitialY = 0, repX = 0, repY = 0, repSkew = 0, lastRepP = 0;
-  let repDocTop = 0, repHeight = 0;
+  const repTheater = new RepertorioTheater();
 
   function measureRepertorio() {
-    if (!repertorio || !repTrack) return;
+    if (repTheater && repTheater.isOpen) {
+      repTheater.resizeCanvas();
+    }
+    if (!repCards || !repCards.length) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    isMobileRep = vw <= 768;
-    const scroll = scrollY();
-
-    repDocTop = repertorio.getBoundingClientRect().top + scroll;
-    repHeight = repertorio.offsetHeight;
-
     repCards.forEach((c) => {
       if (c.canvas) {
         const rect = c.canvas.getBoundingClientRect();
@@ -3471,144 +4058,18 @@
           }
         }
       }
-      c._offsetLeft = c.el.offsetLeft;
-      c._offsetTop = c.el.offsetTop;
-      c._width = c.el.offsetWidth;
-      c._height = c.el.offsetHeight;
     });
-
-    if (isMobileRep) {
-      // Agrupamiento inicial compacto debajo del encabezado en pantalla móvil:
-      // La primera tarjeta se sitúa justo debajo de .repertorio__head (sin espacio vacío intermedio),
-      // permitiendo ver de entrada la Obra 01 completa y la Obra 02 asomando inmediatamente debajo.
-      const firstCard = repCards[0] ? repCards[0].el : null;
-      const cardRect = firstCard ? firstCard.getBoundingClientRect() : null;
-      const cardH = (cardRect && cardRect.height > 50) ? cardRect.height : 265;
-      const stepH = cardH + 20; // altura tarjeta + gap
-      const totalDist = (repCards.length - 1) * stepH;
-
-      const repHead = $(".repertorio__head", repertorio);
-      const headH = repHead ? repHead.offsetHeight : 66;
-      repDist = totalDist;
-      repInitialY = Math.max(138, Math.round(68 + headH + 16));
-      repY = repInitialY;
-      repertorio.style.height = `${Math.round(totalDist * 1.35 + vh)}px`;
-    } else {
-      // Modo Horizontal para escritorios / pantallas panorámicas
-      repDist = Math.max(0, repTrack.scrollWidth - vw + 40);
-      repertorio.style.height = `${Math.round(repDist + vh * 1.25)}px`;
-    }
-    repHeight = repertorio.offsetHeight;
-  }
-
-  if ("IntersectionObserver" in window && repertorio) {
-    const repObserver = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) {
-          if (repCards[0]) repCards[0].loadFrames();
-          if (repCards[1]) repCards[1].loadFrames();
-          repObserver.disconnect();
-        }
-      });
-    }, { rootMargin: "400px 0px" });
-    repObserver.observe(repertorio);
   }
 
   function updateRepertorio(dt) {
-    if (!repertorio || !repTrack) return;
-    const y = scrollY();
-    const rTop = repDocTop - y;
-    const rBottom = rTop + repHeight;
-    if (rBottom < -120 || rTop > vh + 120) return;
-
-    const viewportEntry = clamp((vh - rTop) / vh, 0, 1);
-    const entryShiftY = -(1 - smooth(viewportEntry)) * (isMobileRep ? vh * 0.10 : vh * 0.15);
-    repertorio.style.setProperty("--rep-entry-y", `${entryShiftY.toFixed(1)}px`);
-
-    const p = clamp(-rTop / Math.max(1, repHeight - vh), 0, 1);
-    const vel = (p - lastRepP) * 100;
-    lastRepP = p;
-
-    if (repTrackFill) {
-      repTrackFill.style.transform = `scaleX(${p.toFixed(4)})`;
+    if (repTheater && repTheater.isOpen) {
+      repTheater.update(dt);
+      return;
     }
-
-    if (isMobileRep) {
-      // ==========================================
-      // MODO VERTICAL CINEMATOGRÁFICO COMPACTO (Móvil)
-      // ==========================================
-      const targetY = repInitialY - (p * repDist);
-      repY += (targetY - repY) * 0.16;
-      repSkew += (clamp(-vel * 1.2, -2.5, 2.5) - repSkew) * 0.12;
-
-      repTrack.style.setProperty("--ry", `${repY.toFixed(1)}px`);
-      repTrack.style.setProperty("--rx", "0px");
-      repTrack.style.setProperty("--rep-skew", `${repSkew.toFixed(2)}deg`);
-
-      const firstCardH = (repCards[0] && repCards[0]._height) ? repCards[0]._height : 260;
-      const focusShift = smooth(range(p, 0.0, 0.25));
-      const midY = (repInitialY + firstCardH * 0.5) * (1 - focusShift) + (vh * 0.46) * focusShift;
-      const halfH = vh * 0.46;
-
-      let closestCardIdx = 0;
-      let minCardDist = Infinity;
-
-      repCards.forEach((card, idx) => {
-        const cardH = card._height || 260;
-        const stageCardCenterY = repY + (card._offsetTop || 0) + cardH * 0.5;
-        const screenCardCenterY = Math.max(0, rTop) + stageCardCenterY;
-        const isVisible = (screenCardCenterY + cardH * 0.5) > -80 && (screenCardCenterY - cardH * 0.5) < vh + 80;
-        card.update(dt, Math.abs(vel), isVisible);
-
-        const distToCenter = Math.abs(stageCardCenterY - midY);
-        if (distToCenter < minCardDist) {
-          minCardDist = distToCenter;
-          closestCardIdx = idx;
-        }
-
-        // Foco visual cinematográfico: tarjeta activa al 100%, tarjetas contiguas claramente visibles
-        const normDist = clamp(distToCenter / halfH, 0, 1);
-        card.el.style.setProperty("--card-opacity", (1 - normDist * 0.45).toFixed(2));
-        card.el.style.setProperty("--card-scale", (1 - normDist * 0.06).toFixed(3));
-      });
-
-      if (repActiveIdx) {
-        repActiveIdx.textContent = pad(closestCardIdx + 1, 2);
-      }
-
-    } else {
-      // ==========================================
-      // MODO HORIZONTAL CINEMATOGRÁFICO (Escritorio)
-      // ==========================================
-      repSkew += (clamp(-vel * 1.8, -2.5, 2.5) - repSkew) * 0.12;
-      const targetX = -p * repDist;
-      repX += (targetX - repX) * 0.15;
-
-      repTrack.style.setProperty("--rx", `${repX.toFixed(1)}px`);
-      repTrack.style.setProperty("--ry", "0px");
-      repTrack.style.setProperty("--rep-skew", `${repSkew.toFixed(2)}deg`);
-
-      const midX = vw / 2;
-      let closestCardIdx = 0;
-      let minCardDist = Infinity;
-
-      repCards.forEach((card, idx) => {
-        const cardCenterX = repX + (card._offsetLeft || 0) + (card._width || 420) / 2;
-        const isVisible = (cardCenterX + (card._width || 420) / 2) > -150 && (cardCenterX - (card._width || 420) / 2) < vw + 150;
-        card.update(dt, Math.abs(vel), isVisible);
-
-        const distToMid = Math.abs(cardCenterX - midX);
-        if (distToMid < minCardDist) {
-          minCardDist = distToMid;
-          closestCardIdx = idx;
-        }
-
-        card.el.style.removeProperty("--card-opacity");
-        card.el.style.removeProperty("--card-scale");
-      });
-
-      if (repActiveIdx) {
-        repActiveIdx.textContent = pad(closestCardIdx + 1, 2);
+    if (!repCards || !repCards.length) return;
+    for (let i = 0; i < repCards.length; i++) {
+      if (repCards[i].isPlaying) {
+        repCards[i].update(dt);
       }
     }
   }
@@ -4323,8 +4784,8 @@
       const rBottom = rTop + b.height;
       if (rTop > vh + 80 || rBottom < -80) return;
 
-      const start = vh * 0.96;
-      const end = vh * 0.58 - b.height * 0.35;
+      const start = vh * 0.80;
+      const end = vh * 0.42 - b.height * 0.35;
       const raw = clamp((start - rTop) / Math.max(1, start - end));
       const p = Math.pow(raw, 1.35);
 
