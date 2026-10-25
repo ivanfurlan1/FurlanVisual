@@ -3629,11 +3629,11 @@ body.is-ready .hero__line > span { transform: none; }
   padding-bottom: 0;
   margin-bottom: 0;
   transform: translate3d(0, var(--choreo-head-y, 0px), 0);
-  will-change: transform;
+  will-change: transform, opacity;
   position: relative;
   z-index: 10;
   opacity: var(--choreo-head-op, 1);
-  transition: opacity 0.35s ease;
+  pointer-events: var(--choreo-head-pe, auto);
 }
 
 .choreo__header-left {
@@ -4244,11 +4244,11 @@ body.is-ready .hero__line > span { transform: none; }
   margin: 0 auto;
   padding-bottom: clamp(16px, 2.5vh, 26px);
   transform: translate3d(0, var(--choreo-foot-y, 0px), 0);
-  will-change: transform;
+  will-change: transform, opacity;
   position: relative;
   z-index: 10;
   opacity: var(--choreo-foot-op, 1);
-  transition: opacity 0.35s ease;
+  pointer-events: var(--choreo-foot-pe, auto);
 }
 
 .choreo__lens-scale {

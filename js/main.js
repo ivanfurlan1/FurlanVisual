@@ -2687,7 +2687,8 @@
     update(dt) {
       if (!this.frames || !this.frames.length) this.load();
       const y = scrollY();
-      const approachWindow = Math.max(260, vh * 0.78);
+      // En vertical ampliamos la ventana de aproximación para anticipar la presencia del recuadro
+      const approachWindow = Math.max(300, vh * (this.isPortrait ? 0.95 : 0.78));
       const exitWindow = Math.max(260, vh * 0.65);
 
       if (y + vh < this.top - approachWindow || y > this.top + this.len + exitWindow + vh) return;
@@ -2722,16 +2723,6 @@
         this.mouseCurrentY = 0;
       }
 
-      const groupShiftY = isApproaching
-        ? (-(1 - smooth(entryProgress)) * (this.approachShiftY || 0))
-        : 0;
-
-      if (this.stage) {
-        this.stage.style.setProperty("--choreo-group-y", `${groupShiftY.toFixed(1)}px`);
-        this.stage.style.setProperty("--choreo-head-y", "0px");
-        this.stage.style.setProperty("--choreo-foot-y", "0px");
-      }
-
       let deckRx = 0, deckRy = 0, deckRz = 0, deckScale = 1;
       let bpZ = -100, bpOpacity = 0;
       let mediaZ = 0;
@@ -2740,61 +2731,122 @@
       let activeAct = 0;
       let phaseTxt = "Aproximación y Nivelación 3D";
       let tExpand = 0;
+      let entryShiftY = 0;
+      let headOp = 1;
+      let headY = 0;
+      let footOp = 1;
+      let footY = 0;
 
       const baseScale = this.isPortrait ? 1.02 : 1.0;
       const fullScale = (this.fullScale || Math.max(vw / Math.max(1, this.deckW || 1), vh / Math.max(1, this.deckH || 1))) * 1.08;
 
       if (isApproaching) {
-        // ENTRADA: Inicia en 3D y se va nivelando con el scroll
+        // ENTRADA: El recuadro 3D aparece elevado para ser visto tempranamente mientras se desliza hacia abajo
         activeAct = 0;
-        phaseTxt = "Aproximación y Nivelación 3D";
-        const tLevel = smooth(entryProgress);
-        const oneMinus = 1 - tLevel;
+        phaseTxt = "Acto I · Aproximación 3D";
+        const entryT = smooth(entryProgress);
 
         if (this.isPortrait) {
-          deckRx = oneMinus * 18;
-          deckRy = oneMinus * -18;
-          deckRz = oneMinus * 1.5;
+          // Desplazamiento vertical adaptativo (estilo Casa Hudson):
+          // Eleva el recuadro (-vh * 0.28) para que asome inmediatamente por arriba.
+          // El cabezal ("Villa Epecuén") y el pie permanecen ocultos para no quedar tapados en la barra superior.
+          entryShiftY = -(1 - entryT) * (vh * 0.28);
+          const levelT = smooth(clamp(entryProgress * 0.65, 0, 1));
+          const oneMinus = 1 - levelT;
+
+          deckRx = oneMinus * 20;
+          deckRy = oneMinus * -20;
+          deckRz = oneMinus * 1.6;
           bpZ = oneMinus * -90;
           hudZ = oneMinus * 50;
-          deckScale = 0.94 + tLevel * (baseScale - 0.94);
+          deckScale = 0.94 + levelT * (baseScale - 0.94);
+          bpOpacity = oneMinus * 0.95;
+          mediaZ = oneMinus * 12;
+
+          headOp = 0;
+          headY = -24;
+          footOp = 0;
+          footY = 24;
         } else {
+          entryShiftY = -(1 - entryT) * (vh * 0.12);
+          const levelT = entryT;
+          const oneMinus = 1 - levelT;
+
           deckRx = oneMinus * 20;
           deckRy = oneMinus * -24;
           deckRz = oneMinus * 2;
           bpZ = oneMinus * -125;
           hudZ = oneMinus * 85;
-          deckScale = 0.92 + tLevel * (baseScale - 0.92);
+          deckScale = 0.92 + levelT * (baseScale - 0.92);
+          bpOpacity = oneMinus * 0.95;
+          mediaZ = oneMinus * 12;
+
+          headOp = smooth(range(entryProgress, 0.70, 1.0));
+          headY = (1 - headOp) * -16;
+          footOp = smooth(range(entryProgress, 0.75, 1.0));
+          footY = (1 - footOp) * 16;
         }
-        bpOpacity = oneMinus * 0.95;
-        mediaZ = oneMinus * 12;
         tExpand = 0;
 
       } else if (isPinned) {
-        // TRAMO FIJADO: El deck permanece 100% plano (0deg), estabilizado y sin inclinación
-        deckRx = 0;
-        deckRy = 0;
-        deckRz = 0;
-        bpOpacity = 0;
-        hudZ = 0;
-        exitGlare = 0;
+        // TRAMO FIJADO:
+        if (this.isPortrait && p < 0.14) {
+          // En vertical, la nivelación 3D concluye dentro de la pantalla completa (p: 0 -> 0.14)
+          // permitiendo que el usuario aprecie el giro 3D acomodándose al centro
+          const pLevel = smooth(range(p, 0.00, 0.14));
+          const levelT = 0.65 + pLevel * 0.35;
+          const oneMinus = 1 - levelT;
 
-        // Expansión continua a pantalla completa:
-        // En p <= 0.20: recuadro centrado en tamaño base.
-        // En p de 0.20 a 0.40: se agranda progresivamente hasta cubrir toda la pantalla.
+          entryShiftY = -(1 - pLevel) * (vh * 0.07);
+          deckRx = oneMinus * 20;
+          deckRy = oneMinus * -20;
+          deckRz = oneMinus * 1.6;
+          bpZ = oneMinus * -90;
+          hudZ = oneMinus * 50;
+          deckScale = 0.94 + levelT * (baseScale - 0.94);
+          bpOpacity = oneMinus * 0.95;
+          mediaZ = oneMinus * 12;
+
+          activeAct = 0;
+          phaseTxt = "Acto I · Nivelación 3D en Encuadre";
+        } else {
+          entryShiftY = 0;
+          deckRx = 0;
+          deckRy = 0;
+          deckRz = 0;
+          bpOpacity = 0;
+          hudZ = 0;
+          mediaZ = 0;
+          activeAct = (p <= 0.20) ? 1 : activeAct;
+          phaseTxt = (p <= 0.20) ? "Acto I · Vuelo Estabilizado" : phaseTxt;
+        }
+
+        // Aparición armónica y progresiva del cabezal y pie de control una vez fijada la pantalla
+        if (this.isPortrait) {
+          const tHeadIn = smooth(range(p, 0.02, 0.16));
+          const tFootIn = smooth(range(p, 0.05, 0.18));
+          headOp = tHeadIn;
+          headY = (1 - tHeadIn) * -18;
+          footOp = tFootIn;
+          footY = (1 - tFootIn) * 18;
+        } else {
+          headOp = 1;
+          headY = 0;
+          footOp = 1;
+          footY = 0;
+        }
+
+        // Expansión continua a pantalla completa (p: 0.20 -> 0.40):
         tExpand = smooth(range(p, 0.20, 0.40));
         deckScale = baseScale + tExpand * (fullScale - baseScale);
 
-        if (p <= 0.20) {
-          activeAct = 1;
-          phaseTxt = "Acto I · Vuelo Estabilizado";
-        } else if (p < 0.44) {
+        if (p > 0.20 && p < 0.44) {
           activeAct = 2;
           phaseTxt = "Acto II · Expansión Inmersiva";
-        } else if (p <= 0.78) {
+        } else if (p >= 0.44 && p <= 0.78) {
           activeAct = 3;
           phaseTxt = "Acto III · Secuencia Focal en Detalle";
-        } else {
+        } else if (p > 0.78) {
           activeAct = 4;
           phaseTxt = "Acto IV · Telemetría y Cierre de Vuelo";
         }
@@ -2805,12 +2857,15 @@
         phaseTxt = "Descenso · Siguiente Obra";
         tExpand = 1;
         deckScale = fullScale;
+        entryShiftY = 0;
         deckRx = 0;
         deckRy = 0;
         deckRz = 0;
         bpOpacity = 0;
         const tExit = smooth(exitProgress);
         exitGlare = tExit * 0.45;
+        headOp = (1 - tExit) * 0.15;
+        footOp = (1 - tExit) * 0.15;
       }
 
       // Capa oscura y difuminado cinemático de fondo (Acto II / Clímax de zoom):
@@ -2823,6 +2878,13 @@
         const tInsetOut = smooth(range(p, 0.78, 0.88));
         insetOp = tInsetIn * (1 - tInsetOut);
         insetScale = 0.94 + tInsetIn * 0.06 - tInsetOut * 0.04;
+
+        // Desvanecimiento sutil de cabezal y pie durante la tarjeta de cierre
+        const outroT = smooth(range(p, 0.78, 0.91));
+        if (outroT > 0.01) {
+          headOp = headOp * (1 - outroT * 0.85);
+          footOp = footOp * (1 - outroT * 0.85);
+        }
       } else if (isExiting) {
         tDim = 1;
         insetOp = 0;
@@ -2847,10 +2909,17 @@
 
       if (this.stage) {
         this.stage.style.setProperty("--choreo-expand", tExpand.toFixed(3));
+        this.stage.style.setProperty("--choreo-group-y", "0px");
+        this.stage.style.setProperty("--choreo-head-y", `${headY.toFixed(1)}px`);
+        this.stage.style.setProperty("--choreo-head-op", headOp.toFixed(3));
+        this.stage.style.setProperty("--choreo-head-pe", headOp > 0.1 ? "auto" : "none");
+        this.stage.style.setProperty("--choreo-foot-y", `${footY.toFixed(1)}px`);
+        this.stage.style.setProperty("--choreo-foot-op", footOp.toFixed(3));
+        this.stage.style.setProperty("--choreo-foot-pe", footOp > 0.1 ? "auto" : "none");
       }
 
       if (this.deck) {
-        const deckTy = (this.expandShiftY || 0) * tExpand;
+        const deckTy = entryShiftY + (this.expandShiftY || 0) * tExpand;
         this.deck.style.setProperty("--deck-ty", `${deckTy.toFixed(1)}px`);
         this.deck.style.setProperty("--deck-rx", `${deckRx.toFixed(2)}deg`);
         this.deck.style.setProperty("--deck-ry", `${deckRy.toFixed(2)}deg`);
@@ -2960,10 +3029,7 @@
         this.outroCard.style.setProperty("--outro-card-op", outroT.toFixed(3));
         this.outroCard.style.setProperty("--outro-card-ty", `${((1 - outroT) * 16).toFixed(1)}px`);
         this.outroCard.style.setProperty("--outro-card-pe", outroT > 0.2 ? "auto" : "none");
-        if (this.stage) {
-          this.stage.style.setProperty("--choreo-head-op", (1 - outroT * 0.85).toFixed(3));
-          this.stage.style.setProperty("--choreo-foot-op", (1 - outroT * 0.85).toFixed(3));
-        }
+        // El cabezal y pie se atenúan suavemente con el cálculo unificado headOp / footOp
         if (outroT > 0.02) {
           this.updateOutroGleam(p, dt);
         }
