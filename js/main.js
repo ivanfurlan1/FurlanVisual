@@ -39,19 +39,24 @@
   const scrollContainer = $("#top");
   const isVerticalScroller = () => vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
 
+  let isUserTouching = false;
+  window.addEventListener("touchstart", () => { isUserTouching = true; }, { passive: true });
+  window.addEventListener("touchend", () => { isUserTouching = false; }, { passive: true });
+  window.addEventListener("touchcancel", () => { isUserTouching = false; }, { passive: true });
+
   const scrollY = () => {
-    if (lenis) return lenis.scroll;
     if (scrollContainer && isVerticalScroller()) return scrollContainer.scrollTop;
+    if (lenis) return lenis.scroll;
     return window.scrollY;
   };
 
   function scrollToTarget(target, opts = {}) {
     const el = typeof target === "string" ? $(target) : target;
     const y = typeof target === "number" ? target : (el ? el.getBoundingClientRect().top + scrollY() : 0);
-    if (lenis) {
-      lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
-    } else if (scrollContainer && isVerticalScroller()) {
+    if (scrollContainer && isVerticalScroller()) {
       scrollContainer.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
+    } else if (lenis) {
+      lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
     } else {
       window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
     }
@@ -479,7 +484,8 @@
     seekToProgress(progress) {
       const targetP = clamp(progress, 0, 1);
       const targetY = this.top + targetP * this.len;
-      if (lenis) lenis.scrollTo(targetY, { duration: 0.6 });
+      if (scrollContainer && isVerticalScroller()) scrollToTarget(targetY, { duration: 0.6 });
+      else if (lenis) lenis.scrollTo(targetY, { duration: 0.6 });
       else scrollToTarget(targetY, { duration: 0.6 });
     }
 
@@ -1184,21 +1190,21 @@
         if (this.isKinetic) {
           const isMob = vw <= 900 || (vw / vh < 0.95);
           const initEntryShiftY = isMob ? -vh * 0.28 : 0;
-          st.setProperty("--kseq-clip-x", isMob ? "10%" : "36%");
-          st.setProperty("--kseq-clip-y", isMob ? "3%" : "6%");
+          st.setProperty("--kseq-clip-x", isMob ? "30%" : "36%");
+          st.setProperty("--kseq-clip-y", "6%");
           st.setProperty("--kseq-tx", "0px");
           st.setProperty("--kseq-ty", `${initEntryShiftY.toFixed(1)}px`);
           st.setProperty("--kseq-curtain-y", `${initEntryShiftY.toFixed(1)}px`);
-          st.setProperty("--kseq-scale", isMob ? "0.96" : "0.94");
+          st.setProperty("--kseq-scale", "0.94");
           st.setProperty("--kseq-ry", "0deg");
           st.setProperty("--kseq-hud-op", "0");
           st.setProperty("--kseq-inner-hud", "0");
           st.setProperty("--kseq-axis-x", "0px");
-          st.setProperty("--cover-opacity", isMob ? "0.18" : "0.35");
+          st.setProperty("--cover-opacity", "0.35");
           st.setProperty("--frame-opacity", "1");
           st.setProperty("--outro-card-op", "0");
           st.setProperty("--outro-card-pe", "none");
-          this.setVisualFilter(isMob ? 4 : 10, isMob ? 0.35 : 1);
+          this.setVisualFilter(10, 1);
           if (this.kWingL) { this.kWingL.style.opacity = "1"; this.kWingL.style.transform = "translate3d(0,0,0)"; }
           if (this.kWingR) { this.kWingR.style.opacity = "1"; this.kWingR.style.transform = "translate3d(0,0,0)"; }
           if (this.kPanel1) this.kPanel1.style.opacity = "0";
@@ -1335,7 +1341,7 @@
           } else if (rawP > 0.74) {
             // Para Cartografía de Vuelo (#trazado): curva suave natural
             const tDecel = clamp((rawP - 0.74) / (1.0 - 0.74), 0, 1);
-            speedFactor = Math.max(0.32, 1.0 - Math.pow(tDecel, 1.35) * 0.68);
+            speedFactor = Math.max(0.48, 1.0 - Math.pow(tDecel, 1.35) * 0.52);
           }
 
           // Duración calibrada para reproducción automática:
@@ -1346,13 +1352,8 @@
           const autoSpeed = (this.len / Math.max(4, baseDuration)) * speedFactor;
           const autoDy = autoSpeed * dtSec;
 
-          if (lenis) {
-            // Transición unificada sin cortes ni detenciones intermedias:
-            // 1. Si el usuario gira la rueda hacia atrás (arriba), retrocede de forma inmediata.
-            // 2. Si el usuario gira la rueda hacia adelante (abajo) o venía con inercia de entrada,
-            //    esa aceleración se suma suavemente pero NUNCA cae por debajo de autoDy.
-            //    Al soltar el scroll, la desaceleración empalma de forma continua con la velocidad de crucero,
-            //    sin frenar a cero ni esperar tiempos muertos.
+          if (lenis && !isVerticalScroller()) {
+            // Transición unificada sin cortes ni detenciones intermedias en escritorio Lenis:
             const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
             const userDiff = targetY - y;
 
@@ -1380,10 +1381,26 @@
               }
             }
           } else {
+            // Modo vertical / móvil (#top) o scroll nativo sin Lenis:
+            // Acumulador de subpíxeles con despacho entero para garantizar avance continuo sin micro-frenos
             const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
             const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
             if (currentY < this.top + this.len) {
-              scroller.scrollBy(0, autoDy);
+              if (isUserTouching) {
+                this.subpixelAcc = 0;
+              } else {
+                this.subpixelAcc = (this.subpixelAcc || 0) + autoDy;
+                if (this.subpixelAcc >= 1) {
+                  const intStep = Math.floor(this.subpixelAcc);
+                  this.subpixelAcc -= intStep;
+                  const nextY = Math.min(this.top + this.len, currentY + intStep);
+                  if (scroller === window) {
+                    window.scrollTo(0, nextY);
+                  } else {
+                    scroller.scrollTop = nextY;
+                  }
+                }
+              }
             }
           }
         }
@@ -1568,35 +1585,30 @@
         const isMob = vw <= 900 || (vw / vh < 0.95);
 
         // 0. Progreso de aproximación / entrada al viewport
-        // viewportEntry va de 0 (cuando asoma por el borde inferior) a 1 (cuando la sección se fija en top: 0)
         const entryProgress = clamp((y + vh - this.top) / vh, 0, 1);
 
-        // 1. Apertura de la hendidura central
-        // En móvil abre con mayor generosidad y anticipación para que la imagen se aprecie nítida desde el primer instante
-        const openT = smooth(range(p, isMob ? -0.16 : -0.06, isMob ? 0.18 : 0.24));
-        const baseClipX = isMob ? 10 : 36;
-        const baseClipY = isMob ? 3 : 6;
-        const clipX = ((1 - openT) * baseClipX).toFixed(2);
-        const clipY = ((1 - openT) * baseClipY).toFixed(2);
+        // 1. Apertura de la hendidura central (-0.06 -> 0.24)
+        // La hendidura comienza en 30% / 36% y se estira horizontalmente con el scroll
+        const openT = smooth(range(p, -0.06, 0.24));
+        const clipX = ((1 - openT) * (isMob ? 30 : 36)).toFixed(2);
+        const clipY = ((1 - openT) * 6).toFixed(2);
         st.setProperty("--kseq-clip-x", `${clipX}%`);
         st.setProperty("--kseq-clip-y", `${clipY}%`);
 
-        // Revelado cromático y óptico:
-        // En móvil despierta de forma inmediata al asomar por abajo (p > -0.22)
-        const wakeT = smooth(range(p, isMob ? -0.22 : -0.14, 0.04));
+        // Revelado cromático y óptico original:
+        const wakeT = smooth(range(p, -0.14, 0.04));
         const outro = smooth(range(prog, 0.88, 1.0));
-        const cover = Math.max((1 - wakeT) * (isMob ? 0.18 : 0.32), outro * 0.38);
-        const blur = Math.max((1 - wakeT) * (isMob ? 4 : 10), outro * 8);
-        const gray = (1 - wakeT) * (isMob ? 0.35 : 1.0);
+        const cover = Math.max((1 - wakeT) * 0.32, outro * 0.38);
+        const blur = Math.max((1 - wakeT) * 10, outro * 8);
+        const gray = 1 - wakeT;
         st.setProperty("--cover-opacity", cover.toFixed(3));
         st.setProperty("--frame-opacity", "1");
         this.setVisualFilter(blur, gray);
 
         // 2. Telón tipográfico monumental partido (se abre hacia los bordes)
-        // En móvil el texto "Casa Hudson" permanece plenamente legible durante la entrada
-        // y se desplaza con sutil elegancia conforme avanza el film
-        const wingMove = smooth(range(p, isMob ? 0.04 : -0.02, isMob ? 0.28 : 0.25));
-        const wingOp = isMob ? (1 - smooth(range(p, 0.12, 0.26))) : (1 - smooth(range(p, 0.08, 0.23)));
+        // Posición y separación original exacta de las alas "Casa" y "Hudson":
+        const wingMove = smooth(range(p, -0.02, 0.25));
+        const wingOp = 1 - smooth(range(p, 0.08, 0.23));
         const wingShiftX = wingMove * (isMob ? vw * 0.24 : vw * 0.22);
         const wingBlur = (wingMove * 6).toFixed(1);
         if (this.kWingL) {
@@ -1621,10 +1633,8 @@
         const ptrY = (!isMob && finePointer && !reduce) ? normMy * 6 * (1 - outro) : 0;
 
         // Desplazamiento adaptativo en vertical / móvil:
-        // Al asomar la sección (entryProgress: 0 -> 1 / p < 0), eleva el escenario y el telón (-vh * 0.28)
-        // para que "Casa Hudson" y la imagen aparezcan inmediatamente al finalizar la sección anterior.
-        // A medida que el usuario desliza hacia abajo, el fondo oscuro va llenando la pantalla y los elementos
-        // descienden suavemente a su posición centrada de lectura sin ningún salto ni vacío.
+        // Eleva suavemente el escenario y el telón para que aparezcan antes al terminar la sección anterior,
+        // permitiendo que el fondo oscuro se expanda y llene la pantalla sin vacíos
         const mobEntryShiftY = isMob ? (-(1 - smooth(entryProgress)) * (vh * 0.28)) : 0;
         const mobActiveShiftY = isMob ? (- (toLeft + toRight) * (vh * 0.085)) : 0;
 
@@ -2342,7 +2352,8 @@
           if (clientX === undefined) return;
           const p = clamp((clientX - rect.left) / rect.width);
           const y = this.top + p * this.len;
-          if (lenis) lenis.scrollTo(y, { immediate: true });
+          if (scrollContainer && isVerticalScroller()) scrollToTarget(y, { immediate: true });
+          else if (lenis) lenis.scrollTo(y, { immediate: true });
           else window.scrollTo(0, y);
         };
         this.progressTrack.addEventListener("click", seek);
@@ -4054,7 +4065,7 @@
   function loop(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    if (lenis) lenis.raf(now);
+    if (lenis && !isVerticalScroller()) lenis.raf(now);
     const y = scrollY();
     const dy = y - lastY;
     const isScrolling = Math.abs(dy) > 0.05;

@@ -596,9 +596,8 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
 }
 .seq--hero { height: 295vh; } /* Obra I - Los Robles: 145 frames */
 #trazado { height: 280vh; }  /* Cartografia - Casa Greenville: 336 frames (Proyeccion autonoma + aceleracion) */
-@media (max-width: 900px), (max-aspect-ratio: 1/1) { #trazado { height: 195vh; } }
-#film-03 { height: 624vh; }
-@media (max-width: 900px), (max-aspect-ratio: 1/1) { #film-03 { height: 350vh; } }  /* Obra III - Casa Hudson: 419 frames */
+@media (max-width: 900px), (max-aspect-ratio: 1/1) { #trazado { height: 240vh; } }
+#film-03 { height: 624vh; }  /* Obra III - Casa Hudson: 419 frames */
 #film-04 { height: 440vh; }
 @media (max-width: 768px), (max-aspect-ratio: 9/10) { #film-04 { height: 350vh; } }  /* Obra IV - Anacleto: 457 frames */
 #nocturno { height: 386vh; } /* Perspectiva Pantalla Completa - Fincas: 249 frames */
@@ -2386,7 +2385,7 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
    ========================================================= */
 @media (max-width: 900px), (max-aspect-ratio: 1/1) {
   .seq--trace {
-    height: 195vh;
+    height: 240vh;
   }
 
   .trace__takeover {
@@ -5728,13 +5727,12 @@ body.is-ready .hero__line > span { transform: none; }
   .seq { height: 235vh; }
   .seq--hero { height: 265vh; }
   .seq--fullscreen { height: 235vh; }
-  #film-03, .seq--kinetic { height: 350vh; }
+  .seq--kinetic { height: 280vh; }
   .kseq__top-right { display: none; }
   .kseq__wing-no i { display: none; }
   .kseq__wing--left { padding-right: 16px; }
   .kseq__wing--right { padding-left: 16px; }
-  .kseq__wing-title { font-size: clamp(36px, 10.5vw, 56px); letter-spacing: -0.03em; text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 0, 0, 0.65); }
-  .seq--kinetic .kseq__media { border-radius: 4px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(236, 232, 225, 0.14); }
+  .kseq__wing-title { font-size: clamp(38px, 11vw, 62px); }
   .kseq__panel { bottom: 68px; padding: 12px 15px; gap: 6px; }
   .kseq__panel-title { font-size: 21px; }
   .kseq__panel-desc { font-size: 12.5px; line-height: 1.48; }
