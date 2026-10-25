@@ -607,14 +607,17 @@
 
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
-      // Los primeros fotogramas, en orden estricto: arranque y reencuadre sin saltos.
-      const head = Math.min(45, n);
-      for (let i = 0; i < head; i++) { seen[i] = 1; out.push(i); }
-      // El resto, en pasadas progresivas para cubrir todo el film cuanto antes.
-      [6, 3, 1].forEach((step) => {
-        for (let i = head; i < n; i += step) if (!seen[i]) { seen[i] = 1; out.push(i); }
-      });
-      if (!seen[n - 1]) out.push(n - 1);
+      // Prioridad 1: Fotograma inicial para pintar de inmediato
+      out.push(0); seen[0] = 1;
+      // Prioridad 2: Fotogramas pares distribuidos (cobertura suave con mitad de peticiones)
+      for (let i = 2; i < n; i += 2) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
+      }
+      if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
+      // Prioridad 3: Fotogramas impares para completar fluidez cinematográfica
+      for (let i = 1; i < n; i += 2) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
+      }
       return out;
     }
 
@@ -624,9 +627,9 @@
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const first = Math.min(30, Math.max(16, Math.ceil(this.count / 10)));
+      const first = Math.min(20, Math.max(8, Math.ceil(this.count / 15)));
       let qi = 0, done = 0;
-      const parallel = vw < 900 ? 4 : 6;
+      const parallel = 2;
 
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
@@ -721,16 +724,14 @@
       this.randa2Frames = new Array(count);
 
       const loadSeq = (slug, targetArr, cardIdx) => {
-        const queue = [];
-        const head = Math.min(30, count);
-        for (let i = 0; i < head; i++) queue.push(i);
-        [4, 2, 1].forEach((step) => {
-          for (let i = head; i < count; i += step) if (!queue.includes(i)) queue.push(i);
-        });
+        const queue = [0];
+        // Peticiones escalonadas: pares primero, luego impares
+        for (let i = 2; i < count; i += 2) queue.push(i);
         if (!queue.includes(count - 1)) queue.push(count - 1);
+        for (let i = 1; i < count; i += 2) queue.push(i);
 
         let qi = 0;
-        const parallel = vw < 900 ? 3 : 5;
+        const parallel = 2;
         const next = () => {
           if (qi >= queue.length) return;
           const idx = queue[qi++];
@@ -1410,7 +1411,7 @@
           prog = pinMaxProg + Math.sin(exitT * Math.PI * 0.5) * (1.0 - pinMaxProg);
         }
       } else if (this.isFiesta) {
-        if (viewportEntry > 0 && !this.randaLoaded) this.loadRanda();
+        if (p >= 0.15 && !this.randaLoaded) this.loadRanda();
         // Vonharv: se reproduce como un plano continuo de apertura que culmina en p = 0.44
         if (p < 0.0) {
           const u = clamp((p + 0.15) / 0.15);
@@ -2002,22 +2003,33 @@
       }
       this.frames = new Array(this.count);
       const token = ++this.token;
-      const totalToLoad = this.count;
-      for (let i = 0; i < totalToLoad; i++) {
+      const queue = [0];
+      for (let i = 2; i < this.count; i += 2) queue.push(i);
+      if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
+      for (let i = 1; i < this.count; i += 2) queue.push(i);
+
+      let qi = 0;
+      const parallel = 2;
+      const next = () => {
+        if (token !== this.token || qi >= queue.length) return;
+        const i = queue[qi++];
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => {
-          if (token === this.token) {
+        const finish = (ok) => {
+          if (token !== this.token) return;
+          if (ok) {
             this.frames[i] = img;
-            if (i === 0) {
-              this.draw(0);
-            }
+            if (i === 0) this.draw(0);
             this.dirty = true;
           }
+          next();
         };
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
+        img.onerror = () => finish(false);
         const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
         img.src = `${this.src}/lg/${pad(i + 1, 4)}.webp${vParam}`;
-      }
+      };
+      for (let k = 0; k < parallel; k++) next();
     }
 
     nearest(i) {
@@ -2238,21 +2250,32 @@
       }
       this.frames = new Array(this.count);
       const token = ++this.token;
-      const totalToLoad = this.count;
-      for (let i = 0; i < totalToLoad; i++) {
+      const queue = [0];
+      for (let i = 2; i < this.count; i += 2) queue.push(i);
+      if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
+      for (let i = 1; i < this.count; i += 2) queue.push(i);
+
+      let qi = 0;
+      const parallel = 2;
+      const next = () => {
+        if (token !== this.token || qi >= queue.length) return;
+        const i = queue[qi++];
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => {
-          if (token === this.token) {
+        const finish = (ok) => {
+          if (token !== this.token) return;
+          if (ok) {
             this.frames[i] = img;
-            if (i === 0) {
-              this.dirty = true;
-            }
+            if (i === 0) this.dirty = true;
           }
+          next();
         };
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
+        img.onerror = () => finish(false);
         const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
         img.src = `${this.src}/lg/${pad(i + 1, 4)}.webp${vParam}`;
-      }
+      };
+      for (let k = 0; k < parallel; k++) next();
     }
 
     initRuler() {
@@ -2927,7 +2950,7 @@
         if (s && !s.set) s.load();
         seqLoader.unobserve(en.target);
       });
-    }, { rootMargin: "1400px 0px" });
+    }, { rootMargin: "250px 0px" });
     sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
 
     if (choreoEl) {
@@ -2938,7 +2961,7 @@
             choreoObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: "1400px 0px" });
+      }, { rootMargin: "250px 0px" });
       choreoObs.observe(choreoEl);
     }
     if (formatEl) {
@@ -2949,7 +2972,7 @@
             formatObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: "1400px 0px" });
+      }, { rootMargin: "250px 0px" });
       formatObs.observe(formatEl);
     }
   } else {
@@ -3176,7 +3199,7 @@
       let loadedCount = 0;
       const total = this.frameIndices.length;
       let qIdx = 0;
-      const parallel = 4;
+      const parallel = 2;
 
       const loadNext = () => {
         if (qIdx >= total) return;
@@ -3709,7 +3732,6 @@
 
     initObserver() {
       if (!this.sec) return;
-      setTimeout(() => this.load(), 250);
       if ("IntersectionObserver" in window) {
         const io = new IntersectionObserver((entries) => {
           entries.forEach((e) => {
@@ -3718,7 +3740,7 @@
               io.disconnect();
             }
           });
-        }, { rootMargin: "800px 0px" });
+        }, { rootMargin: "250px 0px" });
         io.observe(this.sec);
       }
     }
@@ -3726,15 +3748,15 @@
     order() {
       const n = this.count;
       const seen = new Uint8Array(n);
-      const out = [];
-      const head = Math.min(10, n);
-      for (let i = 0; i < head; i++) { seen[i] = 1; out.push(i); }
-      [4, 2, 1].forEach((step) => {
-        for (let i = head; i < n; i += step) {
-          if (!seen[i]) { seen[i] = 1; out.push(i); }
-        }
-      });
-      if (!seen[n - 1]) out.push(n - 1);
+      const out = [0];
+      seen[0] = 1;
+      for (let i = 2; i < n; i += 2) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
+      }
+      if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
+      for (let i = 1; i < n; i += 2) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
+      }
       return out;
     }
 
@@ -3747,7 +3769,7 @@
       const queue = this.order();
       let qi = 0;
       let loadedCount = 0;
-      const parallel = vw < 900 ? 3 : 5;
+      const parallel = 2;
 
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
