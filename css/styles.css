@@ -597,7 +597,7 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
 .seq--hero { height: 295vh; } /* Obra I - Los Robles: 145 frames */
 #trazado { height: 280vh; }  /* Cartografia - Casa Greenville: 336 frames (Proyeccion autonoma + aceleracion) */
 @media (max-width: 900px), (max-aspect-ratio: 1/1) { #trazado { height: 240vh; } }
-#film-03 { height: 624vh; }  /* Obra III - Casa Hudson: 419 frames */
+#film-03 { height: 624vh; background: #ffffff !important; }  /* Obra III - Casa Hudson: 419 frames · Fondo blanco */
 #film-04 { height: 440vh; }
 @media (max-width: 768px), (max-aspect-ratio: 9/10) { #film-04 { height: 350vh; } }  /* Obra IV - Anacleto: 457 frames */
 #nocturno { height: 386vh; } /* Perspectiva Pantalla Completa - Fincas: 249 frames */
@@ -2543,7 +2543,7 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
 
 .seq--kinetic .seq__stage {
   perspective: 1400px;
-  background: radial-gradient(ellipse at 50% 50%, #151412 0%, #0c0b0a 65%, #050505 100%);
+  background: #ffffff !important;
 }
 
 /* Retícula arquitectónica - líneas en cruz removidas a petición del usuario */
@@ -2597,7 +2597,7 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: 10.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--stone);
+  color: #726d66;
   pointer-events: none;
   opacity: var(--kseq-hud-op, 1);
   transform: translate3d(0, var(--kseq-hud-y, 0px), 0);
@@ -2612,18 +2612,20 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #c89d6c;
-  box-shadow: 0 0 10px rgba(200, 157, 108, 0.75);
+  background: #a2714e;
+  box-shadow: 0 0 8px rgba(162, 113, 78, 0.45);
 }
 .kseq__eyebrow {
-  color: var(--bone);
+  color: #0d0d0c;
+  font-weight: 500;
 }
 .kseq__phase-pill {
   padding: 3px 10px;
-  border: 1px solid rgba(236, 232, 225, 0.22);
+  border: 1px solid rgba(13, 13, 12, 0.2);
   border-radius: 999px;
-  color: var(--bone);
-  background: rgba(18, 17, 16, 0.65);
+  color: #0d0d0c;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   font-size: 9.5px;
   letter-spacing: 0.16em;
 }
@@ -2632,17 +2634,19 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   align-items: center;
   gap: 10px;
   font-variant-numeric: tabular-nums;
+  color: #726d66;
 }
 .kseq__top-center strong {
-  color: var(--bone);
-  font-weight: 400;
+  color: #0d0d0c;
+  font-weight: 500;
 }
 .kseq__sep {
-  opacity: 0.4;
+  opacity: 0.3;
+  color: rgba(13, 13, 12, 0.4);
 }
 .kseq__top-right {
   text-align: right;
-  color: rgba(236, 232, 225, 0.72);
+  color: #55504a;
 }
 
 /* Telón tipográfico monumental partido */
@@ -2683,13 +2687,13 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: 10.5px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--stone);
+  color: #6e6962;
 }
 .kseq__wing-no i {
   display: block;
   width: 32px;
   height: 1px;
-  background: rgba(236, 232, 225, 0.28);
+  background: rgba(13, 13, 12, 0.22);
 }
 .kseq__wing-title {
   font-family: var(--serif);
@@ -2697,16 +2701,17 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: clamp(58px, 9.2vw, 152px);
   line-height: 0.88;
   letter-spacing: -0.038em;
-  color: var(--bone);
+  color: #0d0d0c;
+  text-shadow: none;
 }
 .kseq__wing-title em {
   font-style: italic;
-  color: #e5dac9;
+  color: #8c5b34;
 }
 .kseq__wing-sub {
   font-size: 13.5px;
   line-height: 1.5;
-  color: rgba(236, 232, 225, 0.65);
+  color: #55504a;
   max-width: 26ch;
 }
 
@@ -2718,7 +2723,8 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   clip-path: inset(var(--kseq-clip-y, 0%) var(--kseq-clip-x, 0%) var(--kseq-clip-y, 0%) var(--kseq-clip-x, 0%));
   transform: translate3d(var(--kseq-tx, 0px), var(--kseq-ty, 0px), 0) scale(var(--kseq-scale, 1)) rotateY(var(--kseq-ry, 0deg));
   transform-style: preserve-3d;
-  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(236, 232, 225, 0.16);
+  box-shadow: 0 28px 75px rgba(0, 0, 0, 0.16), 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(13, 13, 12, 0.14);
+  border-radius: 3px;
   will-change: transform, clip-path, opacity;
 }
 
@@ -2846,6 +2852,13 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   gap: 14px;
   opacity: 0;
   transform: translate3d(0, -50%, 0);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(13, 13, 12, 0.12);
+  border-radius: 4px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.08), 0 2px 10px rgba(0, 0, 0, 0.03);
+  padding: 20px 24px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
@@ -2865,11 +2878,11 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   text-transform: uppercase;
 }
 .kseq__panel-num {
-  color: #c89d6c;
+  color: #a2714e;
   font-weight: 500;
 }
 .kseq__panel-tag {
-  color: var(--stone);
+  color: #6e6962;
 }
 .kseq__panel-title {
   font-family: var(--serif);
@@ -2877,21 +2890,21 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: clamp(28px, 2.7vw, 44px);
   line-height: 1.06;
   letter-spacing: -0.025em;
-  color: var(--bone);
+  color: #0d0d0c;
 }
 .kseq__panel-title em {
   font-style: italic;
-  color: #e5dac9;
+  color: #8c5b34;
 }
 .kseq__panel-desc {
   font-size: 14px;
   line-height: 1.68;
-  color: rgba(236, 232, 225, 0.72);
+  color: #48443e;
 }
 .kseq__cota {
   margin-top: 6px;
   padding-top: 12px;
-  border-top: 1px solid rgba(236, 232, 225, 0.12);
+  border-top: 1px solid rgba(13, 13, 12, 0.12);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2904,22 +2917,23 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: 10px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: var(--stone);
+  color: #615c55;
 }
 .kseq__cota-row strong {
-  color: var(--bone);
-  font-weight: 400;
+  color: #0d0d0c;
+  font-weight: 500;
 }
 .kseq__cota-bar {
   position: relative;
   height: 1px;
-  background: rgba(236, 232, 225, 0.14);
+  background: rgba(13, 13, 12, 0.12);
+  border-radius: 999px;
   overflow: hidden;
 }
 .kseq__cota-bar i {
   position: absolute;
   inset: 0;
-  background: #c89d6c;
+  background: #a2714e;
   transform-origin: 0 50%;
   transform: scaleX(0);
 }
@@ -2945,16 +2959,20 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   align-items: baseline;
   gap: 16px;
 }
+.seq--kinetic .seq__tc {
+  color: #0d0d0c;
+  font-weight: 500;
+}
 .kseq__bot-title {
   font-family: var(--sans);
   font-size: 10.5px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--stone);
+  color: #615c55;
 }
 .kseq__bot-title strong {
-  color: var(--bone);
-  font-weight: 400;
+  color: #0d0d0c;
+  font-weight: 500;
 }
 .kseq__scrub {
   display: flex;
@@ -2973,10 +2991,22 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
   font-size: 9px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgba(236, 232, 225, 0.48);
+  color: #7c776e;
+}
+.kseq__scrub .seq__track {
+  background: rgba(13, 13, 12, 0.14);
+}
+.kseq__scrub [data-scrub-fill] {
+  background: #0d0d0c;
 }
 .kseq__bot-right {
   text-align: right;
+}
+.seq--kinetic .seq__fr {
+  color: #615c55;
+}
+.seq--kinetic .seq__fr [data-hud-fr] {
+  color: #0d0d0c;
 }
 
 /* ---------- 09. Portada ---------- */
@@ -5734,16 +5764,19 @@ body.is-ready .hero__line > span { transform: none; }
   .kseq__wing-no i { display: none; }
   .kseq__wing--left { padding-right: 16px; }
   .kseq__wing--right { padding-left: 16px; }
-  .kseq__wing-title { font-size: clamp(38px, 11vw, 62px); }
+  .kseq__wing-title { font-size: clamp(38px, 11vw, 62px); color: #0d0d0c; text-shadow: none; }
   .kseq__panel {
     top: calc(50% + var(--kseq-h, 210px) * 0.5 + 18px);
     bottom: auto;
     padding: 12px 16px;
     gap: 6px;
     max-width: 380px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(13, 13, 12, 0.14);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
   }
-  .kseq__panel-title { font-size: 21px; }
-  .kseq__panel-desc { font-size: 12.5px; line-height: 1.48; }
+  .kseq__panel-title { font-size: 20px; line-height: 1.15; color: #0d0d0c; }
+  .kseq__panel-desc { font-size: 12.5px; line-height: 1.48; color: #48443e; }
   .kseq__cota { display: none; }
   .kseq__loupe {
   display: none !important; width: 108px; padding: 5px; }
