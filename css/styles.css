@@ -375,6 +375,15 @@ body.nav-hidden:not(.index-open) .nav,
   pointer-events: none;
   transition: transform 0.32s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.22s ease;
 }
+
+@media (max-width: 900px), (max-aspect-ratio: 1/1) {
+  body.nav-hidden:not(.index-open) .nav,
+  .nav.is-hidden:not(.index-open) {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+}
 .nav > * { pointer-events: auto; }
 
 .nav__brand { display: inline-flex; align-items: baseline; gap: 16px; justify-self: start; }
@@ -560,7 +569,6 @@ body.index-open .index__preview { clip-path: inset(0 0 0 0); }
 .seq--hero { height: 295vh; } /* Obra I - Los Robles: 145 frames */
 #trazado { height: 280vh; }  /* Cartografia - Casa Greenville: 336 frames (Proyeccion autonoma + aceleracion) */
 @media (max-width: 768px), (max-aspect-ratio: 9/10) { #trazado { height: 240vh; } }
-#film-02 { height: 410vh; }  /* Obra II - Vonharv + Extensión Randa I & II: 154 + 208 frames */
 #film-03 { height: 624vh; }  /* Obra III - Casa Hudson: 419 frames */
 #film-04 { height: 440vh; }
 @media (max-width: 768px), (max-aspect-ratio: 9/10) { #film-04 { height: 350vh; } }  /* Obra IV - Anacleto: 457 frames */

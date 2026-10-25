@@ -2098,7 +2098,7 @@
       // Metamorfosis: inicia en 16:9 exacto, muta gradualmente y culmina en 9:16 exacto
       // Al estar header, box y footer agrupados (flex: 0 0 auto), conforme el player crece verticalmente
       // de 16:9 a 9:16, el propio crecimiento empuja de forma orgánica y progresiva el título y la barra.
-      const morphT = smooth(range(p, 0.14, 0.82));
+      const morphT = smooth(range(p, 0.02, 0.72));
       const ratioH = 16 / 9; // 1.777778
       const ratioV = 9 / 16; // 0.5625
       const curRatio = ratioH + (ratioV - ratioH) * morphT;
@@ -4039,7 +4039,14 @@
     }
 
     // Navegación: se retira al bajar, vuelve al subir + indicador de capítulo activo
-    if (isScrolling) {
+    const isVertical = vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
+    if (isVertical) {
+      if (isNavHidden) {
+        isNavHidden = false;
+        if (navEl) navEl.classList.remove("is-hidden");
+        body.classList.remove("nav-hidden");
+      }
+    } else if (isScrolling) {
       navAcc = Math.sign(dy) === Math.sign(navAcc) ? navAcc + dy : dy;
       let shouldHide = isNavHidden;
       if (y < 100) {
