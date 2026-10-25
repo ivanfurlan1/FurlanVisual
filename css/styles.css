@@ -3722,7 +3722,7 @@ body.is-ready .hero__line > span { transform: none; }
   transform-style: preserve-3d;
   will-change: transform;
   transform: translate3d(0, var(--deck-ty, 0px), 0) rotateX(var(--deck-rx, 0deg)) rotateY(var(--deck-ry, 0deg)) rotateZ(var(--deck-rz, 0deg)) scale(var(--deck-scale, 1));
-  transition: transform 0.06s linear;
+  transition: none;
 }
 
 /* Capas */
@@ -4439,6 +4439,7 @@ body.is-ready .hero__line > span { transform: none; }
   .choreo__deck {
     width: var(--deck-w, 320px);
     height: var(--deck-h, 280px);
+    transition: none;
   }
 
   .choreo__stage::after {
