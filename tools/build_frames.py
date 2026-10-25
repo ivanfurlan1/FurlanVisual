@@ -9,6 +9,7 @@ import sys
 import os
 import time
 import json
+import shutil
 from pathlib import Path
 from PIL import Image
 from concurrent.futures import ProcessPoolExecutor
@@ -16,21 +17,30 @@ from concurrent.futures import ProcessPoolExecutor
 def process_single_frame(args):
     f_path, i, out_dir, is_squareish = args
     name = f"{i:04d}.webp"
+    is_source_webp = f_path.suffix.lower() == ".webp"
+
     with Image.open(f_path) as raw_im:
         im = raw_im.convert("RGB")
         w, h = im.size
 
         # lg: horizontal alta definición cinematográfica
-        if is_squareish:
-            im_lg = im if w == 1920 else im.resize((1920, round(1920 * h / w)), Image.LANCZOS)
+        # Si el origen ya es WebP y tiene ancho 1920, conservamos los bytes exactos originales
+        if is_source_webp and w == 1920:
+            shutil.copy2(f_path, out_dir / "lg" / name)
+            im_lg = im
         else:
-            im_lg = im if w == 1920 else im.resize((1920, round(1920 * h / w)), Image.LANCZOS)
-        im_lg.save(out_dir / "lg" / name, "WEBP", quality=88, method=5)
+            if is_squareish:
+                im_lg = im if w == 1920 else im.resize((1920, round(1920 * h / w)), Image.LANCZOS)
+            else:
+                im_lg = im if w == 1920 else im.resize((1920, round(1920 * h / w)), Image.LANCZOS)
+            q_lg = 80 if is_source_webp else 88
+            im_lg.save(out_dir / "lg" / name, "WEBP", quality=q_lg, method=5)
 
         # md: tablets / intermedias
         mw = 1440 if is_squareish else 1440
         im_md = im.resize((mw, round(mw * h / w)), Image.LANCZOS)
-        im_md.save(out_dir / "md" / name, "WEBP", quality=84, method=5)
+        q_md = 70 if is_source_webp else 84
+        im_md.save(out_dir / "md" / name, "WEBP", quality=q_md, method=5)
 
         # pt: vertical nativo para celulares (relación 9:16 completa)
         pw = round(h * 9 / 16)
@@ -38,7 +48,8 @@ def process_single_frame(args):
         crop_pt = im.crop((left, 0, left + pw, h))
         target_pt = (900, 1600) if is_squareish else (720, 1280)
         crop_pt = crop_pt.resize(target_pt, Image.LANCZOS)
-        crop_pt.save(out_dir / "pt" / name, "WEBP", quality=84, method=5)
+        q_pt = 74 if is_source_webp else 84
+        crop_pt.save(out_dir / "pt" / name, "WEBP", quality=q_pt, method=5)
 
         if i == 1:
             im_lg.save(out_dir / "poster.jpg", "JPEG", quality=88, optimize=True, progressive=True)

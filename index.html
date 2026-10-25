@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Furlan — Cine de Arquitectura</title>
   <meta name="description" content="Estudio de cine de arquitectura. Planos secuencia FPV y cine aéreo para residencias de autor, estudios y desarrolladoras. Buenos Aires, Argentina.">
   <meta name="theme-color" content="#0d0d0c">
@@ -10,8 +13,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..600;1,6..96,400..600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="preload" as="image" href="assets/seq/residencia-los-robles/poster.jpg">
-  <link rel="stylesheet" href="css/styles.css?v=20261023-r2">
+  <link rel="preload" as="image" href="assets/seq/test-3/poster.jpg?v=1792879555">
+  <link rel="stylesheet" href="css/styles.css?v=1792913130969">
 </head>
 <body class="is-loading">
 
@@ -30,33 +33,38 @@
     </div>
   </div>
 
-  <!-- Cursor -->
-  <div class="cursor" aria-hidden="true"><span class="cursor__label"></span></div>
-
-  <!-- Progreso de lectura -->
-  <div class="readline" aria-hidden="true"><i data-readline></i></div>
+  <!-- Cursor con anillo óptico inercial -->
+  <div class="cursor" aria-hidden="true">
+    <span class="cursor__ring"></span>
+    <span class="cursor__label"></span>
+  </div>
 
   <!-- =====================================================
        NAVEGACIÓN
        ===================================================== -->
   <header class="nav">
-    <a href="#top" class="nav__brand" aria-label="Furlan, volver al inicio">
+    <a href="#top" class="nav__brand" aria-label="Furlan, volver al inicio" data-magnetic="0.22">
       <span class="nav__name">Furlan</span>
       <span class="nav__tag">Cine de arquitectura</span>
     </a>
     <nav class="nav__links" aria-label="Secciones">
-      <a href="#estudio" class="ulink">Estudio</a>
-      <a href="#obra" class="ulink">Obra</a>
-      <a href="#servicios" class="ulink">Servicios</a>
-      <a href="#metodo" class="ulink">Método</a>
-      <a href="#contacto" class="ulink">Contacto</a>
+      <a href="#estudio" class="ulink" data-nav-sec="estudio">Estudio</a>
+      <a href="#trazado" class="ulink" data-nav-sec="trazado">Trazado</a>
+      <a href="#obra" class="ulink" data-nav-sec="obra">Obra</a>
+      <a href="#coreografia" class="ulink" data-nav-sec="coreografia">Coreografía</a>
+      <a href="#servicios" class="ulink" data-nav-sec="servicios">Servicios</a>
+      <a href="#formato" class="ulink" data-nav-sec="formato">Formato</a>
+      <a href="#nocturno" class="ulink" data-nav-sec="nocturno">Visión</a>
+      <a href="#repertorio" class="ulink" data-nav-sec="repertorio">Repertorio</a>
+      <a href="#metodo" class="ulink" data-nav-sec="metodo">Método</a>
+      <a href="#contacto" class="ulink" data-nav-sec="contacto">Contacto</a>
     </nav>
     <div class="nav__actions">
-      <button class="nav__sound" id="soundToggle" type="button" aria-pressed="false" aria-label="Atmósfera sonora">
+      <button class="nav__sound" id="soundToggle" type="button" aria-pressed="false" aria-label="Atmósfera sonora" data-magnetic="0.3">
         <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span class="nav__sound-label">Sonido</span>
       </button>
-      <button class="nav__index" type="button" aria-expanded="false" aria-controls="index">
+      <button class="nav__index" type="button" aria-expanded="false" aria-controls="index" data-magnetic="0.3">
         <span class="nav__index-txt"><span>Índice</span><span>Cerrar</span></span>
         <span class="nav__index-ico" aria-hidden="true"><i></i><i></i></span>
       </button>
@@ -74,31 +82,35 @@
           <li><a href="#film-01" data-preview="assets/stills/residencia-los-robles/0152.webp">
             <span class="index__n">I</span><span class="index__t">Residencia <em>Los Robles</em></span><span class="index__l">Pilar</span>
           </a></li>
-          <li><a href="#film-02" data-preview="assets/stills/casa-del-lago/0134.webp">
-            <span class="index__n">II</span><span class="index__t">Casa del <em>Lago</em></span><span class="index__l">Nordelta</span>
+          <li><a href="#film-02" data-preview="assets/stills/vonharv/0154.webp">
+            <span class="index__n">II</span><span class="index__t"><em>Vonharv</em></span><span class="index__l">La Plata</span>
           </a></li>
           <li><a href="#film-03" data-preview="assets/stills/casa-hudson/0040.webp">
             <span class="index__n">III</span><span class="index__t">Casa <em>Hudson</em></span><span class="index__l">Hudson</span>
           </a></li>
-          <li><a href="#film-04" data-preview="assets/stills/salida-balcon-hudson/0126.webp">
-            <span class="index__n">IV</span><span class="index__t">Balcón <em>Hudson</em></span><span class="index__l">Hudson</span>
+          <li><a href="#film-04" data-preview="assets/stills/anacleto/0457.webp">
+            <span class="index__n">IV</span><span class="index__t">Anacleto</span><span class="index__l">Buenos Aires</span>
           </a></li>
         </ol>
       </div>
       <div class="index__col index__col--preview" aria-hidden="true">
         <figure class="index__preview">
-          <img src="assets/stills/residencia-los-robles/0152.webp" alt="" class="is-active">
-          <img src="assets/stills/casa-del-lago/0134.webp" alt="">
-          <img src="assets/stills/casa-hudson/0040.webp" alt="">
-          <img src="assets/stills/salida-balcon-hudson/0126.webp" alt="">
+          <img src="assets/stills/residencia-los-robles/0152.webp" alt="" class="is-active" decoding="async">
+          <img src="assets/stills/vonharv/0154.webp" alt="" decoding="async">
+          <img src="assets/stills/casa-hudson/0040.webp" alt="" decoding="async">
+          <img src="assets/stills/anacleto/0457.webp" alt="" decoding="async">
         </figure>
       </div>
       <div class="index__foot">
         <nav class="index__secs" aria-label="Secciones">
           <a href="#estudio" class="ulink">Estudio</a>
+          <a href="#trazado" class="ulink">Trazado en planta</a>
           <a href="#obra" class="ulink">Obra seleccionada</a>
+          <a href="#coreografia" class="ulink">Coreografía de vuelo</a>
           <a href="#servicios" class="ulink">Servicios</a>
-          <a href="#archivo" class="ulink">Archivo</a>
+          <a href="#formato" class="ulink">Formato dual</a>
+          <a href="#nocturno" class="ulink">Visión nocturna</a>
+          <a href="#repertorio" class="ulink">Repertorio vivo</a>
           <a href="#metodo" class="ulink">Método</a>
           <a href="#contacto" class="ulink">Contacto</a>
         </nav>
@@ -113,15 +125,16 @@
          OBRA I · RESIDENCIA LOS ROBLES — Portada y proyección
          ===================================================== -->
     <section class="seq seq--hero" id="film-01"
-             data-src="assets/seq/residencia-los-robles"
-             data-count="265"
-             data-fps="25">
+             data-src="assets/seq/test-3"
+             data-count="145"
+             data-version="1792879555"
+             data-fps="24">
       <div class="seq__stage">
         <div class="seq__media">
           <canvas class="seq__canvas" aria-label="Plano secuencia FPV por la Residencia Los Robles"></canvas>
           <picture class="seq__poster">
-            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/residencia-los-robles/poster-pt.jpg">
-            <img src="assets/seq/residencia-los-robles/poster.jpg" alt="Residencia Los Robles, fachada" fetchpriority="high">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/test-3/poster-pt.jpg?v=1792879555">
+            <img src="assets/seq/test-3/poster.jpg?v=1792879555" alt="Residencia Los Robles, fachada" fetchpriority="high" decoding="async">
           </picture>
           <div class="seq__veil" aria-hidden="true"></div>
           <div class="seq__cover" aria-hidden="true"></div>
@@ -129,19 +142,23 @@
 
         <!-- Portada -->
         <div class="hero" data-seq-hero>
-          <div class="hero__meta">
-            <span>Estudio de cine de arquitectura</span>
-            <span>Buenos Aires — Argentina</span>
-            <span>Obras 2024 — 2026</span>
-            <span class="hero__meta-r">Edición N.º 04</span>
-          </div>
           <h1 class="hero__title" aria-label="Arquitectura en movimiento">
             <span class="hero__line"><span>Arquitectura</span></span>
             <span class="hero__line hero__line--2"><span><em>en movimiento</em></span></span>
           </h1>
           <div class="hero__foot">
             <p class="hero__lede">Planos secuencia y cine aéreo para residencias de autor. Recorridos continuos que leen la luz, la escala y la intimidad de cada espacio.</p>
-            <span class="hero__scroll"><span>Desplazar</span><i aria-hidden="true"></i></span>
+            <button type="button" class="hero__scroll" aria-label="Desliza para ver" data-cursor="Deslizar" data-magnetic="0.28">
+              <span class="hero__scroll-pill">
+                <span class="hero__scroll-mouse" aria-hidden="true">
+                  <span class="hero__scroll-wheel"></span>
+                </span>
+                <span class="hero__scroll-text">Desliza para ver</span>
+                <svg class="hero__scroll-arrow" width="10" height="12" viewBox="0 0 10 12" fill="none" aria-hidden="true">
+                  <path d="M5 1v9M1.5 6.5L5 10l3.5-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -177,7 +194,24 @@
             <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
               <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__fr"><span data-hud-fr>001</span> / 265</span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 145</span>
+          </div>
+
+          <!-- Tarjeta de cierre cinematográfica: Ver Film Completo en YouTube -->
+          <div class="seq__outro-card" data-seq-outro>
+            <div class="seq__outro-inner">
+              <span class="seq__outro-eyebrow">Obra I · Film máster 4K</span>
+              <h3 class="seq__outro-title">Residencia <em>Los Robles</em></h3>
+              <p class="seq__outro-desc">El plano secuencia FPV ininterrumpido con diseño sonoro espacial en alta definición.</p>
+              <button class="seq__outro-btn" type="button" data-magnetic="0.22" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Residencia Los Robles — Film Completo">
+                <span class="seq__outro-btn-play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+                <span class="seq__outro-btn-txt">
+                  <strong>Ver film completo</strong>
+                  <small>En YouTube · 4K UHD</small>
+                </span>
+                <i class="seq__outro-btn-arr" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -186,7 +220,21 @@
     <!-- =====================================================
          ESTUDIO / MANIFIESTO
          ===================================================== -->
-    <section class="statement paper" id="estudio">
+    <section class="statement paper" id="estudio" data-estudio>
+      <!-- Fondo cinematográfico sutil: Secuencia Casa del Lago con velo blanco arquitectónico -->
+      <div class="statement__bg" aria-hidden="true">
+        <div class="statement__bg-sticky">
+          <canvas class="statement__bg-canvas" aria-label="Secuencia de fondo Casa del Lago"></canvas>
+          <picture class="statement__bg-poster">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-del-lago/poster-pt.jpg">
+            <img src="assets/seq/casa-del-lago/poster.jpg" alt="" loading="lazy" decoding="async">
+          </picture>
+          <div class="statement__bg-veil"></div>
+        </div>
+      </div>
+      <div class="paper__draft" aria-hidden="true">
+        <span class="paper__draft-axis"></span>
+      </div>
       <div class="wrap">
         <header class="runhead" data-reveal>
           <span>Estudio</span>
@@ -195,45 +243,1117 @@
         </header>
 
         <div class="statement__grid">
-          <p class="eyebrow statement__label" data-reveal>Manifiesto</p>
+          <div class="statement__aside" data-reveal>
+            <p class="eyebrow statement__label">Manifiesto</p>
+            <div class="solar-dial" aria-hidden="true">
+              <svg class="solar-dial__svg" viewBox="0 0 140 76" fill="none">
+                <path class="solar-dial__arc-bg" d="M 12 64 A 58 58 0 0 1 128 64" stroke="currentColor" stroke-width="1" stroke-dasharray="2 3"/>
+                <path class="solar-dial__arc-fill" data-solar-arc d="M 12 64 A 58 58 0 0 1 128 64" stroke="currentColor" stroke-width="1.2"/>
+                <line x1="6" y1="64" x2="134" y2="64" stroke="currentColor" stroke-width="0.75" stroke-opacity="0.35"/>
+                <circle class="solar-dial__sun" data-solar-sun cx="12" cy="64" r="3.5"/>
+              </svg>
+              <div class="solar-dial__meta">
+                <span>Carta Solar · <strong data-solar-deg>242° O</strong></span>
+                <span data-solar-hour>16:40 ART</span>
+              </div>
+            </div>
+          </div>
           <p class="statement__text" data-words>
             Filmamos una casa del mismo modo en que se la proyecta: con paciencia, con luz natural y en un solo recorrido. Cada movimiento tiene una intención; cada segundo, una razón espacial.
           </p>
         </div>
 
-        <div class="principles">
-          <article class="principle" data-reveal>
-            <span class="principle__n">i.</span>
+        <div class="principles" data-principles>
+          <div class="principles__rail" aria-hidden="true">
+            <span class="principles__rail-lbl">Ejes de proyección · 01 — 03</span>
+            <span class="principles__rail-line"><i data-principles-fill></i></span>
+            <span class="principles__rail-cota">Escala 1:1</span>
+          </div>
+          <article class="principle" data-reveal data-principle>
+            <div class="principle__top">
+              <span class="principle__n">i.</span>
+              <svg class="principle__svg" viewBox="0 0 72 28" fill="none" aria-hidden="true">
+                <path class="principle__path" d="M2 22 C 20 22, 24 6, 42 14 C 54 19, 60 6, 70 6" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/>
+                <circle cx="70" cy="6" r="2" fill="currentColor"/>
+              </svg>
+            </div>
             <h3 class="principle__t">Un solo plano</h3>
             <p>Sin cortes ni efectos. El recorrido continuo es la forma más honesta de explicar cómo se habita un espacio.</p>
+            <span class="principle__tag" aria-hidden="true">Cota I · Continuidad espacial</span>
           </article>
-          <article class="principle" data-reveal>
-            <span class="principle__n">ii.</span>
+          <article class="principle" data-reveal data-principle>
+            <div class="principle__top">
+              <span class="principle__n">ii.</span>
+              <svg class="principle__svg" viewBox="0 0 72 28" fill="none" aria-hidden="true">
+                <line x1="4" y1="24" x2="68" y2="24" stroke="currentColor" stroke-width="0.8" stroke-opacity="0.4"/>
+                <path class="principle__path" d="M12 24 A 24 24 0 0 1 60 24" stroke="currentColor" stroke-width="1.15"/>
+                <line x1="48" y1="7" x2="26" y2="24" stroke="currentColor" stroke-width="0.9" stroke-dasharray="2 2"/>
+                <circle cx="48" cy="7" r="2.2" fill="currentColor"/>
+              </svg>
+            </div>
             <h3 class="principle__t">La luz como guion</h3>
             <p>Rodamos en la franja horaria que mejor describe los materiales. La hora del día se elige antes que la cámara.</p>
+            <span class="principle__tag" aria-hidden="true">Cota II · Incidencia natural</span>
           </article>
-          <article class="principle" data-reveal>
-            <span class="principle__n">iii.</span>
+          <article class="principle" data-reveal data-principle>
+            <div class="principle__top">
+              <span class="principle__n">iii.</span>
+              <svg class="principle__svg" viewBox="0 0 72 28" fill="none" aria-hidden="true">
+                <line x1="2" y1="14" x2="70" y2="14" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2 2" stroke-opacity="0.45"/>
+                <path class="principle__path" d="M6 14 L 34 14 M 38 6 L 52 14 L 38 22" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="14" cy="14" r="2.2" fill="currentColor"/>
+              </svg>
+            </div>
             <h3 class="principle__t">Escala humana</h3>
             <p>Volamos a la altura de la mirada. La arquitectura se entiende caminándola, no sobrevolándola.</p>
+            <span class="principle__tag" aria-hidden="true">Cota III · Horizonte +1.70 m</span>
           </article>
         </div>
       </div>
     </section>
 
     <!-- =====================================================
-         OBRA II · CASA DEL LAGO
+         PERSPECTIVA · CARTOGRAFÍA DE VUELO Y PLANTA ARQUITECTÓNICA
+         (Secuencia a pantalla completa con velo atmosférico oscuro:
+          un punto óptico delicado inicia su trazo en el espacio,
+          convoca la aparición progresiva de la planta arquitectónica
+          y recorre cada ambiente a medida que el usuario desliza)
          ===================================================== -->
-    <section class="seq" id="film-02"
-             data-src="assets/seq/casa-del-lago"
-             data-count="134"
+    <section class="seq seq--fullscreen seq--trace" id="trazado"
+             data-mode="hybrid"
+             data-src="assets/seq/casa-greenville"
+             data-count="336"
+             data-version="1792890543"
+             data-fps="24"
+             aria-label="Simulación estética de recorrido de dron sobre planta arquitectónica a pantalla completa">
+      <div class="seq__stage">
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Secuencia cinematográfica de fondo en recorrido espacial"></canvas>
+          <picture class="seq__poster">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-greenville/poster-pt.jpg?v=1792890543">
+            <img src="assets/seq/casa-greenville/poster.jpg?v=1792890543" alt="Cartografía de vuelo — Casa Greenville" loading="lazy" decoding="async">
+          </picture>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
+        </div>
+
+        <!-- Capa de experiencia: Planta arquitectónica viva, punto óptico y narrativa -->
+        <div class="trace__overlay">
+
+          <!-- Cabezal superior con telemetría sutil -->
+          <header class="trace__header wrap">
+            <div class="trace__header-left">
+              <span class="eyebrow">Perspectiva · Cartografía de Vuelo</span>
+              <span class="trace__phase-pill">
+                <i class="trace__phase-dot" aria-hidden="true"></i>
+                <span data-trace-phase-pill>Fase I · Trazo en el Vacío</span>
+              </span>
+            </div>
+            <div class="trace__header-center" aria-hidden="true">
+              <span>Cota: <strong data-trace-alt>+1.70 m</strong></span>
+              <span class="trace__sep">·</span>
+              <span>Azimut: <strong data-trace-yaw>078° E</strong></span>
+              <span class="trace__sep">·</span>
+              <span>Planta: <strong data-trace-plan-state>En aproximación</strong></span>
+            </div>
+            <div class="trace__header-right">
+              <span class="seq-fs__badge">Secuencia 06 — Planta &amp; Vector</span>
+            </div>
+          </header>
+
+          <!-- Escenario central: Planta arquitectónica de autor y recorrido del punto -->
+          <div class="trace__viewport" aria-hidden="true">
+            <div class="trace__camera" data-trace-camera>
+              <svg class="trace__svg trace__svg--h" viewBox="0 0 1240 460" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <!-- Cono óptico de visión del punto (dron) -->
+                  <radialGradient id="traceConeGrad" cx="0%" cy="50%" r="100%" fx="0%" fy="50%">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.34"/>
+                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.12"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </radialGradient>
+
+                  <!-- Gradiente del trazo recorrido -->
+                  <linearGradient id="traceTrailGrad" x1="80" y1="230" x2="1080" y2="230" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.35"/>
+                    <stop offset="35%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
+                  </linearGradient>
+
+                  <!-- Aura del punto -->
+                  <radialGradient id="tracePointAura" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.65"/>
+                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.24"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </radialGradient>
+
+                  <!-- Rayado diagonal fino de muros (Poché arquitectónico) -->
+                  <pattern id="traceWallHatch" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#ece8e1" stroke-width="0.6" stroke-opacity="0.18"/>
+                  </pattern>
+
+                  <!-- Trama fina de lámina de agua -->
+                  <pattern id="traceWaterLines" width="24" height="6" patternUnits="userSpaceOnUse">
+                    <line x1="0" y1="3" x2="16" y2="3" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.18"/>
+                  </pattern>
+                </defs>
+
+                <!-- =========================================================
+                     CAPA 01: APROXIMACIÓN EXTERIOR (Visible desde el inicio)
+                     El punto nace en este campo abierto antes de que exista el plano
+                     ========================================================= -->
+                <g class="trace__ext" data-trace-ext>
+                  <!-- Eje longitudinal de aproximación -->
+                  <line x1="36" y1="230" x2="328" y2="230" stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.6" stroke-dasharray="2 5"/>
+                  <text x="48" y="221" class="trace__svg-lbl trace__svg-lbl--muted">EJE DE APROXIMACIÓN · 0—0</text>
+
+                  <!-- Curvas de nivel topográficas sutiles -->
+                  <path d="M 58 110 C 95 190, 92 280, 62 375" stroke="#ece8e1" stroke-opacity="0.12" stroke-width="0.6" stroke-dasharray="3 4"/>
+                  <path d="M 142 92 C 185 185, 180 285, 146 388" stroke="#ece8e1" stroke-opacity="0.15" stroke-width="0.6" stroke-dasharray="4 4"/>
+                  <text x="148" y="384" class="trace__svg-lbl trace__svg-lbl--dim">N.T.N. ±0.00m</text>
+
+                  <!-- Árboles de aproximación en representación arquitectónica de planta -->
+                  <g transform="translate(168, 138)" opacity="0.42">
+                    <circle cx="0" cy="0" r="24" stroke="#ece8e1" stroke-width="0.55" stroke-dasharray="2 3"/>
+                    <circle cx="0" cy="0" r="14" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.6"/>
+                    <line x1="-6" y1="0" x2="6" y2="0" stroke="#ece8e1" stroke-width="0.5"/>
+                    <line x1="0" y1="-6" x2="0" y2="6" stroke="#ece8e1" stroke-width="0.5"/>
+                  </g>
+                  <g transform="translate(226, 336)" opacity="0.38">
+                    <circle cx="0" cy="0" r="20" stroke="#ece8e1" stroke-width="0.55" stroke-dasharray="2 3"/>
+                    <circle cx="0" cy="0" r="11" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.6"/>
+                    <circle cx="0" cy="0" r="1.5" fill="#ece8e1"/>
+                  </g>
+
+                  <!-- Placas de travertino de llegada hacia el umbral -->
+                  <g stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.65" fill="#ece8e1" fill-opacity="0.02">
+                    <rect x="216" y="219" width="14" height="22"/>
+                    <rect x="236" y="219" width="14" height="22"/>
+                    <rect x="256" y="219" width="14" height="22"/>
+                    <rect x="276" y="219" width="14" height="22"/>
+                    <rect x="296" y="219" width="14" height="22"/>
+                    <rect x="316" y="216" width="12" height="28"/>
+                  </g>
+                </g>
+
+                <!-- =========================================================
+                     CAPA 02: RETÍCULA ESTRUCTURAL Y COTAS ARQUITECTÓNICAS
+                     Despierta cuando el punto se aproxima al pórtico
+                     ========================================================= -->
+                <g class="trace__grid" data-trace-grid>
+                  <!-- Ejes verticales A — F -->
+                  <g stroke="#ece8e1" stroke-opacity="0.13" stroke-width="0.55" stroke-dasharray="2 5">
+                    <line x1="330" y1="42" x2="330" y2="422"/>
+                    <line x1="490" y1="42" x2="490" y2="422"/>
+                    <line x1="670" y1="42" x2="670" y2="422"/>
+                    <line x1="850" y1="42" x2="850" y2="422"/>
+                    <line x1="960" y1="42" x2="960" y2="422"/>
+                    <line x1="1130" y1="42" x2="1130" y2="422"/>
+                  </g>
+
+                  <!-- Ejes horizontales 1 — 3 -->
+                  <g stroke="#ece8e1" stroke-opacity="0.11" stroke-width="0.55" stroke-dasharray="2 5">
+                    <line x1="295" y1="76" x2="1160" y2="76"/>
+                    <line x1="330" y1="230" x2="1160" y2="230"/>
+                    <line x1="295" y1="384" x2="1160" y2="384"/>
+                  </g>
+
+                  <!-- Burbujas de eje superior -->
+                  <g class="trace__axis-bubbles" transform="translate(0, 30)">
+                    <g transform="translate(330, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">A</text></g>
+                    <g transform="translate(490, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">B</text></g>
+                    <g transform="translate(670, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">C</text></g>
+                    <g transform="translate(850, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">D</text></g>
+                    <g transform="translate(960, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">E</text></g>
+                    <g transform="translate(1130, 0)"><circle r="8" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/><text y="3" text-anchor="middle" class="trace__svg-axis">F</text></g>
+                  </g>
+
+                  <!-- Línea de cotas superiores -->
+                  <g transform="translate(0, 54)" stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.6">
+                    <line x1="330" y1="0" x2="1130" y2="0"/>
+                    <!-- Ticks arquitectónicos a 45° -->
+                    <line x1="327" y1="3" x2="333" y2="-3"/>
+                    <line x1="487" y1="3" x2="493" y2="-3"/>
+                    <line x1="667" y1="3" x2="673" y2="-3"/>
+                    <line x1="847" y1="3" x2="853" y2="-3"/>
+                    <line x1="957" y1="3" x2="963" y2="-3"/>
+                    <line x1="1127" y1="3" x2="1133" y2="-3"/>
+                    <text x="410" y="-5" text-anchor="middle" class="trace__svg-cota" stroke="none">4.80 m</text>
+                    <text x="580" y="-5" text-anchor="middle" class="trace__svg-cota" stroke="none">5.40 m</text>
+                    <text x="760" y="-5" text-anchor="middle" class="trace__svg-cota" stroke="none">5.40 m</text>
+                    <text x="905" y="-5" text-anchor="middle" class="trace__svg-cota" stroke="none">3.30 m</text>
+                    <text x="1045" y="-5" text-anchor="middle" class="trace__svg-cota" stroke="none">5.10 m</text>
+                  </g>
+
+                  <!-- Cota vertical izquierda de fachada -->
+                  <g transform="translate(306, 0)" stroke="#ece8e1" stroke-opacity="0.24" stroke-width="0.6">
+                    <line x1="0" y1="76" x2="0" y2="384"/>
+                    <line x1="-3" y1="79" x2="3" y2="73"/>
+                    <line x1="-3" y1="233" x2="3" y2="227"/>
+                    <line x1="-3" y1="387" x2="3" y2="381"/>
+                    <text x="-8" y="156" text-anchor="end" class="trace__svg-cota" stroke="none">4.60 m</text>
+                    <text x="-8" y="312" text-anchor="end" class="trace__svg-cota" stroke="none">4.60 m</text>
+                  </g>
+                </g>
+
+                <!-- =========================================================
+                     CAPA 03: PLANTA ARQUITECTÓNICA DE LA RESIDENCIA
+                     Se dibuja progresivamente cuando el dron llega al umbral
+                     y reacciona sector por sector mientras el dron la camina
+                     ========================================================= -->
+                <g class="trace__plan" data-trace-plan>
+
+                  <!--onda expansiva sutil de aparición en el umbral -->
+                  <circle class="trace__wake-ring" data-trace-wake cx="330" cy="230" r="10" stroke="#c89d6c" stroke-width="0.8" stroke-opacity="0"/>
+
+                  <!-- ---------------------------------------------------
+                       SECTOR I & II: UMBRAL, VOLUMEN NORTE (PATIO DE LUZ) Y VOLUMEN SUR
+                       --------------------------------------------------- -->
+                  <g class="trace__sector trace__sector--1" data-trace-room="2">
+                    <!-- Fondo sutil de activación espacial del sector -->
+                    <rect class="trace__room-glow" x="330" y="76" width="160" height="308"/>
+
+                    <!-- VOLUMEN NORTE: Muros dobles y Patio de Luz Interno -->
+                    <rect class="trace-draw-1" pathLength="1" x="330" y="76" width="160" height="126" fill="url(#traceWallHatch)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-1" pathLength="1" x="342" y="88" width="136" height="102" fill="#0d0d0c" fill-opacity="0.55" stroke="#ece8e1" stroke-width="0.75"/>
+
+                    <!-- Carpintería vidriada del Patio de Luz -->
+                    <rect class="trace-draw-1" pathLength="1" x="352" y="96" width="116" height="86" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.5" stroke-dasharray="4 2"/>
+
+                    <!-- Árbol escultórico central del Patio de Luz (Foco visual al cruzar el umbral) -->
+                    <g class="trace__patio-tree" transform="translate(410, 139)">
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="28" stroke="#c89d6c" stroke-opacity="0.62" stroke-width="0.65" stroke-dasharray="3 2"/>
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="18" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.55"/>
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="8" stroke="#ece8e1" stroke-opacity="0.35" stroke-width="0.45"/>
+                      <line x1="-22" y1="0" x2="22" y2="0" stroke="#ece8e1" stroke-opacity="0.25" stroke-width="0.45"/>
+                      <line x1="0" y1="-22" x2="0" y2="22" stroke="#ece8e1" stroke-opacity="0.25" stroke-width="0.45"/>
+                      <line x1="-15" y1="-15" x2="15" y2="15" stroke="#ece8e1" stroke-opacity="0.2" stroke-width="0.45"/>
+                      <line x1="-15" y1="15" x2="15" y2="-15" stroke="#ece8e1" stroke-opacity="0.2" stroke-width="0.45"/>
+                      <circle cx="0" cy="0" r="2" fill="#c89d6c"/>
+                    </g>
+                    <text x="410" y="196" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">02 · UMBRAL &amp; PATIO DE LUZ</text>
+
+                    <!-- PASAJE DE UMBRAL CENTRAL (Y: 202 a 258) -->
+                    <line class="trace-draw-1" pathLength="1" x1="330" y1="202" x2="490" y2="202" stroke="#ece8e1" stroke-width="1.2"/>
+                    <line class="trace-draw-1" pathLength="1" x1="330" y1="258" x2="490" y2="258" stroke="#ece8e1" stroke-width="1.2"/>
+
+                    <!-- Puerta pivotante monumental en el ingreso (X: 336) con arco de barrido -->
+                    <line class="trace-draw-1" pathLength="1" x1="336" y1="204" x2="374" y2="204" stroke="#c89d6c" stroke-width="1.35"/>
+                    <path class="trace-draw-1" pathLength="1" d="M 374 204 A 38 38 0 0 1 336 242" stroke="#c89d6c" stroke-opacity="0.65" stroke-width="0.65" stroke-dasharray="2 3"/>
+                    <!-- Juntas de solado en el umbral -->
+                    <g stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.5">
+                      <line x1="378" y1="202" x2="378" y2="258"/>
+                      <line x1="414" y1="202" x2="414" y2="258"/>
+                      <line x1="450" y1="202" x2="450" y2="258"/>
+                    </g>
+
+                    <!-- VOLUMEN SUR (Estudio, circulación vertical y servicios) -->
+                    <rect class="trace-draw-1" pathLength="1" x="330" y="258" width="160" height="126" fill="url(#traceWallHatch)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-1" pathLength="1" x="342" y="270" width="136" height="102" fill="#0d0d0c" fill-opacity="0.55" stroke="#ece8e1" stroke-width="0.75"/>
+                    <!-- Tabiquería interna y escalera escultórica en planta -->
+                    <line class="trace-draw-1" pathLength="1" x1="418" y1="270" x2="418" y2="372" stroke="#ece8e1" stroke-opacity="0.55" stroke-width="0.7"/>
+                    <!-- Escalera (10 peldaños + flecha de subida) -->
+                    <g stroke="#ece8e1" stroke-opacity="0.35" stroke-width="0.5">
+                      <rect x="428" y="280" width="40" height="80"/>
+                      <line x1="428" y1="288" x2="468" y2="288"/>
+                      <line x1="428" y1="296" x2="468" y2="296"/>
+                      <line x1="428" y1="304" x2="468" y2="304"/>
+                      <line x1="428" y1="312" x2="468" y2="312"/>
+                      <line x1="428" y1="320" x2="468" y2="320"/>
+                      <line x1="428" y1="328" x2="468" y2="328"/>
+                      <line x1="428" y1="336" x2="468" y2="336"/>
+                      <line x1="428" y1="344" x2="468" y2="344"/>
+                      <line x1="428" y1="352" x2="468" y2="352"/>
+                      <line x1="448" y1="354" x2="448" y2="286"/>
+                      <polyline points="444,292 448,285 452,292"/>
+                    </g>
+                    <!-- Mesa de estudio en Volumen Sur -->
+                    <rect x="358" y="302" width="44" height="22" stroke="#ece8e1" stroke-opacity="0.3" stroke-width="0.55"/>
+                    <text x="380" y="362" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim">ESTUDIO</text>
+                  </g>
+
+                  <!-- ---------------------------------------------------
+                       SECTOR III: NAVE PRINCIPAL (ESTAR DOBLE ALTURA, COMEDOR & GALERÍA)
+                       --------------------------------------------------- -->
+                  <g class="trace__sector trace__sector--2" data-trace-room="3">
+                    <rect class="trace__room-glow" x="490" y="76" width="470" height="308"/>
+
+                    <!-- Muros envolventes Norte y Sur de la Nave Principal -->
+                    <rect class="trace-draw-2" pathLength="1" x="490" y="76" width="360" height="10" fill="url(#traceWallHatch)" stroke="#ece8e1" stroke-width="1.1"/>
+                    <rect class="trace-draw-2" pathLength="1" x="490" y="374" width="360" height="10" fill="url(#traceWallHatch)" stroke="#ece8e1" stroke-width="1.1"/>
+
+                    <!-- Columnas estructurales de hormigón / acero en la grilla -->
+                    <g fill="#ece8e1">
+                      <rect x="487" y="73" width="6" height="6"/>
+                      <rect x="667" y="73" width="6" height="6"/>
+                      <rect x="847" y="73" width="6" height="6"/>
+                      <rect x="487" y="381" width="6" height="6"/>
+                      <rect x="667" y="381" width="6" height="6"/>
+                      <rect x="847" y="381" width="6" height="6"/>
+                      <rect x="847" y="199" width="6" height="6"/>
+                      <rect x="847" y="255" width="6" height="6"/>
+                    </g>
+
+                    <!-- Cruce de vacío de doble altura sutil -->
+                    <g stroke="#ece8e1" stroke-opacity="0.09" stroke-width="0.5" stroke-dasharray="4 4">
+                      <line x1="504" y1="94" x2="720" y2="222"/>
+                      <line x1="720" y1="94" x2="504" y2="222"/>
+                      <rect x="504" y="94" width="216" height="128"/>
+                    </g>
+
+                    <!-- Hogar / Chimenea lineal en muro norte -->
+                    <rect class="trace-draw-2" pathLength="1" x="568" y="86" width="88" height="10" stroke="#ece8e1" stroke-opacity="0.55" stroke-width="0.65"/>
+
+                    <!-- Equipamiento arquitectónico de Estar Principal (Vista en planta CAD) -->
+                    <g class="trace__furniture" stroke="#ece8e1" stroke-opacity="0.38" stroke-width="0.65">
+                      <!-- Alfombra y sofá modular en L -->
+                      <rect x="534" y="112" width="166" height="98" stroke-opacity="0.18" stroke-dasharray="2 2"/>
+                      <path class="trace-draw-2" pathLength="1" d="M 544 122 H 662 V 148 H 572 V 196 H 544 Z" fill="#ece8e1" fill-opacity="0.03"/>
+                      <line x1="572" y1="122" x2="572" y2="148" stroke-opacity="0.25"/>
+                      <line x1="602" y1="122" x2="602" y2="148" stroke-opacity="0.25"/>
+                      <line x1="632" y1="122" x2="632" y2="148" stroke-opacity="0.25"/>
+                      <line x1="544" y1="172" x2="572" y2="172" stroke-opacity="0.25"/>
+                      <!-- Mesa baja de travertino -->
+                      <rect class="trace-draw-2" pathLength="1" x="590" y="160" width="58" height="30" fill="#ece8e1" fill-opacity="0.02"/>
+                      <!-- Poltronas enfrentadas -->
+                      <rect x="668" y="162" width="22" height="22" rx="2"/>
+                      <rect x="748" y="132" width="64" height="58" stroke-opacity="0.22"/>
+                    </g>
+
+                    <!-- Equipamiento de Comedor Principal e Isla Monolítica (Sector Sur de la Nave) -->
+                    <g class="trace__furniture" stroke="#ece8e1" stroke-opacity="0.38" stroke-width="0.65">
+                      <!-- Isla monolítica de cocina y mesada -->
+                      <rect class="trace-draw-2" pathLength="1" x="518" y="284" width="96" height="34" fill="#ece8e1" fill-opacity="0.03"/>
+                      <rect x="530" y="292" width="24" height="18" stroke-opacity="0.25"/>
+                      <circle cx="588" cy="297" r="4" stroke-opacity="0.25"/>
+                      <circle cx="600" cy="297" r="4" stroke-opacity="0.25"/>
+                      <rect x="518" y="352" width="96" height="22" stroke-opacity="0.28"/>
+
+                      <!-- Mesa de comedor para 8/10 personas -->
+                      <rect class="trace-draw-2" pathLength="1" x="652" y="278" width="128" height="48" fill="#ece8e1" fill-opacity="0.03"/>
+                      <!-- Sillas en planta -->
+                      <rect x="666" y="269" width="16" height="6" rx="2"/>
+                      <rect x="696" y="269" width="16" height="6" rx="2"/>
+                      <rect x="726" y="269" width="16" height="6" rx="2"/>
+                      <rect x="756" y="269" width="16" height="6" rx="2"/>
+                      <rect x="666" y="329" width="16" height="6" rx="2"/>
+                      <rect x="696" y="329" width="16" height="6" rx="2"/>
+                      <rect x="726" y="329" width="16" height="6" rx="2"/>
+                      <rect x="756" y="329" width="16" height="6" rx="2"/>
+                    </g>
+
+                    <!-- Línea de carpintería corrediza piso-techo hacia la Galería (X: 850) -->
+                    <g stroke="#ece8e1" stroke-width="0.7">
+                      <line class="trace-draw-2" pathLength="1" x1="848" y1="86" x2="848" y2="198" stroke-opacity="0.65"/>
+                      <line class="trace-draw-2" pathLength="1" x1="852" y1="110" x2="852" y2="232" stroke-opacity="0.65"/>
+                      <!-- Vano abierto por donde pasa el dron (Y: 232 a 295) -->
+                      <line x1="850" y1="232" x2="850" y2="295" stroke="#c89d6c" stroke-opacity="0.45" stroke-dasharray="2 3"/>
+                      <line class="trace-draw-2" pathLength="1" x1="848" y1="295" x2="848" y2="374" stroke-opacity="0.65"/>
+                    </g>
+
+                    <!-- GALERÍA CUBIERTA (X: 850 a 960) -->
+                    <g>
+                      <!-- Proyección de losa en voladizo -->
+                      <rect class="trace-draw-2" pathLength="1" x="850" y="76" width="110" height="308" stroke="#ece8e1" stroke-opacity="0.55" stroke-width="0.85" stroke-dasharray="6 3"/>
+                      <!-- Trama de deck de travertino en galería -->
+                      <g stroke="#ece8e1" stroke-opacity="0.12" stroke-width="0.5">
+                        <line x1="878" y1="76" x2="878" y2="384"/>
+                        <line x1="906" y1="76" x2="906" y2="384"/>
+                        <line x1="934" y1="76" x2="934" y2="384"/>
+                      </g>
+                      <!-- Living exterior en galería -->
+                      <rect class="trace-draw-2" pathLength="1" x="872" y="114" width="62" height="72" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/>
+                      <rect class="trace-draw-2" pathLength="1" x="872" y="308" width="62" height="52" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/>
+                    </g>
+
+                    <text x="665" y="106" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">03 · NAVE PRINCIPAL — DOBLE ALTURA</text>
+                    <text x="905" y="100" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">04 · GALERÍA</text>
+                  </g>
+
+                  <!-- ---------------------------------------------------
+                       SECTOR IV: ESPEJO DE AGUA, SOLÁRIUM Y CARTA SOLAR
+                       --------------------------------------------------- -->
+                  <g class="trace__sector trace__sector--3" data-trace-room="4">
+                    <rect class="trace__room-glow" x="960" y="96" width="176" height="268"/>
+
+                    <!-- Borde perimetral de piscina / lámina de agua -->
+                    <rect class="trace-draw-3" pathLength="1" x="974" y="104" width="156" height="252" fill="url(#traceWaterLines)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-3" pathLength="1" x="980" y="110" width="144" height="240" stroke="#c89d6c" stroke-opacity="0.48" stroke-width="0.65"/>
+
+                    <!-- Playa húmeda / Solárium sumergido -->
+                    <line class="trace-draw-3" pathLength="1" x1="1012" y1="110" x2="1012" y2="350" stroke="#ece8e1" stroke-opacity="0.4" stroke-width="0.6" stroke-dasharray="3 2"/>
+
+                    <!-- Ondas concéntricas de agua en el punto de desenlace (X: 1062, Y: 224) -->
+                    <g class="trace__water-ripples" data-trace-ripples transform="translate(1062, 224)">
+                      <circle class="trace__ripple trace__ripple--1" r="16" stroke="#ece8e1" stroke-width="0.6" stroke-opacity="0.45"/>
+                      <circle class="trace__ripple trace__ripple--2" r="32" stroke="#c89d6c" stroke-width="0.55" stroke-opacity="0.32" stroke-dasharray="4 3"/>
+                      <circle class="trace__ripple trace__ripple--3" r="50" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.18"/>
+                    </g>
+
+                    <text x="1056" y="128" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">05 · LÁMINA DE AGUA</text>
+                    <text x="1056" y="340" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim">COTA -0.40m · INFINITY</text>
+
+                    <!-- Rosa de los vientos / Carta de Incidencia Solar (Arriba Derecha) -->
+                    <g transform="translate(1182, 118)" class="trace__compass">
+                      <circle r="22" stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.6"/>
+                      <circle r="15" stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.5" stroke-dasharray="2 2"/>
+                      <line x1="0" y1="-26" x2="0" y2="26" stroke="#ece8e1" stroke-opacity="0.3" stroke-width="0.55"/>
+                      <line x1="-26" y1="0" x2="26" y2="0" stroke="#ece8e1" stroke-opacity="0.3" stroke-width="0.55"/>
+                      <!-- Vector de Azimut Solar 242° O -->
+                      <line x1="18" y1="-10" x2="-18" y2="10" stroke="#c89d6c" stroke-width="0.9"/>
+                      <circle cx="18" cy="-10" r="2.2" fill="#c89d6c"/>
+                      <polygon points="0,-24 -3,-16 3,-16" fill="#ece8e1"/>
+                      <text y="-30" text-anchor="middle" class="trace__svg-cota">N 34°S</text>
+                      <text y="38" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim">SOL 242°O</text>
+                    </g>
+
+                    <!-- Escala gráfica técnica (Abajo Derecha) -->
+                    <g transform="translate(1152, 348)" stroke="#ece8e1" stroke-opacity="0.38" stroke-width="0.6">
+                      <line x1="0" y1="0" x2="64" y2="0"/>
+                      <line x1="0" y1="-4" x2="0" y2="4"/>
+                      <line x1="16" y1="-3" x2="16" y2="3"/>
+                      <line x1="32" y1="-3" x2="32" y2="3"/>
+                      <line x1="64" y1="-4" x2="64" y2="4"/>
+                      <rect x="0" y="-2" width="16" height="2" fill="#ece8e1" fill-opacity="0.45" stroke="none"/>
+                      <text x="0" y="13" class="trace__svg-lbl trace__svg-lbl--dim" stroke="none">0</text>
+                      <text x="32" y="13" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim" stroke="none">5m</text>
+                      <text x="64" y="13" text-anchor="end" class="trace__svg-lbl trace__svg-lbl--dim" stroke="none">10m</text>
+                      <text x="32" y="-9" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim" stroke="none">ESC. 1:100</text>
+                    </g>
+                  </g>
+
+                </g><!-- /.trace__plan -->
+
+                <!-- =========================================================
+                     CAPA 04: RECORRIDO VECTORIAL Y PUNTO ÓPTICO DELICADO (DRON)
+                     Traza la línea en tiempo real, atraviesa el umbral y camina la casa
+                     ========================================================= -->
+                <g class="trace__flight">
+
+                  <!-- Guía predictiva punteada por delante del recorrido -->
+                  <path id="tracePathGhost"
+                        class="trace__path-ghost"
+                        d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
+                        stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.85" stroke-dasharray="2 6" stroke-linecap="round"/>
+
+                  <!-- Resplandor cálido detrás del trazo recorrido -->
+                  <path id="tracePathGlow"
+                        class="trace__path-glow"
+                        d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
+                        stroke="#c89d6c" stroke-opacity="0.42" stroke-width="4.5" stroke-linecap="round"/>
+
+                  <!-- Hilo principal nítido que dibuja el punto a su paso -->
+                  <path id="tracePathCore"
+                        class="trace__path-core"
+                        d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
+                        stroke="url(#traceTrailGrad)" stroke-width="1.45" stroke-linecap="round"/>
+
+                  <!-- Hitos espaciales (Waypoints) a lo largo de la trayectoria -->
+                  <g class="trace__waypoints">
+                    <!-- WP 0: Origen en el vacío -->
+                    <g class="trace__wp is-reached" data-trace-wp="0" transform="translate(88, 316)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <line x1="0" y1="8" x2="0" y2="24" stroke="#ece8e1" stroke-opacity="0.3" stroke-width="0.5"/>
+                      <text x="0" y="34" text-anchor="middle" class="trace__svg-wp">00 · ORIGEN</text>
+                    </g>
+
+                    <!-- WP 1: Ingreso al Umbral (X: 330) -->
+                    <g class="trace__wp" data-trace-wp="1" transform="translate(330, 230)">
+                      <circle class="trace__wp-ring" r="5.5" stroke="#c89d6c" stroke-width="0.75"/>
+                      <circle class="trace__wp-dot" r="2" fill="#c89d6c"/>
+                      <line x1="0" y1="-8" x2="0" y2="-22" stroke="#c89d6c" stroke-opacity="0.45" stroke-width="0.5"/>
+                      <text x="0" y="-26" text-anchor="middle" class="trace__svg-wp">UMBRAL +1.70m</text>
+                    </g>
+
+                    <!-- WP 2: Desembocadura del Umbral a la Nave (X: 492) -->
+                    <g class="trace__wp" data-trace-wp="2" transform="translate(492, 230)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                    </g>
+
+                    <!-- WP 3: Ápice en Estar de Doble Altura (X: 666, Y: 170) -->
+                    <g class="trace__wp" data-trace-wp="3" transform="translate(666, 170)">
+                      <circle class="trace__wp-ring" r="5.5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <line x1="0" y1="-8" x2="0" y2="-20" stroke="#ece8e1" stroke-opacity="0.35" stroke-width="0.5"/>
+                      <text x="0" y="-24" text-anchor="middle" class="trace__svg-wp">ESTAR · GIRO 18°</text>
+                    </g>
+
+                    <!-- WP 4: Cruce de Galería (X: 852, Y: 256) -->
+                    <g class="trace__wp" data-trace-wp="4" transform="translate(852, 256)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <line x1="0" y1="8" x2="0" y2="20" stroke="#ece8e1" stroke-opacity="0.35" stroke-width="0.5"/>
+                      <text x="0" y="30" text-anchor="middle" class="trace__svg-wp">GALERÍA</text>
+                    </g>
+
+                    <!-- WP 5: Destino en Espejo de Agua (X: 1062, Y: 224) -->
+                    <g class="trace__wp" data-trace-wp="5" transform="translate(1062, 224)">
+                      <circle class="trace__wp-ring" r="6" stroke="#c89d6c" stroke-width="0.75"/>
+                      <circle class="trace__wp-dot" r="2.2" fill="#c89d6c"/>
+                      <line x1="0" y1="9" x2="0" y2="22" stroke="#c89d6c" stroke-opacity="0.45" stroke-width="0.5"/>
+                      <text x="0" y="32" text-anchor="middle" class="trace__svg-wp">HORIZONTE · 64.8m</text>
+                    </g>
+                  </g>
+
+                  <!-- EL PUNTO ÓPTICO DELICADO (Representación minimalista del dron FPV) -->
+                  <g class="trace__drone" data-trace-drone transform="translate(88, 316)">
+                    <!-- Cono de lectura óptica que rota con el azimut de cámara -->
+                    <g data-trace-drone-rot>
+                      <path d="M 0 0 L 96 -33 A 102 102 0 0 1 96 33 Z" fill="url(#traceConeGrad)"/>
+                      <line x1="0" y1="0" x2="90" y2="-31" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <line x1="0" y1="0" x2="90" y2="31" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <path d="M 66 -22.5 A 70 70 0 0 1 66 22.5" stroke="#c89d6c" stroke-opacity="0.42" stroke-width="0.55" stroke-dasharray="2 3"/>
+                      <line x1="6" y1="0" x2="36" y2="0" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.5" stroke-dasharray="1.5 2.5"/>
+                    </g>
+
+                    <!-- Anillo de respiración exterior -->
+                    <circle class="trace__drone-pulse" r="19" stroke="#ece8e1" stroke-opacity="0.22" stroke-width="0.55"/>
+
+                    <!-- Anillo óptico de precisión con micro-marcas cardinales -->
+                    <circle class="trace__drone-ring" r="11" stroke="#ece8e1" stroke-opacity="0.72" stroke-width="0.75"/>
+                    <line x1="-14" y1="0" x2="-11" y2="0" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="11" y1="0" x2="14" y2="0" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="0" y1="-14" x2="0" y2="-11" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="0" y1="11" x2="0" y2="14" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+
+                    <!-- Halo cálido y núcleo luminoso delicado -->
+                    <circle r="7.5" fill="url(#tracePointAura)"/>
+                    <circle class="trace__drone-core" r="3" fill="#ece8e1"/>
+
+                    <!-- Etiqueta flotante de telemetría viva acoplada al punto -->
+                    <g class="trace__drone-tag" transform="translate(0, -22)">
+                      <rect x="-46" y="-14" width="92" height="15" rx="7.5" fill="#0d0d0c" fill-opacity="0.82" stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.6"/>
+                      <text y="-4" text-anchor="middle" class="trace__svg-drone-txt" data-trace-drone-txt>00.0m · +1.70m</text>
+                    </g>
+                  </g>
+
+                </g><!-- /.trace__flight -->
+              </svg>
+
+              <!-- PLANTA ARQUITECTÓNICA VERTICAL (Exclusiva para pantallas móviles / formato portrait) -->
+              <svg class="trace__svg trace__svg--v" viewBox="0 0 460 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <radialGradient id="traceConeGradV" cx="50%" cy="0%" r="100%" fx="50%" fy="0%">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.34"/>
+                    <stop offset="50%" stop-color="#c89d6c" stop-opacity="0.12"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </radialGradient>
+                  <linearGradient id="traceTrailGradV" x1="230" y1="55" x2="230" y2="690" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.35"/>
+                    <stop offset="35%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
+                  </linearGradient>
+                  <radialGradient id="tracePointAuraV" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.65"/>
+                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.24"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </radialGradient>
+                  <pattern id="traceWallHatchV" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#ece8e1" stroke-width="0.6" stroke-opacity="0.18"/>
+                  </pattern>
+                  <pattern id="traceWaterLinesV" width="24" height="6" patternUnits="userSpaceOnUse">
+                    <line x1="0" y1="3" x2="16" y2="3" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.18"/>
+                  </pattern>
+                </defs>
+
+                <!-- CAPA 01 VERTICAL: APROXIMACIÓN EXTERIOR (Superior) -->
+                <g class="trace__ext" data-trace-ext-v>
+                  <line x1="230" y1="30" x2="230" y2="170" stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.6" stroke-dasharray="2 5"/>
+                  <text x="238" y="42" class="trace__svg-lbl trace__svg-lbl--muted">EJE DE APROXIMACIÓN</text>
+
+                  <!-- Curvas de nivel topográficas sutiles -->
+                  <path d="M 60 70 C 140 100, 320 85, 400 65" stroke="#ece8e1" stroke-opacity="0.12" stroke-width="0.6" stroke-dasharray="3 4"/>
+                  <path d="M 50 115 C 150 135, 310 130, 410 105" stroke="#ece8e1" stroke-opacity="0.15" stroke-width="0.6" stroke-dasharray="4 4"/>
+                  <text x="360" y="100" class="trace__svg-lbl trace__svg-lbl--dim">±0.00m</text>
+
+                  <!-- Árboles arquitectónicos de acceso -->
+                  <g transform="translate(105, 95)" opacity="0.4">
+                    <circle cx="0" cy="0" r="18" stroke="#ece8e1" stroke-width="0.55" stroke-dasharray="2 3"/>
+                    <circle cx="0" cy="0" r="10" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.6"/>
+                    <circle cx="0" cy="0" r="1.5" fill="#ece8e1"/>
+                  </g>
+                  <g transform="translate(355, 115)" opacity="0.38">
+                    <circle cx="0" cy="0" r="16" stroke="#ece8e1" stroke-width="0.55" stroke-dasharray="2 3"/>
+                    <circle cx="0" cy="0" r="9" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.6"/>
+                  </g>
+
+                  <!-- Placas de travertino hacia el pórtico -->
+                  <g stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.65" fill="#ece8e1" fill-opacity="0.02">
+                    <rect x="220" y="112" width="20" height="11"/>
+                    <rect x="220" y="128" width="20" height="11"/>
+                    <rect x="220" y="144" width="20" height="11"/>
+                    <rect x="216" y="160" width="28" height="10"/>
+                  </g>
+                </g>
+
+                <!-- CAPA 02 VERTICAL: RETÍCULA ESTRUCTURAL Y COTAS -->
+                <g class="trace__grid" data-trace-grid-v>
+                  <g stroke="#ece8e1" stroke-opacity="0.12" stroke-width="0.55" stroke-dasharray="2 5">
+                    <line x1="75" y1="170" x2="75" y2="620"/>
+                    <line x1="230" y1="170" x2="230" y2="730"/>
+                    <line x1="385" y1="170" x2="385" y2="620"/>
+                    <line x1="55" y1="170" x2="405" y2="170"/>
+                    <line x1="55" y1="315" x2="405" y2="315"/>
+                    <line x1="55" y1="530" x2="405" y2="530"/>
+                    <line x1="55" y1="620" x2="405" y2="620"/>
+                  </g>
+                  <g transform="translate(48, 0)" stroke="#ece8e1" stroke-opacity="0.24" stroke-width="0.6">
+                    <line x1="0" y1="170" x2="0" y2="620"/>
+                    <line x1="-3" y1="173" x2="3" y2="167"/>
+                    <line x1="-3" y1="318" x2="3" y2="312"/>
+                    <line x1="-3" y1="533" x2="3" y2="527"/>
+                    <line x1="-3" y1="623" x2="3" y2="617"/>
+                    <text x="-6" y="246" text-anchor="end" class="trace__svg-cota" stroke="none">4.8m</text>
+                    <text x="-6" y="426" text-anchor="end" class="trace__svg-cota" stroke="none">10.8m</text>
+                    <text x="-6" y="578" text-anchor="end" class="trace__svg-cota" stroke="none">3.4m</text>
+                  </g>
+                </g>
+
+                <!-- CAPA 03 VERTICAL: PLANTA ARQUITECTÓNICA COMPLETA -->
+                <g class="trace__plan" data-trace-plan-v>
+                  <circle class="trace__wake-ring" data-trace-wake-v cx="230" cy="170" r="10" stroke="#c89d6c" stroke-width="0.8" stroke-opacity="0"/>
+
+                  <!-- SECTOR I & II: UMBRAL, VOLUMEN OESTE Y PATIO DE LUZ (ESTE) -->
+                  <g class="trace__sector trace__sector--1" data-trace-room-v="2">
+                    <rect class="trace__room-glow" x="75" y="170" width="310" height="145"/>
+
+                    <!-- Volumen Oeste (Izquierda: Estudio y Escalera) -->
+                    <rect class="trace-draw-1" pathLength="1" x="75" y="170" width="115" height="145" fill="url(#traceWallHatchV)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-1" pathLength="1" x="85" y="180" width="95" height="125" fill="#0d0d0c" fill-opacity="0.55" stroke="#ece8e1" stroke-width="0.75"/>
+                    <!-- Escalera representativa en planta -->
+                    <g stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.5">
+                      <rect x="95" y="225" width="75" height="34"/>
+                      <line x1="110" y1="225" x2="110" y2="259"/>
+                      <line x1="125" y1="225" x2="125" y2="259"/>
+                      <line x1="140" y1="225" x2="140" y2="259"/>
+                      <line x1="155" y1="225" x2="155" y2="259"/>
+                    </g>
+                    <text x="132" y="202" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim">ESTUDIO</text>
+
+                    <!-- PASAJE DE UMBRAL CENTRAL (X: 190 a 270) -->
+                    <line class="trace-draw-1" pathLength="1" x1="190" y1="170" x2="190" y2="315" stroke="#ece8e1" stroke-width="1.2"/>
+                    <line class="trace-draw-1" pathLength="1" x1="270" y1="170" x2="270" y2="315" stroke="#ece8e1" stroke-width="1.2"/>
+                    <!-- Puerta pivotante y arco -->
+                    <line class="trace-draw-1" pathLength="1" x1="192" y1="176" x2="228" y2="176" stroke="#c89d6c" stroke-width="1.35"/>
+                    <path class="trace-draw-1" pathLength="1" d="M 228 176 A 36 36 0 0 1 192 212" stroke="#c89d6c" stroke-opacity="0.65" stroke-width="0.65" stroke-dasharray="2 3"/>
+                    <!-- Juntas de travertino en umbral -->
+                    <g stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.5">
+                      <line x1="190" y1="215" x2="270" y2="215"/>
+                      <line x1="190" y1="255" x2="270" y2="255"/>
+                      <line x1="190" y1="285" x2="270" y2="285"/>
+                    </g>
+
+                    <!-- Volumen Este (Derecha: Patio de Luz con árbol central) -->
+                    <rect class="trace-draw-1" pathLength="1" x="270" y="170" width="115" height="145" fill="url(#traceWallHatchV)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-1" pathLength="1" x="280" y="180" width="95" height="125" fill="#0d0d0c" fill-opacity="0.55" stroke="#ece8e1" stroke-width="0.75"/>
+                    <rect class="trace-draw-1" pathLength="1" x="288" y="188" width="79" height="109" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.5" stroke-dasharray="4 2"/>
+                    <!-- Árbol escultórico en Patio de Luz -->
+                    <g class="trace__patio-tree" transform="translate(328, 242)">
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="24" stroke="#c89d6c" stroke-opacity="0.62" stroke-width="0.65" stroke-dasharray="3 2"/>
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="15" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.55"/>
+                      <circle class="trace-draw-1" pathLength="1" cx="0" cy="0" r="7" stroke="#ece8e1" stroke-opacity="0.35" stroke-width="0.45"/>
+                      <line x1="-18" y1="0" x2="18" y2="0" stroke="#ece8e1" stroke-opacity="0.25" stroke-width="0.45"/>
+                      <line x1="0" y1="-18" x2="0" y2="18" stroke="#ece8e1" stroke-opacity="0.25" stroke-width="0.45"/>
+                      <circle cx="0" cy="0" r="2" fill="#c89d6c"/>
+                    </g>
+                    <text x="328" y="306" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">PATIO DE LUZ</text>
+                  </g>
+
+                  <!-- SECTOR III: NAVE PRINCIPAL, ESTAR, COMEDOR Y GALERÍA -->
+                  <g class="trace__sector trace__sector--2" data-trace-room-v="3">
+                    <rect class="trace__room-glow" x="75" y="315" width="310" height="305"/>
+
+                    <!-- Muros envolventes laterales Oeste y Este -->
+                    <rect class="trace-draw-2" pathLength="1" x="75" y="315" width="10" height="215" fill="url(#traceWallHatchV)" stroke="#ece8e1" stroke-width="1.1"/>
+                    <rect class="trace-draw-2" pathLength="1" x="375" y="315" width="10" height="215" fill="url(#traceWallHatchV)" stroke="#ece8e1" stroke-width="1.1"/>
+
+                    <!-- Columnas estructurales -->
+                    <g fill="#ece8e1">
+                      <rect x="73" y="313" width="6" height="6"/>
+                      <rect x="381" y="313" width="6" height="6"/>
+                      <rect x="73" y="527" width="6" height="6"/>
+                      <rect x="381" y="527" width="6" height="6"/>
+                      <rect x="188" y="313" width="6" height="6"/>
+                      <rect x="266" y="313" width="6" height="6"/>
+                    </g>
+
+                    <!-- Vacío doble altura sutil -->
+                    <g stroke="#ece8e1" stroke-opacity="0.08" stroke-width="0.5" stroke-dasharray="4 4">
+                      <line x1="90" y1="335" x2="225" y2="445"/>
+                      <line x1="225" y1="335" x2="90" y2="445"/>
+                    </g>
+
+                    <!-- Equipamiento Estar de Doble Altura (Izquierda) -->
+                    <g stroke="#ece8e1" stroke-opacity="0.38" stroke-width="0.65">
+                      <!-- Sofá modular en L -->
+                      <path class="trace-draw-2" pathLength="1" d="M 98 345 V 435 H 185 V 412 H 122 V 345 Z" fill="#ece8e1" fill-opacity="0.03"/>
+                      <rect class="trace-draw-2" pathLength="1" x="134" y="365" width="45" height="30" fill="#ece8e1" fill-opacity="0.02"/>
+                      <!-- Hogar lineal -->
+                      <rect x="85" y="370" width="8" height="48" stroke-opacity="0.55"/>
+                    </g>
+
+                    <!-- Equipamiento Comedor e Isla de Cocina (Derecha) -->
+                    <g stroke="#ece8e1" stroke-opacity="0.38" stroke-width="0.65">
+                      <!-- Mesa de comedor con sillas -->
+                      <rect class="trace-draw-2" pathLength="1" x="265" y="335" width="46" height="84" fill="#ece8e1" fill-opacity="0.03"/>
+                      <rect x="256" y="348" width="6" height="14" rx="2"/>
+                      <rect x="256" y="375" width="6" height="14" rx="2"/>
+                      <rect x="256" y="400" width="6" height="14" rx="2"/>
+                      <rect x="314" y="348" width="6" height="14" rx="2"/>
+                      <rect x="314" y="375" width="6" height="14" rx="2"/>
+                      <rect x="314" y="400" width="6" height="14" rx="2"/>
+                      <!-- Isla culinaria -->
+                      <rect class="trace-draw-2" pathLength="1" x="335" y="335" width="30" height="74" fill="#ece8e1" fill-opacity="0.03"/>
+                    </g>
+
+                    <!-- Carpintería vidriada hacia Galería (Y = 530) con vano central -->
+                    <g stroke="#ece8e1" stroke-width="0.7">
+                      <line class="trace-draw-2" pathLength="1" x1="85" y1="528" x2="195" y2="528" stroke-opacity="0.65"/>
+                      <line x1="195" y1="530" x2="265" y2="530" stroke="#c89d6c" stroke-opacity="0.45" stroke-dasharray="2 3"/>
+                      <line class="trace-draw-2" pathLength="1" x1="265" y1="528" x2="375" y2="528" stroke-opacity="0.65"/>
+                    </g>
+
+                    <!-- GALERÍA CUBIERTA (Y: 530 a 620) -->
+                    <g>
+                      <!-- Proyección de alero -->
+                      <rect class="trace-draw-2" pathLength="1" x="75" y="530" width="310" height="90" stroke="#ece8e1" stroke-opacity="0.55" stroke-width="0.85" stroke-dasharray="6 3"/>
+                      <!-- Solado de travertino exterior -->
+                      <g stroke="#ece8e1" stroke-opacity="0.12" stroke-width="0.5">
+                        <line x1="75" y1="560" x2="385" y2="560"/>
+                        <line x1="75" y1="590" x2="385" y2="590"/>
+                      </g>
+                      <rect class="trace-draw-2" pathLength="1" x="95" y="546" width="60" height="52" stroke="#ece8e1" stroke-opacity="0.32" stroke-width="0.6"/>
+                    </g>
+
+                    <text x="145" y="332" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">03 · NAVE PRINCIPAL</text>
+                    <text x="230" y="548" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">04 · GALERÍA</text>
+                  </g>
+
+                  <!-- SECTOR IV: LÁMINA DE AGUA Y HORIZONTE -->
+                  <g class="trace__sector trace__sector--3" data-trace-room-v="4">
+                    <rect class="trace__room-glow" x="100" y="620" width="260" height="125"/>
+
+                    <!-- Piscina infinity -->
+                    <rect class="trace-draw-3" pathLength="1" x="115" y="632" width="230" height="100" fill="url(#traceWaterLinesV)" stroke="#ece8e1" stroke-width="1.15"/>
+                    <rect class="trace-draw-3" pathLength="1" x="122" y="638" width="216" height="88" stroke="#c89d6c" stroke-opacity="0.48" stroke-width="0.65"/>
+                    <!-- Solárium húmedo -->
+                    <line class="trace-draw-3" pathLength="1" x1="122" y1="655" x2="338" y2="655" stroke="#ece8e1" stroke-opacity="0.4" stroke-width="0.6" stroke-dasharray="3 2"/>
+
+                    <!-- Ondas de agua en desenlace (X: 230, Y: 690) -->
+                    <g class="trace__water-ripples" data-trace-ripples-v transform="translate(230, 690)">
+                      <circle class="trace__ripple trace__ripple--1" r="14" stroke="#ece8e1" stroke-width="0.6" stroke-opacity="0.45"/>
+                      <circle class="trace__ripple trace__ripple--2" r="28" stroke="#c89d6c" stroke-width="0.55" stroke-opacity="0.32" stroke-dasharray="4 3"/>
+                      <circle class="trace__ripple trace__ripple--3" r="44" stroke="#ece8e1" stroke-width="0.45" stroke-opacity="0.18"/>
+                    </g>
+
+                    <text x="230" y="630" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--room">05 · LÁMINA DE AGUA</text>
+                    <text x="230" y="744" text-anchor="middle" class="trace__svg-lbl trace__svg-lbl--dim">COTA -0.40m</text>
+                  </g>
+                </g>
+
+                <!-- CAPA 04 VERTICAL: RECORRIDO VECTORIAL Y PUNTO ÓPTICO DELICADO -->
+                <g class="trace__flight">
+                  <!-- Guía punteada predictiva -->
+                  <path id="tracePathGhostV"
+                        class="trace__path-ghost"
+                        d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
+                        stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.85" stroke-dasharray="2 6" stroke-linecap="round"/>
+
+                  <!-- Resplandor cálido -->
+                  <path id="tracePathGlowV"
+                        class="trace__path-glow"
+                        d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
+                        stroke="#c89d6c" stroke-opacity="0.42" stroke-width="4.5" stroke-linecap="round"/>
+
+                  <!-- Hilo principal nítido -->
+                  <path id="tracePathCoreV"
+                        class="trace__path-core"
+                        d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
+                        stroke="url(#traceTrailGradV)" stroke-width="1.45" stroke-linecap="round"/>
+
+                  <!-- Hitos espaciales waypoints -->
+                  <g class="trace__waypoints">
+                    <g class="trace__wp is-reached" data-trace-wp-v="0" transform="translate(175, 55)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <text x="-12" y="4" text-anchor="end" class="trace__svg-wp">ORIGEN</text>
+                    </g>
+                    <g class="trace__wp" data-trace-wp-v="1" transform="translate(230, 170)">
+                      <circle class="trace__wp-ring" r="5.5" stroke="#c89d6c" stroke-width="0.75"/>
+                      <circle class="trace__wp-dot" r="2" fill="#c89d6c"/>
+                      <text x="14" y="4" text-anchor="start" class="trace__svg-wp">UMBRAL</text>
+                    </g>
+                    <g class="trace__wp" data-trace-wp-v="2" transform="translate(230, 315)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                    </g>
+                    <g class="trace__wp" data-trace-wp-v="3" transform="translate(155, 440)">
+                      <circle class="trace__wp-ring" r="5.5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <text x="-12" y="4" text-anchor="end" class="trace__svg-wp">ESTAR</text>
+                    </g>
+                    <g class="trace__wp" data-trace-wp-v="4" transform="translate(230, 570)">
+                      <circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/>
+                      <circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/>
+                      <text x="14" y="4" text-anchor="start" class="trace__svg-wp">GALERÍA</text>
+                    </g>
+                    <g class="trace__wp" data-trace-wp-v="5" transform="translate(230, 690)">
+                      <circle class="trace__wp-ring" r="6" stroke="#c89d6c" stroke-width="0.75"/>
+                      <circle class="trace__wp-dot" r="2.2" fill="#c89d6c"/>
+                      <text x="16" y="4" text-anchor="start" class="trace__svg-wp">64.8m</text>
+                    </g>
+                  </g>
+
+                  <!-- PUNTO ÓPTICO DELICADO (Dron en orientación vertical) -->
+                  <g class="trace__drone" data-trace-drone-v transform="translate(175, 55)">
+                    <g data-trace-drone-rot-v>
+                      <path d="M 0 0 L -30 84 A 90 90 0 0 0 30 84 Z" fill="url(#traceConeGradV)"/>
+                      <line x1="0" y1="0" x2="-28" y2="80" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <line x1="0" y1="0" x2="28" y2="80" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <path d="M -20 58 A 62 62 0 0 0 20 58" stroke="#c89d6c" stroke-opacity="0.42" stroke-width="0.55" stroke-dasharray="2 3"/>
+                      <line x1="0" y1="6" x2="0" y2="34" stroke="#ece8e1" stroke-opacity="0.45" stroke-width="0.5" stroke-dasharray="1.5 2.5"/>
+                    </g>
+
+                    <circle class="trace__drone-pulse" r="17" stroke="#ece8e1" stroke-opacity="0.22" stroke-width="0.55"/>
+                    <circle class="trace__drone-ring" r="10" stroke="#ece8e1" stroke-opacity="0.72" stroke-width="0.75"/>
+                    <line x1="-13" y1="0" x2="-10" y2="0" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="10" y1="0" x2="13" y2="0" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="0" y1="-13" x2="0" y2="-10" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+                    <line x1="0" y1="10" x2="0" y2="13" stroke="#ece8e1" stroke-opacity="0.6" stroke-width="0.6"/>
+
+                    <circle r="7" fill="url(#tracePointAuraV)"/>
+                    <circle class="trace__drone-core" r="2.8" fill="#ece8e1"/>
+
+                    <g class="trace__drone-tag" transform="translate(0, -18)">
+                      <rect x="-42" y="-13" width="84" height="14" rx="7" fill="#0d0d0c" fill-opacity="0.84" stroke="#ece8e1" stroke-opacity="0.28" stroke-width="0.6"/>
+                      <text y="-3.5" text-anchor="middle" class="trace__svg-drone-txt" data-trace-drone-txt-v>00.0m · +1.70m</text>
+                    </g>
+                  </g>
+
+                </g>
+              </svg>
+            </div>
+          </div>
+
+
+
+            
+
+          <!-- Pie editorial y consola de recorrido espacial -->
+          <footer class="trace__bottom wrap">
+
+            <!-- Columna izquierda: 4 actos narrativos que explican la lógica del recorrido -->
+            <div class="trace__acts">
+              <article class="trace__act is-active" data-trace-act="-0.35,0.22">
+                <span class="trace__act-num">Acto I · El Punto y el Vacío</span>
+                <h2 class="trace__act-title">Un trazo continuo <em>antes del muro.</em></h2>
+                <p class="trace__act-desc">Todo comienza con un punto de luz en el exterior. La velocidad y el ángulo de incidencia se establecen en el espacio abierto antes de llegar a la obra.</p>
+              </article>
+
+              <article class="trace__act" data-trace-act="0.22,0.48">
+                <span class="trace__act-num">Acto II · Emergencia de la Planta</span>
+                <h2 class="trace__act-title">La arquitectura despierta <em>al ser habitada.</em></h2>
+                <p class="trace__act-desc">Al alcanzar el pórtico, el plano se dibuja e integra al recorrido. El punto se introduce por el umbral entre los dos volúmenes leyendo el patio interno.</p>
+              </article>
+
+              <article class="trace__act" data-trace-act="0.48,0.76">
+                <span class="trace__act-num">Acto III · Coreografía Interior</span>
+                <h2 class="trace__act-title">Lectura espacial <em>en un solo aliento.</em></h2>
+                <p class="trace__act-desc">Dentro de la planta, la trayectoria se curva con suavidad por la nave principal y el estar de doble altura, enlazando cada ambiente sin cortes.</p>
+              </article>
+
+              <article class="trace__act" data-trace-act="0.76,1.05">
+                <span class="trace__act-num">Acto IV · Desembocadura y Síntesis</span>
+                <h2 class="trace__act-title">De la calle al agua, <em>un único hilo.</em></h2>
+                <p class="trace__act-desc">El recorrido atraviesa la galería y culmina sobre la lámina de agua, dejando trazada la cartografía íntegra de la residencia.</p>
+              </article>
+            </div>
+
+            <!-- Columna derecha: Línea de tiempo sutil y telemetría de recorrido -->
+            <div class="trace__console">
+              <div class="seq__scrub trace__scrub" role="slider" aria-label="Línea de tiempo del recorrido en planta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+                <span class="seq__track"><i data-scrub-fill></i></span>
+              </div>
+
+              <div class="trace__meta-row">
+                <span class="trace__meta-item">Recorrido: <strong data-trace-dist>00.0 m</strong> / 64.8 m</span>
+                <span class="trace__meta-item">Sector: <strong data-trace-room-name>Aproximación Exterior</strong></span>
+                <span class="seq__fr"><strong data-trace-tc>00:00</strong> / 00:14 · <span data-hud-fr>001</span>f</span>
+              </div>
+            </div>
+
+          </footer>
+
+        </div><!-- /.trace__overlay -->
+      </div>
+    </section>
+
+    <!-- =====================================================
+         OBRA III · CASA HUDSON — ESCENOGRAFÍA CINÉTICA DE APERTURA Y CONTRAPUNTO
+         ===================================================== -->
+    <section class="seq seq--kinetic" id="film-03"
+             data-src="assets/seq/casa-hudson"
+             data-count="419"
+             data-version="1792907717"
+             data-fps="25">
+      <div class="seq__stage">
+
+        <!-- Retícula arquitectónica viva y eje de simetría móvil -->
+        <div class="kseq__grid" aria-hidden="true">
+          <span class="kseq__axis-v" data-kseq-axis></span>
+          <span class="kseq__axis-h"></span>
+        </div>
+
+        <!-- Cabezal técnico perimetral (despeje seguro bajo navegación) -->
+        <header class="kseq__topbar wrap" aria-hidden="true">
+          <div class="kseq__top-left">
+            <span class="kseq__dot"></span>
+            <span class="kseq__eyebrow">Obra III · Díptico Cinético</span>
+            <span class="kseq__phase-pill" data-kseq-phase>Apertura de Umbral</span>
+          </div>
+          <div class="kseq__top-center">
+            <span>Distancia al umbral: <strong data-kseq-dist>18.4 m</strong></span>
+            <span class="kseq__sep">·</span>
+            <span>Azimut solar: <strong>284° O</strong></span>
+          </div>
+          <div class="kseq__top-right">
+            <span>Hudson, Buenos Aires</span>
+          </div>
+        </header>
+
+        <!-- Telón tipográfico monumental partido (se abre hacia los lados con el scroll) -->
+        <div class="kseq__curtain" data-kseq-curtain aria-hidden="true">
+          <div class="kseq__wing kseq__wing--left" data-kseq-wing-l>
+            <span class="kseq__wing-no"><i></i>Obra III · 01</span>
+            <span class="kseq__wing-title">Casa</span>
+            <span class="kseq__wing-sub">Volumetría sobria y hormigón visto</span>
+          </div>
+          <div class="kseq__wing kseq__wing--right" data-kseq-wing-r>
+            <span class="kseq__wing-no">Hudson, Bs. As.<i></i></span>
+            <span class="kseq__wing-title"><em>Hudson</em></span>
+            <span class="kseq__wing-sub">Recorrido envolvente hacia el umbral</span>
+          </div>
+        </div>
+
+        <!-- Escenario principal móvil con apertura por hendidura y traslación espacial -->
+        <div class="seq__media kseq__media">
+          <canvas class="seq__canvas" aria-label="Recorrido por la fachada e ingreso de Casa Hudson"></canvas>
+          <picture class="seq__poster">
+            <img src="assets/seq/casa-hudson/poster.jpg?v=1792907717" alt="Casa Hudson" loading="lazy" decoding="async">
+          </picture>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
+
+          <!-- Marcas ópticas internas del visor cinético -->
+          <div class="kseq__media-hud" aria-hidden="true">
+            <span class="seq__mark seq__mark--tl"></span>
+            <span class="seq__mark seq__mark--tr"></span>
+            <span class="seq__mark seq__mark--bl"></span>
+            <span class="seq__mark seq__mark--br"></span>
+            <div class="kseq__media-caption">
+              <span>Plano Principal · Escala 1:1</span>
+              <span data-kseq-focal>Óptica 18mm T2.0</span>
+            </div>
+          </div>
+
+          <!-- Tarjeta de cierre cinematográfica: Ver Film Completo en YouTube -->
+          <div class="seq__outro-card" data-seq-outro>
+            <div class="seq__outro-inner">
+              <span class="seq__outro-eyebrow">Obra III · Film máster 4K</span>
+              <h3 class="seq__outro-title">Casa <em>Hudson</em></h3>
+              <p class="seq__outro-desc">El recorrido de fachada e ingreso revelando las texturas bajo la luz natural.</p>
+              <button class="seq__outro-btn" type="button" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Casa Hudson — Film Completo">
+                <span class="seq__outro-btn-play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+                <span class="seq__outro-btn-txt">
+                  <strong>Ver film completo</strong>
+                  <small>En YouTube · 4K UHD</small>
+                </span>
+                <i class="seq__outro-btn-arr" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        
+
+        <!-- Paneles editoriales asimétricos que emergen al desplazarse el lienzo -->
+        <div class="kseq__editorial wrap">
+          <!-- Acto I: aparece a la derecha cuando el video viaja a la izquierda -->
+          <article class="kseq__panel kseq__panel--right" data-kseq-panel-1>
+            <div class="kseq__panel-meta">
+              <span class="kseq__panel-num">01 / 02</span>
+              <span class="kseq__panel-tag">Acto I · Geometría y Materia</span>
+            </div>
+            <h2 class="kseq__panel-title">Volúmenes serenos <em>bajo luz rasante.</em></h2>
+            <p class="kseq__panel-desc">El encuadre se desplaza lateralmente liberando el espacio de lectura. Los planos de hormigón y piedra dialogan con la vegetación antes de descubrir el acceso.</p>
+            <div class="kseq__cota">
+              <div class="kseq__cota-row">
+                <span>Cota de fachada</span>
+                <strong>+3.60 m · Hormigón y Piedra</strong>
+              </div>
+              <span class="kseq__cota-bar"><i data-kseq-cota-1></i></span>
+            </div>
+          </article>
+
+          <!-- Acto II: aparece a la izquierda cuando el video cruza el eje hacia la derecha -->
+          <article class="kseq__panel kseq__panel--left" data-kseq-panel-2>
+            <div class="kseq__panel-meta">
+              <span class="kseq__panel-num">02 / 02</span>
+              <span class="kseq__panel-tag">Acto II · Escala de Ingreso</span>
+            </div>
+            <h2 class="kseq__panel-title">El umbral como <em>centro de gravedad.</em></h2>
+            <p class="kseq__panel-desc">La proyección cruza el eje arquitectónico y se expande al aproximarse a la puerta principal de doble altura, conduciendo la mirada hacia el interior.</p>
+            <div class="kseq__cota">
+              <div class="kseq__cota-row">
+                <span>Profundidad de umbral</span>
+                <strong>4.20 m · Doble Altura</strong>
+              </div>
+              <span class="kseq__cota-bar"><i data-kseq-cota-2></i></span>
+            </div>
+          </article>
+        </div>
+
+        <!-- Pie de control técnico y línea de tiempo con hitos espaciales -->
+        <footer class="kseq__botbar wrap">
+          <div class="kseq__bot-left">
+            <span class="seq__tc" data-tc>00:00</span>
+            <span class="kseq__bot-title"><strong>Casa Hudson</strong> · Plano Secuencia</span>
+          </div>
+
+          <div class="seq__scrub kseq__scrub" role="slider" aria-label="Línea de tiempo de Casa Hudson" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+            <div class="kseq__scrub-markers" aria-hidden="true">
+              <span>Apertura</span>
+              <span>I. Fachada</span>
+              <span>II. Umbral</span>
+              <span>Máster</span>
+            </div>
+            <span class="seq__track"><i data-scrub-fill></i></span>
+          </div>
+
+          <div class="kseq__bot-right">
+            <span class="seq__fr"><span data-hud-fr>001</span> / 419</span>
+          </div>
+        </footer>
+
+      </div>
+    </section>
+
+        <!-- =====================================================
+         OBRA II · VONHARV — FIESTAS & EVENTOS NOCTURNOS
+         ===================================================== -->
+    <section class="seq seq--fiesta" id="film-02"
+             data-src="assets/seq/vonharv"
+             data-count="154"
+             data-version="1792892959"
              data-fps="25">
       <div class="seq__stage">
         <div class="seq__media">
-          <canvas class="seq__canvas" aria-label="Toma aérea en retroceso sobre Casa del Lago"></canvas>
+          <canvas class="seq__canvas" aria-label="Toma aérea en retroceso sobre Vonharv eventos nocturnos"></canvas>
           <picture class="seq__poster">
-            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-del-lago/poster-pt.jpg">
-            <img src="assets/seq/casa-del-lago/poster.jpg" alt="Casa del Lago" loading="lazy">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/vonharv/poster-pt.jpg?v=1792892959">
+            <img src="assets/seq/vonharv/poster.jpg?v=1792892959" alt="Vonharv" loading="lazy" decoding="async">
           </picture>
           <div class="seq__veil" aria-hidden="true"></div>
           <div class="seq__cover" aria-hidden="true"></div>
@@ -241,12 +1361,12 @@
 
         <div class="lead" data-seq-lead>
           <span class="lead__no"><i></i>Obra II<i></i></span>
-          <h2 class="lead__title">Casa del <em>Lago</em></h2>
-          <p class="lead__desc">Un retroceso aéreo continuo. La simetría de inspiración francesa se descubre, plano a plano, frente al agua.</p>
+          <h2 class="lead__title"><em>Vonharv</em></h2>
+          <p class="lead__desc">La atmósfera lumínica de eventos y fiestas nocturnas. Un vuelo de apertura continuo que da paso al registro doble de la celebración.</p>
           <dl class="lead__meta">
-            <div><dt>Lugar</dt><dd>Nordelta, Tigre</dd></div>
-            <div><dt>Toma</dt><dd>Aérea en retroceso</dd></div>
-            <div><dt>Duración</dt><dd>00:05</dd></div>
+            <div><dt>Atmósfera</dt><dd>Fiestas & Eventos</dd></div>
+            <div><dt>Lugar</dt><dd>Gonnet, La Plata</dd></div>
+            <div><dt>Registro</dt><dd>Aéreo & Secuencia Dual</dd></div>
           </dl>
         </div>
 
@@ -257,18 +1377,14 @@
           <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
 
           <div class="seq__top">
-            <span class="seq__title"><span class="seq__no">II</span>Casa del <em>Lago</em></span>
-            <span class="seq__loc">Nordelta, Tigre — Aérea en retroceso</span>
+            <span class="seq__title"><span class="seq__no">II</span><em>Vonharv</em></span>
+            <span class="seq__loc">Gonnet, La Plata — Fiestas & Eventos</span>
           </div>
 
           <div class="seq__chapters">
-            <div class="chapter" data-range="0.36,0.60">
-              <span class="chapter__n">I. Retroceso</span>
-              <p class="chapter__t">Un vuelo en retirada que revela <em>la simetría de la fachada.</em></p>
-            </div>
-            <div class="chapter" data-range="0.62,0.86">
-              <span class="chapter__n">II. Horizonte</span>
-              <p class="chapter__t">La arquitectura clásica, <em>en diálogo con el agua.</em></p>
+            <div class="chapter" data-range="0.14,0.34">
+              <span class="chapter__n">I. Atmósfera</span>
+              <p class="chapter__t">El vuelo en retirada que devela <em>la iluminación y la fiesta.</em></p>
             </div>
           </div>
 
@@ -277,7 +1393,78 @@
             <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
               <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__fr"><span data-hud-fr>001</span> / 134</span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 154</span>
+          </div>
+        </div>
+
+        <!-- Capa de transición por destello a blanco (sobreexposición luminosa que revela el lienzo blanco) -->
+        <!-- Reflejo óptico expansivo desde el centro y base blanca inmaculada -->
+        <div class="seq__whiteout-glow" aria-hidden="true"></div>
+        <div class="seq__whiteout" aria-hidden="true"></div>
+
+        <!-- =====================================================
+             EXTENSIÓN DE EVENTOS: DÍPTICO RANDA 1 & RANDA 2
+             (Formato horizontal 16:9 apilado, sincronizado al scroll)
+             ===================================================== -->
+        <div class="seq__randa" data-seq-randa aria-label="Extensión de fiesta: Randa I y Randa II">
+          <div class="seq__randa-flare" aria-hidden="true"></div>
+
+          <div class="seq__randa-header">
+            <div class="seq__randa-badge">
+              <span class="seq__randa-dot" aria-hidden="true"></span>
+              <span>Extensión de rodaje · Fiestas & Eventos</span>
+            </div>
+            <div class="seq__randa-meta">
+              <span class="seq__randa-pill">Formato horizontal</span>
+              <span class="seq__randa-sep">—</span>
+              <span class="seq__randa-tc" data-randa-tc>00:00</span>
+            </div>
+          </div>
+
+          <div class="seq__randa-stack">
+            <!-- Secuencia Superior: RANDA 1 (16:9 horizontal) -->
+            <article class="seq__randa-card seq__randa-card--1" data-randa-card="1">
+              <div class="seq__randa-media">
+                <canvas class="seq__randa-canvas" data-randa-canvas="1" aria-label="Secuencia de fiesta Randa 1"></canvas>
+                <img class="seq__randa-poster" src="assets/seq/randa1/poster.jpg?v=1792892959" alt="Randa I" loading="lazy" decoding="async">
+                <div class="seq__randa-corners" aria-hidden="true">
+                  <span class="seq__randa-corner seq__randa-corner--tl"></span>
+                  <span class="seq__randa-corner seq__randa-corner--tr"></span>
+                  <span class="seq__randa-corner seq__randa-corner--bl"></span>
+                  <span class="seq__randa-corner seq__randa-corner--br"></span>
+                </div>
+                <div class="seq__randa-hud-top">
+                  <span class="seq__randa-cam">Toma 01 · <em>Randa I</em></span>
+                  <span class="seq__randa-rec"><i class="seq__randa-rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="seq__randa-hud-bot">
+                  <span class="seq__randa-caption">Pista & Escenario</span>
+                  <span class="seq__randa-fr">FR <strong data-randa-fr="1">001</strong> / 208</span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Secuencia Inferior: RANDA 2 (16:9 horizontal) -->
+            <article class="seq__randa-card seq__randa-card--2" data-randa-card="2">
+              <div class="seq__randa-media">
+                <canvas class="seq__randa-canvas" data-randa-canvas="2" aria-label="Secuencia de fiesta Randa 2"></canvas>
+                <img class="seq__randa-poster" src="assets/seq/randa2/poster.jpg?v=1792892959" alt="Randa II" loading="lazy" decoding="async">
+                <div class="seq__randa-corners" aria-hidden="true">
+                  <span class="seq__randa-corner seq__randa-corner--tl"></span>
+                  <span class="seq__randa-corner seq__randa-corner--tr"></span>
+                  <span class="seq__randa-corner seq__randa-corner--bl"></span>
+                  <span class="seq__randa-corner seq__randa-corner--br"></span>
+                </div>
+                <div class="seq__randa-hud-top">
+                  <span class="seq__randa-cam">Toma 02 · <em>Randa II</em></span>
+                  <span class="seq__randa-rec"><i class="seq__randa-rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="seq__randa-hud-bot">
+                  <span class="seq__randa-caption">Atmósfera & Celebración</span>
+                  <span class="seq__randa-fr">FR <strong data-randa-fr="2">001</strong> / 208</span>
+                </div>
+              </div>
+            </article>
           </div>
         </div>
       </div>
@@ -303,107 +1490,207 @@
         </div>
 
         <figure class="work__hero rimg" data-cursor="Proyectar" data-goto="#film-01">
-          <div class="rimg__in" data-parallax="0.06"><img src="assets/stills/residencia-los-robles/0265.webp" alt="Galería, piscina y jardín de la Residencia Los Robles" loading="lazy"></div>
-          <figcaption><span>Fotograma 265</span><span>Galería y espejo de agua</span></figcaption>
+          <div class="rimg__in" data-parallax="0.06">
+            <img src="assets/stills/residencia-los-robles/0265.webp" alt="Galería, piscina y jardín de la Residencia Los Robles" loading="lazy">
+            <div class="rimg__hud" aria-hidden="true">
+              <span class="rimg__corner rimg__corner--tl"></span>
+              <span class="rimg__corner rimg__corner--tr"></span>
+              <span class="rimg__corner rimg__corner--bl"></span>
+              <span class="rimg__corner rimg__corner--br"></span>
+            </div>
+          </div>
+          <figcaption><span>Fotograma 265 · Contraluz</span><span>Galería y espejo de agua</span></figcaption>
         </figure>
 
         <div class="work__grid">
-          <figure class="work__tall rimg">
-            <div class="rimg__in" data-parallax="0.08"><img src="assets/stills/residencia-los-robles/0118-v.webp" alt="Paso entre los dos volúmenes" loading="lazy"></div>
+          <figure class="work__tall rimg" data-cursor="Ampliar" data-still-src="assets/stills/residencia-los-robles/0118-v.webp" data-still-caption="Residencia Los Robles — Fotograma 118 · Umbral">
+            <div class="rimg__in" data-parallax="0.08">
+              <img src="assets/stills/residencia-los-robles/0118-v.webp" alt="Paso entre los dos volúmenes" loading="lazy">
+              <div class="rimg__hud" aria-hidden="true">
+                <span class="rimg__corner rimg__corner--tl"></span>
+                <span class="rimg__corner rimg__corner--tr"></span>
+                <span class="rimg__corner rimg__corner--bl"></span>
+                <span class="rimg__corner rimg__corner--br"></span>
+              </div>
+            </div>
             <figcaption><span>Fotograma 118</span><span>Umbral</span></figcaption>
           </figure>
 
           <div class="work__side">
             <!-- Rótulo técnico, como en un plano de arquitectura -->
-            <dl class="titleblock" data-reveal>
-              <div class="tb tb--wide"><dt>Proyecto</dt><dd>Residencia Los Robles</dd></div>
-              <div class="tb"><dt>Ubicación</dt><dd>Pilar, Buenos Aires</dd></div>
-              <div class="tb"><dt>Año</dt><dd>2026</dd></div>
-              <div class="tb"><dt>Tipología</dt><dd>Vivienda unifamiliar</dd></div>
-              <div class="tb"><dt>Superficie</dt><dd>420 m²</dd></div>
-              <div class="tb"><dt>Rodaje</dt><dd>Una jornada</dd></div>
-              <div class="tb"><dt>Luz</dt><dd>Media tarde</dd></div>
-              <div class="tb tb--wide"><dt>Captura</dt><dd>Cinewhoop FPV 4K · Aéreo 5.1K</dd></div>
-              <div class="tb tb--wide"><dt>Entregables</dt><dd>Film máster 16:9 · Tres piezas 9:16 · 36 fotogramas</dd></div>
-            </dl>
+            <div class="titleblock-wrap" data-reveal>
+              <dl class="titleblock">
+                <div class="tb tb--wide"><dt>Proyecto</dt><dd>Residencia Los Robles</dd></div>
+                <div class="tb"><dt>Ubicación</dt><dd>Pilar, Buenos Aires</dd></div>
+                <div class="tb"><dt>Año</dt><dd>2026</dd></div>
+                <div class="tb"><dt>Tipología</dt><dd>Vivienda unifamiliar</dd></div>
+                <div class="tb"><dt>Superficie</dt><dd>420 m²</dd></div>
+                <div class="tb"><dt>Rodaje</dt><dd>Una jornada</dd></div>
+                <div class="tb"><dt>Luz</dt><dd>Media tarde</dd></div>
+                <div class="tb tb--wide"><dt>Captura</dt><dd>Cinewhoop FPV 4K · Aéreo 5.1K</dd></div>
+                <div class="tb tb--wide"><dt>Entregables</dt><dd>Film máster 16:9 · Tres piezas 9:16 · 36 fotogramas</dd></div>
+              </dl>
+            </div>
 
-            <figure class="work__small rimg">
-              <div class="rimg__in" data-parallax="0.05"><img src="assets/stills/residencia-los-robles/0092.webp" alt="Volúmenes blancos y portones de la fachada" loading="lazy"></div>
+            <figure class="work__small rimg" data-cursor="Ampliar" data-still-src="assets/stills/residencia-los-robles/0092.webp" data-still-caption="Residencia Los Robles — Fotograma 092 · Fachada">
+              <div class="rimg__in" data-parallax="0.05">
+                <img src="assets/stills/residencia-los-robles/0092.webp" alt="Volúmenes blancos y portones de la fachada" loading="lazy">
+                <div class="rimg__hud" aria-hidden="true">
+                  <span class="rimg__corner rimg__corner--tl"></span>
+                  <span class="rimg__corner rimg__corner--tr"></span>
+                  <span class="rimg__corner rimg__corner--bl"></span>
+                  <span class="rimg__corner rimg__corner--br"></span>
+                </div>
+              </div>
               <figcaption><span>Fotograma 092</span><span>Fachada</span></figcaption>
             </figure>
 
-            <a href="#film-01" class="arrowlink" data-reveal><span>Volver a proyectar la obra</span><i aria-hidden="true"></i></a>
+            <div class="work__links" data-reveal>
+              <a href="#film-01" class="arrowlink" data-magnetic="0.18"><span>Volver a proyectar la obra</span><i aria-hidden="true"></i></a>
+              <button class="arrowlink arrowlink--yt" type="button" data-magnetic="0.18" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Residencia Los Robles — Film Completo"><span>Ver film completo en YouTube</span><i aria-hidden="true"></i></button>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- =====================================================
-         OBRA III · CASA HUDSON
+         COREOGRAFÍA ESPACIAL DE VUELO · MATRIZ CINÉTICA 3D
+         Disección interactiva del plano secuencia continuo en cuatro dimensiones
          ===================================================== -->
-    <section class="seq" id="film-03"
-             data-src="assets/seq/casa-hudson"
-             data-count="109"
-             data-fps="25">
-      <div class="seq__stage">
-        <div class="seq__media">
-          <canvas class="seq__canvas" aria-label="Recorrido por la fachada e ingreso de Casa Hudson"></canvas>
-          <picture class="seq__poster">
-            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/casa-hudson/poster-pt.jpg">
-            <img src="assets/seq/casa-hudson/poster.jpg" alt="Casa Hudson" loading="lazy">
-          </picture>
-          <div class="seq__veil" aria-hidden="true"></div>
-          <div class="seq__cover" aria-hidden="true"></div>
-        </div>
+    <section class="choreo" id="coreografia"
+             data-choreo
+             data-src="assets/seq/epecuen"
+             data-count="179"
+             data-version="1792885490"
+             data-fps="24"
+             aria-label="Coreografía espacial de vuelo FPV y telemetría cinematográfica">
+      <div class="choreo__stage">
+        <div class="wrap choreo__inner">
 
-        <div class="lead" data-seq-lead>
-          <span class="lead__no"><i></i>Obra III<i></i></span>
-          <h2 class="lead__title">Casa <em>Hudson</em></h2>
-          <p class="lead__desc">Volumetría sobria y texturas nobles en un recorrido envolvente que conduce la mirada hacia el umbral.</p>
-          <dl class="lead__meta">
-            <div><dt>Lugar</dt><dd>Hudson, Buenos Aires</dd></div>
-            <div><dt>Toma</dt><dd>Fachada e ingreso</dd></div>
-            <div><dt>Duración</dt><dd>00:04</dd></div>
-          </dl>
-        </div>
-
-        <div class="seq__frame">
-          <span class="seq__mark seq__mark--tl" aria-hidden="true"></span>
-          <span class="seq__mark seq__mark--tr" aria-hidden="true"></span>
-          <span class="seq__mark seq__mark--bl" aria-hidden="true"></span>
-          <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
-
-          <div class="seq__top">
-            <span class="seq__title"><span class="seq__no">III</span>Casa <em>Hudson</em></span>
-            <span class="seq__loc">Hudson, Buenos Aires — Fachada e ingreso</span>
-          </div>
-
-          <div class="seq__chapters">
-            <div class="chapter" data-range="0.36,0.60">
-              <span class="chapter__n">I. Fachada</span>
-              <p class="chapter__t">Volúmenes serenos y texturas <em>que dialogan con el jardín.</em></p>
+          <!-- Cabezal técnico cinemático -->
+          <header class="choreo__header">
+            <div class="choreo__header-left">
+              <span class="eyebrow choreo__eyebrow">
+                <span>Villa Epecuén</span>
+              </span>
+              <h2 class="display display--sm choreo__title">
+                Coreografía <em>espacial</em>
+              </h2>
             </div>
-            <div class="chapter" data-range="0.62,0.86">
-              <span class="chapter__n">II. Ingreso</span>
-              <p class="chapter__t">El umbral principal, <em>abriéndose hacia el interior.</em></p>
+            <div class="choreo__header-center">
+              <p class="choreo__desc">
+                La física detrás del plano secuencia continuo: aceleración milimétrica, cota de altura constante e inmersión de vuelo continuo.
+              </p>
             </div>
-          </div>
+            <div class="choreo__header-right">
+              <div class="choreo__live-badge" aria-hidden="true">
+                <span class="choreo__live-txt" data-choreo-live-phase>Acto I · Entrada en 3D</span>
+              </div>
+            </div>
+          </header>
 
-          <div class="seq__bottom">
-            <span class="seq__tc" data-tc>00:00</span>
-            <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
-              <span class="seq__track"><i data-scrub-fill></i></span>
+          <!-- Escenario 3D interactivo -->
+          <div class="choreo__stage-box">
+            <div class="choreo__3d-scene" data-choreo-scene>
+
+              <!-- Deck contenedor 3D que rota con el scroll y el puntero -->
+              <div class="choreo__deck" data-choreo-deck>
+
+                <!-- CAPA 03 (Profunda): Plano arquitectónico y radar de vuelo -->
+                <div class="choreo__layer choreo__layer--blueprint" aria-hidden="true">
+                  <div class="choreo__blueprint-frame">
+                    <canvas class="choreo__blueprint-canvas" data-choreo-blueprint></canvas>
+                    <div class="choreo__blueprint-hud">
+                      <span class="choreo__bp-tag">Cota de Planta: 0.00m · Travertino & Volumetría</span>
+                      <span class="choreo__bp-coords" data-choreo-coords>X: +14.2m · Y: -08.4m · Z: +1.80m</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- CAPA 02 (Central): Lienzo cinemático principal -->
+                <div class="choreo__layer choreo__layer--media">
+                  <div class="choreo__media-frame">
+                    <canvas class="choreo__canvas" data-choreo-canvas aria-label="Plano secuencia FPV analizado en 3D"></canvas>
+                    <div class="choreo__cinema-glow" aria-hidden="true"></div>
+                  </div>
+                </div>
+
+                <!-- CAPA 01 (Frontal): HUD de vuelo, óptica y visor ARRI/FPV -->
+                <div class="choreo__layer choreo__layer--hud" aria-hidden="true">
+                  <div class="choreo__hud-grid">
+
+                    <!-- Marcas esquineras Leica/Cine -->
+                    <span class="choreo__corner choreo__corner--tl"></span>
+                    <span class="choreo__corner choreo__corner--tr"></span>
+                    <span class="choreo__corner choreo__corner--bl"></span>
+                    <span class="choreo__corner choreo__corner--br"></span>
+
+                    <!-- Cabezal del visor FPV -->
+                    <div class="choreo__hud-bar choreo__hud-bar--top">
+                      <div class="choreo__hud-pill">
+                        <span class="choreo__hud-dot"></span>
+                        <span class="choreo__hud-mode-txt" data-choreo-phase-label>Modo I · Telemetría</span>
+                      </div>
+                      <div class="choreo__hud-readout">
+                        <span>FOCAL: 16MM PRIME</span>
+                        <span>SHUTTER: 1/50</span>
+                        <span>GÍMBAL: <strong data-choreo-pitch>-3.2°</strong></span>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+              </div><!-- /.choreo__deck -->
+
+            </div><!-- /.choreo__3d-scene -->
+          </div><!-- /.choreo__stage-box -->
+
+          <!-- Pie de control: regla háptica milimétrica de enfoque de cine -->
+          <footer class="choreo__footer">
+            <div class="choreo__lens-scale" aria-hidden="true">
+              <span class="choreo__lens-center-mark"></span>
+              <div class="choreo__lens-ruler" data-choreo-ruler>
+                <!-- Generado dinámicamente con ticks milimétricos y distancias focales -->
+              </div>
             </div>
-            <span class="seq__fr"><span data-hud-fr>001</span> / 109</span>
+            <div class="choreo__footer-meta">
+              <span class="choreo__status-badge" data-choreo-status-pill>Acto I · Aproximación y Vector</span>
+              <div class="choreo__progress-track" role="slider" aria-label="Progreso de la coreografía" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+                <span class="choreo__progress-fill" data-choreo-progress-fill></span>
+              </div>
+              <span class="choreo__tc-counter">
+                <strong data-choreo-fr>001</strong> / 179 FR · <span data-choreo-tc>00:00.00</span>
+              </span>
+            </div>
+          </footer>
+
+        </div><!-- /.wrap -->
+
+        <!-- Tarjeta de cierre cinematográfica: Ver Film Completo en YouTube -->
+        <div class="seq__outro-card choreo__seq-outro" data-choreo-outro>
+          <div class="seq__outro-inner">
+            <span class="seq__outro-eyebrow">Coreografía de vuelo · Film máster 4K</span>
+            <h3 class="seq__outro-title">Villa <em>Epecuén</em></h3>
+            <p class="seq__outro-desc">El plano secuencia FPV ininterrumpido sobre las ruinas y el agua.</p>
+            <button class="seq__outro-btn" type="button" data-magnetic="0.22" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Villa Epecuén — Film Completo">
+              <span class="seq__outro-btn-play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+              <span class="seq__outro-btn-txt">
+                <strong>Ver film completo</strong>
+                <small>En YouTube · 4K UHD</small>
+              </span>
+              <i class="seq__outro-btn-arr" aria-hidden="true"></i>
+            </button>
           </div>
         </div>
-      </div>
+      </div><!-- /.choreo__stage -->
     </section>
 
-    <!-- =====================================================
+        <!-- =====================================================
          SERVICIOS
          ===================================================== -->
-    <section class="services" id="servicios">
+    <section class="services" id="servicios" data-services>
       <div class="wrap">
         <header class="runhead runhead--dark" data-reveal>
           <span>Servicios</span>
@@ -414,12 +1701,22 @@
         <div class="services__grid">
           <div class="services__visual" aria-hidden="true">
             <figure class="services__fig">
-              <img src="assets/stills/residencia-los-robles/0118-v.webp" alt="" class="is-active">
-              <img src="assets/stills/casa-del-lago/0134-v.webp" alt="">
-              <img src="assets/stills/residencia-los-robles/0185-v.webp" alt="">
-              <img src="assets/stills/salida-balcon-hudson/0035-v.webp" alt="">
+              <img src="assets/stills/residencia-los-robles/0118-v.webp" alt="" class="is-active" loading="lazy" decoding="async">
+              <img src="assets/stills/vonharv/0154-v.webp" alt="" loading="lazy" decoding="async">
+              <img src="assets/stills/residencia-los-robles/0185-v.webp" alt="" loading="lazy" decoding="async">
+              <img src="assets/stills/anacleto/0060-v.webp" alt="" loading="lazy" decoding="async">
+              <div class="services__hud">
+                <span class="services__corner services__corner--tl"></span>
+                <span class="services__corner services__corner--tr"></span>
+                <span class="services__corner services__corner--bl"></span>
+                <span class="services__corner services__corner--br"></span>
+              </div>
             </figure>
-            <span class="services__count"><span data-svc-n>01</span> / 04</span>
+            <div class="services__foot">
+              <span class="services__count"><span data-svc-n>01</span> / 04</span>
+              <span class="services__progress"><i data-svc-bar></i></span>
+              <span class="services__mode-lbl" data-svc-label>Plano continuo</span>
+            </div>
           </div>
 
           <div class="services__list">
@@ -428,31 +1725,47 @@
               <span class="ln"><span>de contar <em>una obra</em></span></span>
             </h2>
             <ol class="svc">
-              <li class="svc__row is-active" data-reveal>
+              <li class="svc__row is-active" data-reveal data-svc-spec="Cinewhoop FPV · 4K Raw" data-svc-lens="18mm T2.0" data-svc-label="Plano continuo">
+                <span class="svc__line" aria-hidden="true"><i data-svc-row-bar></i></span>
                 <span class="svc__n">01</span>
                 <div class="svc__body">
-                  <h3 class="svc__t">Recorrido FPV de autor</h3>
+                  <div class="svc__head">
+                    <h3 class="svc__t">Recorrido FPV de autor</h3>
+                    <span class="svc__tag">Máster 16:9 · Sin cortes</span>
+                  </div>
                   <p class="svc__d">Un plano secuencia ininterrumpido que enlaza el exterior, el umbral y los ambientes más nobles de la casa.</p>
                 </div>
               </li>
-              <li class="svc__row" data-reveal>
+              <li class="svc__row" data-reveal data-svc-spec="Aéreo 5.1K · ProRes" data-svc-lens="24mm T1.5" data-svc-label="Escala territorial">
+                <span class="svc__line" aria-hidden="true"><i data-svc-row-bar></i></span>
                 <span class="svc__n">02</span>
                 <div class="svc__body">
-                  <h3 class="svc__t">Cine aéreo de contexto</h3>
+                  <div class="svc__head">
+                    <h3 class="svc__t">Cine aéreo de contexto</h3>
+                    <span class="svc__tag">5.1K · Luz rasante</span>
+                  </div>
                   <p class="svc__d">Entorno, orientación y escala del paisaje. La obra situada en su territorio antes de llegar al detalle.</p>
                 </div>
               </li>
-              <li class="svc__row" data-reveal>
+              <li class="svc__row" data-reveal data-svc-spec="Fotograma Fijo · DNG 16-bit" data-svc-lens="35mm T1.4" data-svc-label="Archivo editorial">
+                <span class="svc__line" aria-hidden="true"><i data-svc-row-bar></i></span>
                 <span class="svc__n">03</span>
                 <div class="svc__body">
-                  <h3 class="svc__t">Fotografía de arquitectura</h3>
+                  <div class="svc__head">
+                    <h3 class="svc__t">Fotografía de arquitectura</h3>
+                    <span class="svc__tag">Prensa & Monografías</span>
+                  </div>
                   <p class="svc__d">Fotogramas y tomas aéreas de alta resolución para monografías, prensa especializada y catálogos.</p>
                 </div>
               </li>
-              <li class="svc__row" data-reveal>
+              <li class="svc__row" data-reveal data-svc-spec="Open Gate · 9:16 Nativo" data-svc-lens="21mm T1.8" data-svc-label="Corte vertical">
+                <span class="svc__line" aria-hidden="true"><i data-svc-row-bar></i></span>
                 <span class="svc__n">04</span>
                 <div class="svc__body">
-                  <h3 class="svc__t">Piezas verticales nativas</h3>
+                  <div class="svc__head">
+                    <h3 class="svc__t">Piezas verticales nativas</h3>
+                    <span class="svc__tag">9:16 · Sin reencuadre</span>
+                  </div>
                   <p class="svc__d">Cortes 9:16 pensados desde la coreografía del vuelo, sin perder encuadre ni intención.</p>
                 </div>
               </li>
@@ -463,18 +1776,89 @@
     </section>
 
     <!-- =====================================================
-         OBRA IV · BALCÓN HUDSON
+         FORMATO DUAL — METAMORFOSIS 16:9 HORIZONTAL ↔ 9:16 VERTICAL
+         ===================================================== -->
+    <section class="format-showcase" id="formato"
+             data-format-showcase
+             data-src="assets/seq/campo"
+             data-count="238"
+             data-version="1792892888"
+             data-fps="24">
+      <div class="format-showcase__stage">
+        <div class="wrap format-showcase__content">
+          <!-- Textos centrados arriba -->
+          <div class="format-showcase__header">
+            <span class="eyebrow">Un solo rodaje · Dos formatos nativos</span>
+            <h2 class="display display--sm format-showcase__title">
+              Horizontal 16:9<span class="format-showcase__sep">↔</span><em>Vertical 9:16</em>
+            </h2>
+            <p class="format-showcase__desc">
+              Una misma pasada cinematográfica en formato abierto. Sin comprometer la resolución: el máster panorámico para cine y web convive con la pieza vertical nativa para pantallas móviles.
+            </p>
+          </div>
+
+          <!-- Reproductor cinemático central con guías de sensor Open Gate -->
+          <div class="format-showcase__box">
+            <div class="format-showcase__guide format-showcase__guide--h" data-format-guide-h aria-hidden="true">
+              <span class="format-showcase__guide-tag">16:9 Máster · 3840×2160</span>
+            </div>
+            <div class="format-showcase__guide format-showcase__guide--v" data-format-guide-v aria-hidden="true">
+              <span class="format-showcase__guide-tag">9:16 Nativo · 2160×3840</span>
+            </div>
+
+            <div class="format-showcase__player">
+              <canvas class="format-showcase__canvas" aria-label="Transformación de encuadre 16:9 a 9:16"></canvas>
+
+              <!-- Marcas esquineras de visor -->
+              <span class="format-showcase__corner format-showcase__corner--tl" aria-hidden="true"></span>
+              <span class="format-showcase__corner format-showcase__corner--tr" aria-hidden="true"></span>
+              <span class="format-showcase__corner format-showcase__corner--bl" aria-hidden="true"></span>
+              <span class="format-showcase__corner format-showcase__corner--br" aria-hidden="true"></span>
+
+              <!-- Badge con el formato activo flotando en el marco -->
+              <div class="format-showcase__pill" aria-hidden="true">
+                <span class="format-showcase__ratio" data-format-ratio>16:9</span>
+                <span class="format-showcase__status" data-format-status>Máster Horizontal</span>
+              </div>
+
+              <!-- Telemetría óptica inferior en el marco -->
+              <div class="format-showcase__hud-bot" aria-hidden="true">
+                <span>OPEN GATE · 5.1K RAW</span>
+                <span data-format-res>3840 × 2160 PX</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pie técnico centrado -->
+          <div class="format-showcase__footer">
+            <div class="format-showcase__scrub">
+              <span class="format-showcase__ratio-label format-showcase__ratio-label--l">16:9 Panorámico</span>
+              <div class="format-showcase__line">
+                <span class="format-showcase__fill" data-format-fill></span>
+              </div>
+              <span class="format-showcase__ratio-label format-showcase__ratio-label--r">9:16 Vertical</span>
+            </div>
+            <span class="format-showcase__counter">Fotograma <strong data-format-fr>001</strong> / 238</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================
+         OBRA IV · ANACLETO
          ===================================================== -->
     <section class="seq" id="film-04"
-             data-src="assets/seq/salida-balcon-hudson"
-             data-count="126"
+             data-mode="hybrid"
+             data-src="assets/seq/anacleto"
+             data-count="457"
+             data-version="1792888022"
              data-fps="25">
       <div class="seq__stage">
         <div class="seq__media">
-          <canvas class="seq__canvas" aria-label="Plano secuencia desde la suite hacia el balcón, Casa Hudson"></canvas>
+          <canvas class="seq__canvas" aria-label="Plano secuencia Anacleto"></canvas>
           <picture class="seq__poster">
-            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/salida-balcon-hudson/poster-pt.jpg">
-            <img src="assets/seq/salida-balcon-hudson/poster.jpg" alt="Suite y balcón, Casa Hudson" loading="lazy">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/anacleto/poster-pt.jpg?v=1792888022">
+            <img src="assets/seq/anacleto/poster.jpg?v=1792888022" alt="Anacleto" loading="lazy" decoding="async">
           </picture>
           <div class="seq__veil" aria-hidden="true"></div>
           <div class="seq__cover" aria-hidden="true"></div>
@@ -482,12 +1866,12 @@
 
         <div class="lead" data-seq-lead>
           <span class="lead__no"><i></i>Obra IV<i></i></span>
-          <h2 class="lead__title">Balcón <em>Hudson</em></h2>
-          <p class="lead__desc">De la intimidad de la suite a la apertura del horizonte. Un plano continuo de interior a exterior, a contraluz.</p>
+          <h2 class="lead__title">Anacleto</h2>
+          <p class="lead__desc">De la intimidad de la arquitectura a la apertura del paisaje. Un plano continuo en movimiento cinematográfico.</p>
           <dl class="lead__meta">
-            <div><dt>Lugar</dt><dd>Hudson, Buenos Aires</dd></div>
+            <div><dt>Lugar</dt><dd>Buenos Aires</dd></div>
             <div><dt>Toma</dt><dd>Interior — exterior</dd></div>
-            <div><dt>Duración</dt><dd>00:05</dd></div>
+            <div><dt>Duración</dt><dd>00:18</dd></div>
           </dl>
         </div>
 
@@ -498,14 +1882,14 @@
           <span class="seq__mark seq__mark--br" aria-hidden="true"></span>
 
           <div class="seq__top">
-            <span class="seq__title"><span class="seq__no">IV</span>Balcón <em>Hudson</em></span>
-            <span class="seq__loc">Hudson, Buenos Aires — Suite y horizonte</span>
+            <span class="seq__title"><span class="seq__no">IV</span>Anacleto</span>
+            <span class="seq__loc">Buenos Aires — Transición continua</span>
           </div>
 
           <div class="seq__chapters">
             <div class="chapter" data-range="0.36,0.60">
-              <span class="chapter__n">I. Suite</span>
-              <p class="chapter__t">La luz de la tarde <em>recorriendo el espacio íntimo.</em></p>
+              <span class="chapter__n">I. Espacio</span>
+              <p class="chapter__t">La luz natural <em>recorriendo la volumetría.</em></p>
             </div>
             <div class="chapter" data-range="0.62,0.86">
               <span class="chapter__n">II. Horizonte</span>
@@ -518,46 +1902,395 @@
             <div class="seq__scrub" role="slider" aria-label="Línea de tiempo de la obra" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
               <span class="seq__track"><i data-scrub-fill></i></span>
             </div>
-            <span class="seq__fr"><span data-hud-fr>001</span> / 126</span>
+            <span class="seq__fr"><span data-hud-fr>001</span> / 457</span>
+          </div>
+
+          <!-- Tarjeta de cierre cinematográfica: Ver Film Completo en YouTube -->
+          <div class="seq__outro-card" data-seq-outro>
+            <div class="seq__outro-inner">
+              <span class="seq__outro-eyebrow">Obra IV · Film máster 4K</span>
+              <h3 class="seq__outro-title">Anacleto</h3>
+              <p class="seq__outro-desc">La transición continua de la arquitectura al horizonte abierto.</p>
+              <button class="seq__outro-btn" type="button" data-magnetic="0.22" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Anacleto — Film Completo">
+                <span class="seq__outro-btn-play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+                <span class="seq__outro-btn-txt">
+                  <strong>Ver film completo</strong>
+                  <small>En YouTube · 4K UHD</small>
+                </span>
+                <i class="seq__outro-btn-arr" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
     <!-- =====================================================
-         ARCHIVO — galería horizontal
+         SECUENCIA PANORÁMICA FULLSCREEN · VISIÓN NOCTURNA
+         (Secuencia a pantalla completa continua, con velo oscuro
+          y lectura editorial tipográfica superpuesta en el scroll)
          ===================================================== -->
-    <section class="archive" id="archivo" aria-label="Archivo de fotogramas">
-      <div class="archive__pin">
-        <div class="archive__head wrap">
+    <section class="seq seq--fullscreen" id="nocturno"
+             data-src="assets/seq/fincas"
+             data-count="249"
+             data-version="1792891724"
+             data-fps="25">
+      <div class="seq__stage">
+        <div class="seq__media">
+          <canvas class="seq__canvas" aria-label="Plano cinematográfico continuo a pantalla completa — Fincas"></canvas>
+          <picture class="seq__poster">
+            <source media="(max-aspect-ratio: 9/10)" srcset="assets/seq/fincas/poster-pt.jpg?v=1792891724">
+            <img src="assets/seq/fincas/poster.jpg?v=1792891724" alt="Fincas — Perspectiva a pantalla completa" loading="lazy" decoding="async">
+          </picture>
+          <div class="seq__veil" aria-hidden="true"></div>
+          <div class="seq__cover" aria-hidden="true"></div>
+        </div>
+
+        <!-- Capas editoriales que se alternan durante el recorrido a pantalla completa -->
+        <div class="seq-fs__overlay">
+          <!-- Cabezal superior fijo -->
+          <div class="seq-fs__header wrap">
+            <span class="eyebrow">Perspectiva · Pantalla Completa</span>
+            <span class="seq-fs__badge">Secuencia 05 — Estudio de Luz</span>
+          </div>
+
+          <!-- Acto I: Escala y Materia (-0.38 - 0.34) -->
+          <div class="seq-fs__act" data-fs-act="-0.38,0.34">
+            <div class="wrap seq-fs__act-inner">
+              <span class="seq-fs__num">Acto I · Penumbra y Volumen</span>
+              <h2 class="seq-fs__title">Materia, penumbra<br><em>y escala continua.</em></h2>
+              <p class="seq-fs__desc">El plano se expande en el espacio sin límites de marco. Una mirada reposada que explora la textura de los muros y el silencio de la arquitectura.</p>
+            </div>
+          </div>
+
+          <!-- Acto II: La Luz Rasante (0.35 - 0.67) -->
+          <div class="seq-fs__act" data-fs-act="0.35,0.67">
+            <div class="wrap seq-fs__act-inner seq-fs__act-inner--right">
+              <span class="seq-fs__num">Acto II · Ángulo Solar</span>
+              <h2 class="seq-fs__title">La luz natural<br><em>como única directriz.</em></h2>
+              <p class="seq-fs__desc">Cada sombra proyectada revela la geometría oculta de los volúmenes. No iluminamos la escena: esperamos el ángulo solar exacto.</p>
+            </div>
+          </div>
+
+          <!-- Acto III: Síntesis Espacial (0.68 - 0.98) -->
+          <div class="seq-fs__act" data-fs-act="0.68,0.98">
+            <div class="wrap seq-fs__act-inner seq-fs__act-inner--center">
+              <span class="seq-fs__num">Acto III · Síntesis Espacial</span>
+              <h2 class="seq-fs__title">Un viaje continuo<br><em>hacia el interior.</em></h2>
+              <p class="seq-fs__desc">La transición entre el exterior abierto y el resguardo del umbral. El cine aéreo al servicio de la intimidad habitable.</p>
+              <div class="seq-fs__yt-wrap">
+                <button class="seq__outro-btn" type="button" data-magnetic="0.22" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Visión Nocturna — Film Panorámico">
+                  <span class="seq__outro-btn-play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+                  <span class="seq__outro-btn-txt">
+                    <strong>Ver film completo</strong>
+                    <small>En YouTube · 4K UHD</small>
+                  </span>
+                  <i class="seq__outro-btn-arr" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pie de control técnico flotante milimétrico -->
+          <div class="seq-fs__footer wrap">
+            <div class="seq-fs__meta">
+              <span class="seq-fs__tag">Cinematografía continua</span>
+              <span class="seq-fs__res">4K Raw · 25 FPS</span>
+            </div>
+            <div class="seq-fs__scrub">
+              <div class="seq-fs__bar"><i data-fs-bar></i></div>
+              <span class="seq-fs__time"><span data-fs-tc>00:00</span> / 00:10</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================
+         REPERTORIO — SECUENCIAS VIVAS EN TRÁNSITO
+         (Carrusel horizontal dinámico con secuencias en reproducción continua
+          al deslizar, tamaño mediano optimizado para material complementario)
+         ===================================================== -->
+    <section class="repertorio" id="repertorio" aria-label="Repertorio de secuencias y tomas complementarias">
+      <div class="repertorio__pin">
+        <div class="repertorio__head wrap">
           <header class="runhead runhead--dark">
-            <span>Archivo</span>
-            <span>Fotogramas de rodaje</span>
+            <span>Repertorio</span>
+            <span>Secuencias de campo & tomas vivas</span>
             <span>04</span>
           </header>
-        </div>
-        <div class="archive__track" data-archive>
-          <div class="archive__intro">
-            <h2 class="display display--sm">Cada fotograma, <em>una fotografía.</em></h2>
-            <p>Doce cuadros extraídos de los planos secuencia, sin retoque adicional. La misma luz, el mismo encuadre, detenidos.</p>
+          <div class="repertorio__intro">
+            <h2 class="display display--sm">Tomas de paso, <em>secuencias vivas.</em></h2>
+            <p class="repertorio__desc">Un catálogo dinámico de rodajes complementarios, exploraciones de luz y fragmentos arquitectónicos. Cada toma se reproduce en flujo continuo al recorrer la galería.</p>
           </div>
-          <figure class="arc arc--l"><img src="assets/stills/residencia-los-robles/0001.webp" alt="Residencia Los Robles, llegada" loading="lazy"><figcaption><span>I · 001</span><span>Los Robles</span></figcaption></figure>
-          <figure class="arc arc--v arc--up"><img src="assets/stills/residencia-los-robles/0152-v.webp" alt="Residencia Los Robles, galería" loading="lazy"><figcaption><span>I · 152</span><span>Los Robles</span></figcaption></figure>
-          <figure class="arc arc--m arc--down"><img src="assets/stills/casa-del-lago/0045.webp" alt="Casa del Lago, piscina" loading="lazy"><figcaption><span>II · 045</span><span>Casa del Lago</span></figcaption></figure>
-          <figure class="arc arc--v"><img src="assets/stills/casa-hudson/0080-v.webp" alt="Casa Hudson, puerta de ingreso" loading="lazy"><figcaption><span>III · 080</span><span>Casa Hudson</span></figcaption></figure>
-          <figure class="arc arc--l arc--up"><img src="assets/stills/residencia-los-robles/0240.webp" alt="Residencia Los Robles, espejo de agua" loading="lazy"><figcaption><span>I · 240</span><span>Los Robles</span></figcaption></figure>
-          <figure class="arc arc--s arc--down"><img src="assets/stills/salida-balcon-hudson/0035.webp" alt="Balcón Hudson, cortinas a contraluz" loading="lazy"><figcaption><span>IV · 035</span><span>Balcón Hudson</span></figcaption></figure>
-          <figure class="arc arc--v arc--up"><img src="assets/stills/casa-del-lago/0025-v.webp" alt="Casa del Lago, fachada" loading="lazy"><figcaption><span>II · 025</span><span>Casa del Lago</span></figcaption></figure>
-          <figure class="arc arc--m"><img src="assets/stills/casa-hudson/0140.webp" alt="Casa Hudson, escalera y comedor" loading="lazy"><figcaption><span>III · 140</span><span>Casa Hudson</span></figcaption></figure>
-          <figure class="arc arc--v arc--down"><img src="assets/stills/residencia-los-robles/0092-v.webp" alt="Residencia Los Robles, volumen" loading="lazy"><figcaption><span>I · 092</span><span>Los Robles</span></figcaption></figure>
-          <figure class="arc arc--l arc--up"><img src="assets/stills/salida-balcon-hudson/0126.webp" alt="Balcón Hudson, vista a la piscina" loading="lazy"><figcaption><span>IV · 126</span><span>Balcón Hudson</span></figcaption></figure>
-          <figure class="arc arc--s"><img src="assets/stills/casa-hudson/0001.webp" alt="Casa Hudson, llegada" loading="lazy"><figcaption><span>III · 001</span><span>Casa Hudson</span></figcaption></figure>
-          <figure class="arc arc--v arc--down"><img src="assets/stills/casa-del-lago/0134-v.webp" alt="Casa del Lago, jardín" loading="lazy"><figcaption><span>II · 134</span><span>Casa del Lago</span></figcaption></figure>
-          <div class="archive__end"><span>Fin del archivo</span></div>
         </div>
-        <div class="archive__foot wrap">
-          <span class="archive__progress"><i data-archive-bar></i></span>
-          <span class="archive__hint">Desplazar</span>
+
+        <div class="repertorio__viewport">
+          <div class="repertorio__track" data-repertorio-track>
+            <!-- Card 01 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/test-3"
+                     data-count="145"
+                     data-version="1792879555"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Residencia Los Robles — Galería y Patios"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma secundaria Residencia Los Robles"></canvas>
+                <img class="rep-card__poster" src="assets/seq/test-3/poster.jpg?v=1792879555" alt="Residencia Los Robles" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 01</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Pilar, Buenos Aires</span>
+                  <span class="rep-card__lens">21mm T1.8 Cine</span>
+                </div>
+                <h3 class="rep-card__title">Residencia <em>Los Robles</em></h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 02 · Transición al Jardín</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <!-- Card 02 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/casa-del-lago"
+                     data-count="134"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Casa del Lago — Espejo de Agua"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma secundaria Casa del Lago"></canvas>
+                <img class="rep-card__poster" src="assets/seq/vonharv/poster.jpg?v=1792892959" alt="Vonharv" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 02</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Nordelta, Tigre</span>
+                  <span class="rep-card__lens">24mm T1.5 Cine</span>
+                </div>
+                <h3 class="rep-card__title">Casa del <em>Lago</em></h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 05 · Espejo de Agua</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <!-- Card 03 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/casa-hudson"
+                     data-count="419"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Casa Hudson — Umbral y Rasante"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma secundaria Casa Hudson"></canvas>
+                <img class="rep-card__poster" src="assets/seq/casa-hudson/poster.jpg?v=1792907717" alt="Casa Hudson" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 03</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Hudson, Buenos Aires</span>
+                  <span class="rep-card__lens">18mm T2.0 Cine</span>
+                </div>
+                <h3 class="rep-card__title">Casa <em>Hudson</em></h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 01 · Rasante de Fachada</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <!-- Card 04 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/anacleto"
+                     data-count="457"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Anacleto — Film Completo"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma Anacleto"></canvas>
+                <img class="rep-card__poster" src="assets/seq/anacleto/poster.jpg?v=1792888022" alt="Anacleto" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 04</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Buenos Aires</span>
+                  <span class="rep-card__lens">24mm T1.5 Cine</span>
+                </div>
+                <h3 class="rep-card__title">Anacleto</h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 04 · Espacio &amp; Horizonte</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <!-- Card 05 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/casa-del-lago"
+                     data-count="134"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Casa del Lago — Muelle y Atardecer"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma secundaria Casa del Lago en muelle"></canvas>
+                <img class="rep-card__poster" src="assets/seq/vonharv/poster.jpg?v=1792892959" alt="Vonharv" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 05</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Nordelta, Tigre</span>
+                  <span class="rep-card__lens">35mm Anamórfico</span>
+                </div>
+                <h3 class="rep-card__title">Casa del <em>Lago</em></h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 08 · Muelle y Atardecer</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <!-- Card 06 -->
+            <article class="rep-card"
+                     data-rep-card
+                     data-src="assets/seq/test-3"
+                     data-count="145"
+                     data-version="1792879555"
+                     data-step="2"
+                     data-fps="24"
+                     data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4"
+                     data-video-title="Residencia Los Robles — Patio y Umbral"
+                     data-cursor="Ver film">
+              <div class="rep-card__screen">
+                <canvas class="rep-card__canvas" aria-label="Toma secundaria Residencia Los Robles patio"></canvas>
+                <img class="rep-card__poster" src="assets/seq/test-3/poster.jpg?v=1792879555" alt="Residencia Los Robles" loading="lazy">
+                <div class="rep-card__hud-top">
+                  <span class="rep-card__badge">SEQ · 06</span>
+                  <span class="rep-card__rec"><i class="rep-card__rec-dot" aria-hidden="true"></i>REC · 24 FPS</span>
+                </div>
+                <div class="rep-card__reticle" aria-hidden="true">
+                  <span class="rep-card__cross"></span>
+                </div>
+                <div class="rep-card__action" aria-hidden="true">
+                  <span class="rep-card__play-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </span>
+                  <span class="rep-card__play-txt">Abrir film</span>
+                </div>
+              </div>
+              <footer class="rep-card__info">
+                <div class="rep-card__meta-top">
+                  <span class="rep-card__loc">Pilar, Buenos Aires</span>
+                  <span class="rep-card__lens">28mm T1.8 Cine</span>
+                </div>
+                <h3 class="rep-card__title">Residencia <em>Los Robles</em></h3>
+                <div class="rep-card__meta-bot">
+                  <span class="rep-card__take">Toma 07 · Patio y Umbral</span>
+                  <span class="rep-card__tc" data-card-tc>00:00:00</span>
+                </div>
+                <div class="rep-card__bar"><i data-card-fill></i></div>
+              </footer>
+            </article>
+
+            <div class="repertorio__end" aria-hidden="true">
+              <span class="repertorio__end-tag">Fin del repertorio</span>
+              <span class="repertorio__end-sub">06 tomas de catálogo</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="repertorio__foot wrap">
+          <div class="repertorio__status">
+            <span class="repertorio__pulse-dot" aria-hidden="true"></span>
+            <span class="repertorio__status-txt"><strong data-rep-active-idx>01</strong> / 06 tomas activas</span>
+          </div>
+          <div class="repertorio__track-bar">
+            <i data-rep-track-fill></i>
+          </div>
+          <span class="repertorio__hint">Desliza para avanzar el rodaje</span>
         </div>
       </div>
     </section>
@@ -565,7 +2298,7 @@
     <!-- =====================================================
          MÉTODO
          ===================================================== -->
-    <section class="method paper" id="metodo">
+    <section class="method paper" id="metodo" data-method>
       <div class="wrap">
         <header class="runhead" data-reveal>
           <span>Método</span>
@@ -578,26 +2311,51 @@
             <span class="ln"><span>Cada recorrido se</span></span>
             <span class="ln ln--in"><span><em>proyecta antes de volar</em></span></span>
           </h2>
+          <div class="method__telemetry" data-reveal aria-hidden="true">
+            <span class="method__tel-lbl">Secuencia de Producción</span>
+            <span class="method__tel-val" data-method-phase>Fase 01 · Estudio Solar</span>
+          </div>
+        </div>
+
+        <!-- Riel continuo de trayectoria que avanza con el scroll -->
+        <div class="method__rail" aria-hidden="true">
+          <span class="method__rail-track"><i data-method-bar></i></span>
+          <span class="method__rail-node is-active" data-method-node="0"></span>
+          <span class="method__rail-node" data-method-node="1"></span>
+          <span class="method__rail-node" data-method-node="2"></span>
+          <span class="method__rail-node" data-method-node="3"></span>
         </div>
 
         <ol class="steps">
-          <li class="step" data-reveal>
-            <span class="step__n">01</span>
+          <li class="step" data-reveal data-method-step data-phase-name="Fase 01 · Estudio Solar">
+            <div class="step__head">
+              <span class="step__n">01</span>
+              <span class="step__tag">Azimut & Luz</span>
+            </div>
             <h3 class="step__t">Visita y estudio solar</h3>
             <p>Recorremos el sitio, estudiamos la orientación y la incidencia de la luz, y definimos la hora exacta de rodaje.</p>
           </li>
-          <li class="step" data-reveal>
-            <span class="step__n">02</span>
+          <li class="step" data-reveal data-method-step data-phase-name="Fase 02 · Trazado Espacial">
+            <div class="step__head">
+              <span class="step__n">02</span>
+              <span class="step__tag">Vector FPV</span>
+            </div>
             <h3 class="step__t">Coreografía de vuelo</h3>
             <p>Diseñamos la trayectoria plano por plano: ejes, velocidades y el orden en que cada ambiente se revela.</p>
           </li>
-          <li class="step" data-reveal>
-            <span class="step__n">03</span>
+          <li class="step" data-reveal data-method-step data-phase-name="Fase 03 · Captura Continua">
+            <div class="step__head">
+              <span class="step__n">03</span>
+              <span class="step__tag">5.1K D-Log</span>
+            </div>
             <h3 class="step__t">Rodaje</h3>
             <p>Una jornada técnica en la franja de luz elegida. Repetimos la toma hasta que la trayectoria es exacta.</p>
           </li>
-          <li class="step" data-reveal>
-            <span class="step__n">04</span>
+          <li class="step" data-reveal data-method-step data-phase-name="Fase 04 · Etalonaje y Máster">
+            <div class="step__head">
+              <span class="step__n">04</span>
+              <span class="step__tag">16:9 & 9:16</span>
+            </div>
             <h3 class="step__t">Color y máster</h3>
             <p>Etalonaje cinematográfico fiel a los materiales y entrega multiformato en 4K, horizontal y vertical.</p>
           </li>
@@ -608,9 +2366,10 @@
     <!-- =====================================================
          TESTIMONIO
          ===================================================== -->
-    <section class="quote paper">
+    <section class="quote paper" data-quote>
       <div class="wrap">
         <figure class="quote__fig">
+          <span class="quote__plumb" aria-hidden="true"><i data-quote-plumb></i></span>
           <span class="quote__mark" aria-hidden="true">“</span>
           <blockquote>
             <p data-words>Entendió la casa mejor que muchas de las fotografías que teníamos de ella. El recorrido transmite exactamente lo que se siente al entrar.</p>
@@ -626,12 +2385,12 @@
     <!-- =====================================================
          CONTACTO
          ===================================================== -->
-    <section class="contact" id="contacto">
+    <section class="contact" id="contacto" data-contact>
       <div class="wrap">
         <header class="runhead runhead--dark" data-reveal>
           <span>Contacto</span>
           <span>Nuevos proyectos — 2026 / 2027</span>
-          <span>06</span>
+          <span>07</span>
         </header>
 
         <h2 class="contact__title" data-lines>
@@ -640,10 +2399,16 @@
         </h2>
 
         <div class="contact__grid">
-          <a class="contact__mail" href="mailto:hola@furlan.film" data-reveal data-cursor="Escribir">
-            <span class="contact__mail-txt">hola@furlan.film</span>
-            <i aria-hidden="true"></i>
-          </a>
+          <div class="contact__cta" data-reveal>
+            <a class="contact__mail" href="mailto:hola@furlan.film" data-cursor="Escribir" data-magnetic="0.18">
+              <span class="contact__mail-txt">hola@furlan.film</span>
+              <i aria-hidden="true"></i>
+            </a>
+            <button type="button" class="contact__copy" data-copy-mail="hola@furlan.film" aria-label="Copiar dirección de correo">
+              <span class="contact__copy-dot" aria-hidden="true"></span>
+              <span data-copy-txt>Copiar dirección de correo</span>
+            </button>
+          </div>
           <dl class="contact__list" data-reveal>
             <div><dt>WhatsApp</dt><dd><a href="https://wa.me/5491100000000" target="_blank" rel="noopener" class="ulink">+54 9 11 0000 0000</a></dd></div>
             <div><dt>Instagram</dt><dd><a href="https://instagram.com/furlan.film" target="_blank" rel="noopener" class="ulink">@furlan.film</a></dd></div>
@@ -657,9 +2422,9 @@
         <div class="wrap foot__row">
           <span>© 2026 Furlan — Cine de arquitectura</span>
           <span>34°36′S 58°22′O · <span data-clock>--:--</span> ART</span>
-          <a href="#top" class="ulink">Volver al inicio</a>
+          <a href="#top" class="ulink" data-magnetic="0.2">Volver al inicio</a>
         </div>
-        <div class="foot__mark" aria-hidden="true">Furlan</div>
+        <div class="foot__mark" data-foot-mark aria-hidden="true">Furlan</div>
       </footer>
     </section>
 
@@ -667,7 +2432,51 @@
 
   <div class="grain" aria-hidden="true"></div>
 
+  <!-- =====================================================
+       MODAL DE FOTOGRAMA / MESA DE LUZ ARQUITECTÓNICA
+       ===================================================== -->
+  <div class="smodal" id="stillModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Visor de fotograma en alta resolución">
+    <div class="smodal__backdrop" data-smodal-close></div>
+    <div class="smodal__dialog">
+      <div class="smodal__top">
+        <span class="smodal__tag">Archivo de rodaje · Fotograma sin retoque</span>
+        <span class="smodal__caption" data-smodal-caption>Fotograma</span>
+        <button class="smodal__close" type="button" data-smodal-close aria-label="Cerrar visor">
+          <span>Cerrar</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <figure class="smodal__figure">
+        <img data-smodal-img src="" alt="">
+        <span class="smodal__corner smodal__corner--tl" aria-hidden="true"></span>
+        <span class="smodal__corner smodal__corner--tr" aria-hidden="true"></span>
+        <span class="smodal__corner smodal__corner--bl" aria-hidden="true"></span>
+        <span class="smodal__corner smodal__corner--br" aria-hidden="true"></span>
+      </figure>
+    </div>
+  </div>
+
+  <!-- =====================================================
+       MODAL DE CINE / YOUTUBE OVERLAY
+       ===================================================== -->
+  <div class="vmodal" id="videoModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Reproductor cinematográfico de YouTube">
+    <div class="vmodal__backdrop" data-vmodal-close></div>
+    <div class="vmodal__dialog">
+      <div class="vmodal__top">
+        <span class="vmodal__tag">Cine de arquitectura · Film máster</span>
+        <span class="vmodal__title" data-vmodal-title>Reproducción</span>
+        <button class="vmodal__close" type="button" data-vmodal-close aria-label="Cerrar reproductor">
+          <span>Cerrar</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="vmodal__player">
+        <iframe data-vmodal-frame src="" title="Film en YouTube" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
-  <script src="js/main.js?v=20261023-r2" defer></script>
+  <script src="js/main.js?v=1792913130969" defer></script>
 </body>
 </html>
