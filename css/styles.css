@@ -376,41 +376,6 @@ body.nav-hidden:not(.index-open) .nav,
   transition: transform 0.32s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.22s ease;
 }
 
-/* Fijar barra del navegador en versión vertical / móvil evitando que se contraiga al deslizar */
-@media (max-width: 900px), (max-aspect-ratio: 1/1) {
-  html {
-    overflow: hidden !important;
-    width: 100% !important;
-    height: 100% !important;
-    overscroll-behavior: none !important;
-  }
-  body {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden !important;
-    overscroll-behavior: none !important;
-  }
-  #top {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow-y: scroll !important;
-    overflow-x: hidden !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior-y: none !important;
-  }
-  body.index-open #top,
-  body.modal-open #top {
-    overflow-y: hidden !important;
-  }
-}
 .nav > * { pointer-events: auto; }
 
 .nav__brand { display: inline-flex; align-items: baseline; gap: 16px; justify-self: start; }

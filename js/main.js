@@ -36,25 +36,13 @@
     });
     lenis.stop();
   }
-  const scrollContainer = $("#top");
-  const isVerticalScroller = () => !finePointer || vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
-
-  const scrollY = () => {
-    if (lenis) return lenis.scroll;
-    if (scrollContainer && isVerticalScroller()) return scrollContainer.scrollTop;
-    return window.scrollY;
-  };
+  const scrollY = () => (lenis ? lenis.scroll : window.scrollY);
 
   function scrollToTarget(target, opts = {}) {
     const el = typeof target === "string" ? $(target) : target;
     const y = typeof target === "number" ? target : (el ? el.getBoundingClientRect().top + scrollY() : 0);
-    if (lenis) {
-      lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
-    } else if (scrollContainer && isVerticalScroller()) {
-      scrollContainer.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
-    } else {
-      window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
-    }
+    if (lenis) lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
+    else window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
   }
 
 
@@ -1373,7 +1361,7 @@
               }
             }
           } else {
-            if (finePointer && window.scrollY < this.top + this.len) {
+            if (window.scrollY < this.top + this.len) {
               window.scrollBy(0, autoDy);
             }
           }
