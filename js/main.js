@@ -176,8 +176,7 @@
       this.isFiesta = el.id === "film-02" || el.classList.contains("seq--fiesta");
       this.isHybrid = el.dataset.mode === "hybrid" || el.classList.contains("seq--trace") || el.id === "trazado" || el.id === "film-04";
       this.autoPlayPaused = false;
-      this.rewindCooldown = 0;
-      this.resumeTimer = 1.0;
+      this.autoPlaySuspended = false;
       this.lastTrackedY = undefined;
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
@@ -1361,61 +1360,23 @@
           const autoDy = autoSpeed * dtSec;
 
           if (lenis && !isVerticalScroller()) {
-            // Transición unificada sin cortes ni detenciones intermedias en escritorio Lenis:
             const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
             const userDiff = targetY - y;
 
             if (userDiff < -1.5) {
-              // El usuario está desplazando deliberadamente hacia atrás (reversa / scroll up):
-              // Activar tregua de rebobinado para que el usuario pueda explorar hacia atrás o subir con total libertad
-              this.rewindCooldown = 0.45;
-              this.resumeTimer = 0;
+              // El usuario desliza hacia arriba: se frena el automático inmediatamente.
+              // Lenis procesa el retroceso natural sin límites, permitiendo salir hacia arriba sin trabas.
+              this.autoPlaySuspended = true;
+            } else if (userDiff > 2.0) {
+              // El usuario vuelve a deslizar hacia abajo: se reinicia la autoreproducción continua
+              this.autoPlaySuspended = false;
+            }
 
-              const userRevLead = -userDiff;
-              const revDy = userRevLead * (1 - Math.exp(-18 * dtSec));
-              const nextY = Math.max(this.top, y - revDy);
-              const remainingRev = Math.max(0, userRevLead - revDy);
-              lenis.scrollTo(nextY, { immediate: true });
-              if (remainingRev > 0.5) {
-                lenis.targetScroll = nextY - remainingRev;
-              }
-            } else if (userDiff > 3.0) {
-              // El usuario scrollea deliberadamente hacia abajo: reanudar avance continuo inmediato sin esperar
-              this.rewindCooldown = 0;
-              this.resumeTimer = 1.0;
-
-              const userForwardLead = userDiff;
-              const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
-              const totalDy = autoDy + userDy;
-              const nextY = Math.min(this.top + this.len, y + totalDy);
-              const remainingLead = Math.max(0, userForwardLead - userDy);
-              lenis.scrollTo(nextY, { immediate: true });
-              if (remainingLead > 0.5) {
-                lenis.targetScroll = nextY + remainingLead;
-              }
-            } else if (this.rewindCooldown > 0) {
-              // Periodo de gracia/tregua tras haber desplazado hacia arriba:
-              // NO avanzar automáticamente hacia adelante. Permitir navegar o contemplar sin lucha.
-              this.rewindCooldown -= dtSec;
-              this.resumeTimer = 0;
-              if (Math.abs(userDiff) > 0.5) {
-                const step = userDiff * (1 - Math.exp(-16 * dtSec));
-                const nextY = clamp(y + step, this.top, this.top + this.len);
-                lenis.scrollTo(nextY, { immediate: true });
-                if (Math.abs(userDiff - step) > 0.5) {
-                  lenis.targetScroll = nextY + (userDiff - step);
-                }
-              }
-            } else {
-              // Avance continuo normal hacia adelante:
-              // Reanudación suave y progresiva con rampa orgánica tras el periodo de gracia
-              this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.28);
-              const resumeFactor = smooth(this.resumeTimer);
-              const effectiveAutoDy = autoDy * resumeFactor;
-
+            if (!this.autoPlaySuspended) {
+              // Avance continuo hacia abajo: suma el impulso del usuario al motor continuo
               const userForwardLead = Math.max(0, userDiff);
               const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
-              const totalDy = effectiveAutoDy + userDy;
+              const totalDy = autoDy + userDy;
               const nextY = Math.min(this.top + this.len, y + totalDy);
               const remainingLead = Math.max(0, userForwardLead - userDy);
               lenis.scrollTo(nextY, { immediate: true });
@@ -1433,30 +1394,19 @@
             this.lastTrackedY = currentY;
 
             if (scrollDelta < -1.5) {
-              // Detección de subida activa en touch / rueda / inercia nativa hacia arriba
-              this.rewindCooldown = 0.45;
-              this.resumeTimer = 0;
+              // El usuario desliza hacia arriba: se frena el automático y puede subir libremente a la sección previa
+              this.autoPlaySuspended = true;
               this.subpixelAcc = 0;
-            } else if (scrollDelta > 2.5) {
-              // Usuario deslizando deliberadamente hacia abajo: cancelar tregua y acelerar
-              this.rewindCooldown = 0;
-              this.resumeTimer = 1.0;
+            } else if (scrollDelta > 2.0) {
+              // El usuario desliza hacia abajo: se reinicia el automático
+              this.autoPlaySuspended = false;
             }
 
-            if (this.rewindCooldown > 0) {
-              // Tregua de rebobinado: pausado para permitir navegar o mirar hacia arriba sin lucha
-              this.rewindCooldown -= dtSec;
-              this.resumeTimer = 0;
-              this.subpixelAcc = 0;
-            } else if (currentY < this.top + this.len) {
+            if (!this.autoPlaySuspended && currentY < this.top + this.len) {
               if (isUserTouching) {
                 this.subpixelAcc = 0;
               } else {
-                this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.28);
-                const resumeFactor = smooth(this.resumeTimer);
-                const effectiveAutoDy = autoDy * resumeFactor;
-
-                this.subpixelAcc = (this.subpixelAcc || 0) + effectiveAutoDy;
+                this.subpixelAcc = (this.subpixelAcc || 0) + autoDy;
                 if (this.subpixelAcc >= 1) {
                   const intStep = Math.floor(this.subpixelAcc);
                   this.subpixelAcc -= intStep;
