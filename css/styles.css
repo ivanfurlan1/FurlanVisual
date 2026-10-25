@@ -410,12 +410,6 @@ body.nav-hidden:not(.index-open) .nav,
   body.modal-open #top {
     overflow-y: hidden !important;
   }
-  body.nav-hidden:not(.index-open) .nav,
-  .nav.is-hidden:not(.index-open) {
-    transform: translateY(0) !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-  }
 }
 .nav > * { pointer-events: auto; }
 

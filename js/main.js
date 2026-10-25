@@ -4051,14 +4051,7 @@
     }
 
     // Navegación: se retira al bajar, vuelve al subir + indicador de capítulo activo
-    const isVertical = vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
-    if (isVertical) {
-      if (isNavHidden) {
-        isNavHidden = false;
-        if (navEl) navEl.classList.remove("is-hidden");
-        body.classList.remove("nav-hidden");
-      }
-    } else if (isScrolling) {
+    if (isScrolling) {
       navAcc = Math.sign(dy) === Math.sign(navAcc) ? navAcc + dy : dy;
       let shouldHide = isNavHidden;
       if (y < 100) {
