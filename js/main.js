@@ -2920,7 +2920,7 @@
 
   function tickLoader(now) {
     if (ready) return;
-    const minT = reduce ? 0 : 1700;
+    const minT = reduce ? 0 : 2800;
     const timeCap = clamp((now - tStart) / minT);
     const goal = Math.min(loadTarget, reduce ? 1 : timeCap);
     loadShown += (goal - loadShown) * 0.08;
@@ -2947,6 +2947,11 @@
 
   if (sequences.length) {
     sequences[0].load(undefined, (p) => { loadTarget = Math.max(loadTarget, p); });
+
+    // Precarga temprana encadenada: mientras el usuario contempla la portada, Film 02 se precarga en silencio
+    setTimeout(() => {
+      if (sequences[1] && !sequences[1].set) sequences[1].load();
+    }, 1200);
 
     const seqLoader = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
