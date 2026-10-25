@@ -3580,8 +3580,8 @@ body.is-ready .hero__line > span { transform: none; }
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: var(--nav-clearance) 0 clamp(16px, 2.5vh, 26px);
+  justify-content: space-between;
+  padding: 0;
   background: radial-gradient(ellipse 90% 75% at 50% 48%, #141311 0%, #070706 100%);
   contain: layout paint;
 }
@@ -3625,6 +3625,7 @@ body.is-ready .hero__line > span { transform: none; }
   align-items: center;
   gap: clamp(16px, 2.4vw, 36px);
   width: 100%;
+  padding-top: var(--nav-clearance);
   padding-bottom: 0;
   margin-bottom: 0;
   transform: translate3d(0, var(--choreo-head-y, 0px), 0);
@@ -3688,16 +3689,18 @@ body.is-ready .hero__line > span { transform: none; }
   display: none;
 }
 
-/* Contenedor central del escenario 3D: compacto alrededor del deck */
+/* Contenedor central del escenario 3D: centrado matemáticamente en el centro absoluto del visor */
 .choreo__stage-box {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: var(--deck-w, 920px);
+  height: var(--deck-h, 518px);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: var(--deck-h, 518px);
-  position: relative;
-  margin: auto 0;
   z-index: 2;
 }
 
@@ -4139,6 +4142,7 @@ body.is-ready .hero__line > span { transform: none; }
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
+  padding-bottom: clamp(16px, 2.5vh, 26px);
   transform: translate3d(0, var(--choreo-foot-y, 0px), 0);
   will-change: transform;
   position: relative;
@@ -4271,7 +4275,7 @@ body.is-ready .hero__line > span { transform: none; }
   }
 
   .choreo__stage {
-    padding: var(--nav-clearance-mobile) 0 clamp(16px, 2.4vh, 24px);
+    padding: 0;
   }
 
   .choreo__3d-scene {
@@ -4282,6 +4286,7 @@ body.is-ready .hero__line > span { transform: none; }
     grid-template-columns: 1fr;
     text-align: center;
     gap: 12px;
+    padding-top: var(--nav-clearance-mobile);
     padding-bottom: 0;
     border-bottom: none;
     margin-bottom: 0;
@@ -4301,12 +4306,18 @@ body.is-ready .hero__line > span { transform: none; }
   }
 
   .choreo__stage-box {
-    margin: auto 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0;
+    width: var(--deck-w, 320px);
     height: var(--deck-h, 280px);
   }
 
   .choreo__footer {
     margin: 0 auto;
+    padding-bottom: clamp(16px, 2.4vh, 24px);
   }
 
   /* El Deck 3D central adopta formato 8:7 nativo Open Gate en móviles */
@@ -6133,11 +6144,15 @@ body.cursor-label .cursor__ring {
   transform: scaleY(1.45);
 }
 
-/* 3. Estudio / Manifiesto: Luz Solar Viva, Carta Solar & Diagramas de Principios */
+/* 3. Estudio / Manifiesto: Fondo plano blanco arquitectónico puro */
 .statement.paper {
   position: relative;
   overflow: clip;
-  background: var(--bone);
+  background: #ffffff !important;
+}
+
+.statement__bg {
+  display: none !important;
 }
 
 /* Fondo cinemático sutil para Estudio / Manifiesto:

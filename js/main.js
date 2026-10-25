@@ -2431,16 +2431,8 @@
         }
       });
 
-      if (this.stage && (this.stageBox || this.deck)) {
-        const stageRect = this.stage.getBoundingClientRect();
-        const boxEl = this.stageBox || this.deck;
-        const boxRect = boxEl.getBoundingClientRect();
-        const boxRelCenterY = (boxRect.top - stageRect.top) + (boxRect.height / 2);
-        const targetCenterY = vh / 2;
-        this.expandShiftY = targetCenterY - boxRelCenterY;
-      } else {
-        this.expandShiftY = 0;
-      }
+      // El stage-box está centrado en el centro geométrico de la pantalla (50% / 50%)
+      this.expandShiftY = 0;
 
       this.dirty = true;
     }
@@ -3738,8 +3730,9 @@
     constructor(secEl) {
       this.sec = secEl;
       if (!this.sec) return;
-      this.bgEl = $(".statement__bg", this.sec);
       this.canvas = $(".statement__bg-canvas", this.sec);
+      if (!this.canvas) return;
+      this.bgEl = $(".statement__bg", this.sec);
       this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
       this.src = "assets/seq/casa-del-lago";
       this.count = 134;
