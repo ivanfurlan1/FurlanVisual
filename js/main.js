@@ -2738,36 +2738,39 @@
       const fullScale = (this.fullScale || Math.max(vw / Math.max(1, this.deckW || 1), vh / Math.max(1, this.deckH || 1))) * 1.08;
 
       if (isApproaching) {
-        // ENTRADA: El recuadro 3D está automáticamente centrado en el visor y concluye su nivelación antes de fijar
+        // ENTRADA: El recuadro asoma tempranamente con elevación suave mientras el fondo se extiende hacia arriba
         activeAct = 0;
         phaseTxt = "Acto I · Aproximación 3D";
-        const oneMinus = 1 - smooth(entryProgress);
+        const entryT = smooth(entryProgress);
+        const oneMinus = 1 - entryT;
 
         if (this.isPortrait) {
-          deckRx = oneMinus * 18;
-          deckRy = oneMinus * -18;
-          deckRz = oneMinus * 1.5;
-          bpZ = oneMinus * -90;
-          hudZ = oneMinus * 50;
-          deckScale = 0.94 + (1 - oneMinus) * (baseScale - 0.94);
+          // Perspectiva isométrica sutil y calma (sin giros bruscos ni distorsión)
+          deckRx = oneMinus * 8;
+          deckRy = oneMinus * -8;
+          deckRz = 0;
+          bpZ = oneMinus * -60;
+          hudZ = oneMinus * 35;
+          deckScale = baseScale;
         } else {
-          deckRx = oneMinus * 20;
-          deckRy = oneMinus * -24;
-          deckRz = oneMinus * 2;
-          bpZ = oneMinus * -125;
-          hudZ = oneMinus * 85;
-          deckScale = 0.92 + (1 - oneMinus) * (baseScale - 0.92);
+          deckRx = oneMinus * 14;
+          deckRy = oneMinus * -16;
+          deckRz = 0;
+          bpZ = oneMinus * -90;
+          hudZ = oneMinus * 55;
+          deckScale = baseScale;
         }
-        bpOpacity = oneMinus * 0.95;
-        mediaZ = oneMinus * 12;
+        bpOpacity = oneMinus * 0.70;
+        mediaZ = oneMinus * 10;
         tExpand = 0;
 
-        // Cabezal y pie ocultos durante la aproximación para evitar quedar tapados por la barra superior
+        // Cabezal y pie ocultos durante la aproximación para no quedar tapados por la barra superior
         headOp = 0;
         footOp = 0;
 
       } else if (isPinned) {
-        // TRAMO FIJADO: El recuadro queda AUTOMÁTICAMENTE CENTRADO y plano (0deg) sin desplazarse ni acomodarse después
+        // TRAMO FIJADO: En el momento exacto en que la pantalla se fija, el recuadro YA ESTÁ CENTRADO (deckTy = 0)
+        // y completamente plano (0deg), sin desplazarse hacia abajo ni reacomodarse después
         deckRx = 0;
         deckRy = 0;
         deckRz = 0;
@@ -2775,7 +2778,7 @@
         hudZ = 0;
         mediaZ = 0;
 
-        // Cabezal y pie aparecen limpiamente sin saltos de traslación
+        // Cabezal y pie aparecen suavemente sin saltos
         headOp = smooth(range(p, 0.00, 0.08));
         footOp = smooth(range(p, 0.02, 0.10));
 
@@ -2864,8 +2867,9 @@
       }
 
       if (this.deck) {
-        // deckTy es estrictamente 0: el recuadro está centrado automáticamente sin desplazamientos residuales
-        this.deck.style.setProperty("--deck-ty", "0px");
+        // En aproximación el recuadro asoma elevado (-vh * 0.22) para verse antes mientras el fondo sube; al fijar la pantalla (entryProgress=1) llega con precisión a 0px
+        const deckTy = isApproaching ? (-(1 - smooth(entryProgress)) * (this.isPortrait ? (vh * 0.22) : (vh * 0.10))) : 0;
+        this.deck.style.setProperty("--deck-ty", `${deckTy.toFixed(1)}px`);
         this.deck.style.setProperty("--deck-rx", `${deckRx.toFixed(2)}deg`);
         this.deck.style.setProperty("--deck-ry", `${deckRy.toFixed(2)}deg`);
         this.deck.style.setProperty("--deck-rz", `${deckRz.toFixed(2)}deg`);
