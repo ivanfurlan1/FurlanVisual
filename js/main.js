@@ -1633,16 +1633,13 @@
         const ptrY = (!isMob && finePointer && !reduce) ? normMy * 6 * (1 - outro) : 0;
 
         // Desplazamiento adaptativo en vertical / móvil:
-        // Eleva suavemente el escenario y el telón para que aparezcan antes al terminar la sección anterior,
-        // permitiendo que el fondo oscuro se expanda y llene la pantalla sin vacíos
+        // En la aproximación (entryProgress < 1), eleva suavemente el telón y escenario para anticipar la llegada sin hueco negro.
+        // Una vez fijada la sección (p >= 0), el recuadro y el título permanecen estrictamente fijos en el centro de la pantalla.
         const mobEntryShiftY = isMob ? (-(1 - smooth(entryProgress)) * (vh * 0.28)) : 0;
-        const mobActiveShiftY = isMob ? (- (toLeft + toRight) * (vh * 0.085)) : 0;
 
-        const stageTx = (-toLeft * maxShiftX) + (toRight * maxShiftX) + ptrX;
-        const stageTy = (isMob
-          ? (mobEntryShiftY + mobActiveShiftY)
-          : ((toLeft * -10) + (toRight * 8))) + ptrY;
-        const stageScale = 0.94 + openT * 0.06 - toLeft * 0.05 + toRight * 0.04;
+        const stageTx = isMob ? 0 : ((-toLeft * maxShiftX) + (toRight * maxShiftX) + ptrX);
+        const stageTy = (isMob ? mobEntryShiftY : ((toLeft * -10) + (toRight * 8))) + ptrY;
+        const stageScale = isMob ? (0.94 + openT * 0.06) : (0.94 + openT * 0.06 - toLeft * 0.05 + toRight * 0.04);
         const stageRy = isMob ? 0 : (toLeft * 4.2 - toRight * 4.2 + (finePointer && !reduce ? normMx * 1.6 : 0));
 
         st.setProperty("--kseq-tx", `${stageTx.toFixed(1)}px`);
@@ -1663,6 +1660,7 @@
         st.setProperty("--kseq-inner-hud", (smooth(range(p, 0.18, 0.28)) * (1 - outro)).toFixed(3));
 
         // 5. Paneles editoriales en contrapunto (Acto I a la derecha, Acto II a la izquierda)
+        // En vertical aparecen directamente debajo del recuadro de forma estable y bien emplazada, sin derivas verticales
         if (this.kPanel1) {
           const t1 = (p - 0.21) / (0.54 - 0.21);
           if (t1 <= 0 || t1 >= 1) {
@@ -1670,12 +1668,11 @@
             this.kPanel1.style.visibility = "hidden";
           } else {
             const o1 = smooth(Math.min(range(t1, 0, 0.22), 1 - range(t1, 0.78, 1)));
-            const drift1 = (0.5 - t1) * (isMob ? 14 : 36);
             this.kPanel1.style.visibility = "visible";
             this.kPanel1.style.opacity = o1.toFixed(3);
             this.kPanel1.style.transform = isMob
-              ? `translate3d(0, ${drift1.toFixed(1)}px, 0)`
-              : `translate3d(0, calc(-50% + ${drift1.toFixed(1)}px), 0)`;
+              ? "translate3d(0, 0, 0)"
+              : `translate3d(0, calc(-50% + ${((0.5 - t1) * 36).toFixed(1)}px), 0)`;
             if (this.kCota1) this.kCota1.style.transform = `scaleX(${clamp(t1 * 1.25).toFixed(3)})`;
           }
         }
@@ -1687,12 +1684,11 @@
             this.kPanel2.style.visibility = "hidden";
           } else {
             const o2 = smooth(Math.min(range(t2, 0, 0.22), 1 - range(t2, 0.78, 1)));
-            const drift2 = (0.5 - t2) * (isMob ? 14 : 36);
             this.kPanel2.style.visibility = "visible";
             this.kPanel2.style.opacity = o2.toFixed(3);
             this.kPanel2.style.transform = isMob
-              ? `translate3d(0, ${drift2.toFixed(1)}px, 0)`
-              : `translate3d(0, calc(-50% + ${drift2.toFixed(1)}px), 0)`;
+              ? "translate3d(0, 0, 0)"
+              : `translate3d(0, calc(-50% + ${((0.5 - t2) * 36).toFixed(1)}px), 0)`;
             if (this.kCota2) this.kCota2.style.transform = `scaleX(${clamp(t2 * 1.25).toFixed(3)})`;
           }
         }
