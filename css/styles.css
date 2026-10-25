@@ -3800,6 +3800,9 @@ body.is-ready .hero__line > span { transform: none; }
   display: block;
   object-fit: cover;
   border-radius: 1px;
+  filter: blur(var(--choreo-canvas-blur, 0px)) brightness(var(--choreo-canvas-bright, 100%));
+  will-change: filter;
+  transition: filter 0.18s ease;
 }
 
 .choreo__cinema-glow {
@@ -3807,7 +3810,9 @@ body.is-ready .hero__line > span { transform: none; }
   inset: -1px;
   border-radius: 2px;
   box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
+  background: rgba(7, 7, 6, var(--choreo-dim-op, 0));
   pointer-events: none;
+  transition: background 0.18s ease;
 }
 
 /* Destello cinemático anamórfico en transición 3D de salida */
@@ -4133,6 +4138,101 @@ body.is-ready .hero__line > span { transform: none; }
   z-index: 25;
 }
 
+/* Inset cinematográfico central: Segundo clip / plano secuencia en detalle */
+.choreo__inset {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(var(--choreo-inset-scale, 0.94));
+  opacity: var(--choreo-inset-op, 0);
+  pointer-events: var(--choreo-inset-pe, none);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(760px, 62vw);
+  max-width: calc(100% - 40px);
+  will-change: transform, opacity;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.choreo__inset-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid rgba(236, 232, 225, 0.26);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.92),
+    0 0 45px rgba(0, 0, 0, 0.65),
+    0 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
+.choreo__inset-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* Sutil viñeta interna que suaviza los bordes del clip central con máxima elegancia */
+.choreo__inset-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.55);
+  border-radius: inherit;
+}
+
+/* Cabezal HUD técnico sobre el recuadro central */
+.choreo__inset-hud {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--sans);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bone);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.choreo__inset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: rgba(13, 13, 12, 0.72);
+  border: 1px solid rgba(236, 232, 225, 0.20);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.choreo__inset-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--oxide);
+  box-shadow: 0 0 6px var(--oxide);
+}
+
+.choreo__inset-meta {
+  padding: 3px 8px;
+  background: rgba(13, 13, 12, 0.72);
+  border: 1px solid rgba(236, 232, 225, 0.20);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--stone);
+}
+
 /* Pie de control: regla milimétrica Leica */
 .choreo__footer {
   display: flex;
@@ -4313,6 +4413,21 @@ body.is-ready .hero__line > span { transform: none; }
     margin: 0;
     width: var(--deck-w, 320px);
     height: var(--deck-h, 280px);
+  }
+
+  .choreo__inset {
+    width: min(340px, 86vw);
+  }
+
+  .choreo__inset-frame {
+    aspect-ratio: 8 / 7;
+  }
+
+  .choreo__inset-hud {
+    top: 8px;
+    left: 10px;
+    right: 10px;
+    font-size: 8.5px;
   }
 
   .choreo__footer {

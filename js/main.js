@@ -2254,6 +2254,18 @@
       this.outroCard = $("[data-choreo-outro]", el);
       this.outroGleamOp = 0;
 
+      this.insetEl = $("[data-choreo-inset]", el);
+      this.insetFrame = $("[data-choreo-inset-frame]", el);
+      this.insetCanvas = $("[data-choreo-inset-canvas]", el);
+      this.insetCtx = this.insetCanvas ? this.insetCanvas.getContext("2d", { alpha: false }) : null;
+      this.insetLabel = $("[data-choreo-inset-label]", el);
+      this.insetMeta = $("[data-choreo-inset-meta]", el);
+      this.insetSrc = el.dataset.insetSrc || null;
+      this.insetCount = +el.dataset.insetCount || this.count;
+      this.insetFrames = null;
+      this.lastDrawnInsetImg = null;
+      this.lastInsetCur = -1;
+
       this.cur = 0;
       this.lastCur = -1;
       this.lastAct = -1;
@@ -2431,6 +2443,18 @@
         }
       });
 
+      if (this.insetCanvas) {
+        const rect = this.insetFrame ? this.insetFrame.getBoundingClientRect() : null;
+        const iw = rect && rect.width ? rect.width : (this.isPortrait ? 320 : 720);
+        const ih = rect && rect.height ? rect.height : (this.isPortrait ? 280 : 405);
+        const inCw = Math.round(iw * dpr);
+        const inCh = Math.round(ih * dpr);
+        if (this.insetCanvas.width !== inCw || this.insetCanvas.height !== inCh) {
+          this.insetCanvas.width = inCw;
+          this.insetCanvas.height = inCh;
+        }
+      }
+
       // El stage-box está centrado en el centro geométrico de la pantalla (50% / 50%)
       this.expandShiftY = 0;
 
@@ -2480,6 +2504,14 @@
       ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cw, ch);
     }
 
+    getInsetFrame(frameIdx) {
+      if (this.insetFrames && this.insetFrames.length) {
+        const f = Math.round(clamp(frameIdx, 0, this.insetCount - 1));
+        if (this.insetFrames[f] && this.insetFrames[f].naturalWidth) return this.insetFrames[f];
+      }
+      return this.getChoreoFrame(frameIdx);
+    }
+
     drawVideo(pos) {
       if (!this.canvas || !this.ctx) return;
       const img = this.getChoreoFrame(pos);
@@ -2487,6 +2519,15 @@
       if (this.lastDrawnImg === img) return;
       this.drawImageCover(this.ctx, img, this.canvas.width, this.canvas.height);
       this.lastDrawnImg = img;
+    }
+
+    drawInsetVideo(pos) {
+      if (!this.insetCanvas || !this.insetCtx) return;
+      const img = this.getInsetFrame(pos);
+      if (!img || !img.naturalWidth) return;
+      if (this.lastDrawnInsetImg === img && !this.dirty) return;
+      this.drawImageCover(this.insetCtx, img, this.insetCanvas.width, this.insetCanvas.height);
+      this.lastDrawnInsetImg = img;
     }
 
     drawBlueprint(p) {
@@ -2741,27 +2782,26 @@
         // Expansión continua a pantalla completa:
         // En p <= 0.20: recuadro centrado en tamaño base.
         // En p de 0.20 a 0.40: se agranda progresivamente hasta cubrir toda la pantalla.
-        // En p >= 0.40: queda como fondo de pantalla de toda la pantalla durante el resto del vuelo.
         tExpand = smooth(range(p, 0.20, 0.40));
         deckScale = baseScale + tExpand * (fullScale - baseScale);
 
         if (p <= 0.20) {
           activeAct = 1;
           phaseTxt = "Acto I · Vuelo Estabilizado";
-        } else if (p < 0.40) {
+        } else if (p < 0.44) {
           activeAct = 2;
           phaseTxt = "Acto II · Expansión Inmersiva";
-        } else if (p <= 0.85) {
-          activeAct = 2;
-          phaseTxt = "Acto II · Vuelo a Pantalla Completa";
-        } else {
+        } else if (p <= 0.78) {
           activeAct = 3;
-          phaseTxt = "Acto III · Telemetría y Cierre de Vuelo";
+          phaseTxt = "Acto III · Secuencia Focal en Detalle";
+        } else {
+          activeAct = 4;
+          phaseTxt = "Acto IV · Telemetría y Cierre de Vuelo";
         }
 
       } else {
         // SALIDA: El video se mantiene en pantalla completa como fondo continuo y transiciona suavemente hacia la siguiente obra
-        activeAct = 4;
+        activeAct = 5;
         phaseTxt = "Descenso · Siguiente Obra";
         tExpand = 1;
         deckScale = fullScale;
@@ -2772,6 +2812,25 @@
         const tExit = smooth(exitProgress);
         exitGlare = tExit * 0.45;
       }
+
+      // Capa oscura y difuminado cinemático de fondo (Acto II / Clímax de zoom):
+      let tDim = 0;
+      let insetOp = 0;
+      let insetScale = 0.94;
+      if (isPinned) {
+        tDim = smooth(range(p, 0.38, 0.48));
+        const tInsetIn = smooth(range(p, 0.44, 0.54));
+        const tInsetOut = smooth(range(p, 0.78, 0.88));
+        insetOp = tInsetIn * (1 - tInsetOut);
+        insetScale = 0.94 + tInsetIn * 0.06 - tInsetOut * 0.04;
+      } else if (isExiting) {
+        tDim = 1;
+        insetOp = 0;
+        insetScale = 0.90;
+      }
+      const canvasBlur = tDim * 14;
+      const canvasBright = 100 - tDim * 45;
+      const dimOp = tDim * 0.65;
 
       // Parallax de raton sutil atenuado al estar a pantalla completa
       if (!reduce && activeAct !== 1) {
@@ -2807,6 +2866,15 @@
         this.deck.style.setProperty("--choreo-shadow-op", frameShadowOp.toFixed(3));
         this.deck.style.setProperty("--choreo-radius", `${frameRadius.toFixed(1)}px`);
         this.deck.style.setProperty("--choreo-hud-op", hudOp.toFixed(3));
+        this.deck.style.setProperty("--choreo-canvas-blur", `${canvasBlur.toFixed(1)}px`);
+        this.deck.style.setProperty("--choreo-canvas-bright", `${canvasBright.toFixed(0)}%`);
+        this.deck.style.setProperty("--choreo-dim-op", dimOp.toFixed(3));
+      }
+
+      if (this.insetEl) {
+        this.insetEl.style.setProperty("--choreo-inset-op", insetOp.toFixed(3));
+        this.insetEl.style.setProperty("--choreo-inset-scale", insetScale.toFixed(3));
+        this.insetEl.style.setProperty("--choreo-inset-pe", insetOp > 0.05 ? "auto" : "none");
       }
 
       if (activeAct !== this.lastAct) {
@@ -2904,6 +2972,9 @@
       if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
         this.drawVideo(this.cur);
         this.drawBlueprint(effectiveP);
+        if (insetOp > 0.01) {
+          this.drawInsetVideo(this.cur);
+        }
         this.lastCur = this.cur;
         this.dirty = false;
       }
