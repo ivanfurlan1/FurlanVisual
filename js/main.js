@@ -1159,16 +1159,16 @@
       const isFullscreen = this.isFullscreen;
       const y = scrollY();
 
-      if (!this.set && viewportEntry > 0) {
-        this.load();
-      }
-
       // Rango de evaluación extendido:
       // Permite que la secuencia empiece a reproducirse y a despertar desde el primer píxel en que asoma
       // por debajo de la pantalla (viewportEntry > 0), evitando cualquier vacío en negro o arranque tardío.
       const rawP = (y - this.top) / this.len;
       const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
       const st = this.stage.style;
+
+      if (!this.set && viewportEntry > 0) {
+        this.load();
+      }
 
       // Fuera de pantalla: no trabajar.
       if (y + vh < this.top - vh || y > this.top + this.len + vh) {
