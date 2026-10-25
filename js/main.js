@@ -609,12 +609,18 @@
       const n = this.count, seen = new Uint8Array(n), out = [];
       // Paso 1: Fotograma inicial y final
       out.push(0); seen[0] = 1;
-      // Paso 2: Cobertura total de toda la escena cada 3 frames (carga rápida y scrub instantáneo)
-      for (let i = 3; i < n; i += 3) {
+      // Para secuencias largas (>250 fotogramas como Greenville y Anacleto),
+      // el paso inicial es cada 6 para garantizar cobertura instantánea sin saturar la red
+      const step1 = n > 250 ? 6 : 3;
+      for (let i = step1; i < n; i += step1) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      // Paso 3: Resto de fotogramas para máxima densidad y fluidez
+      // Paso 2: Cobertura intermedia cada 3 frames
+      for (let i = 3; i < n; i += 3) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
+      }
+      // Paso 3: Resto de fotogramas para máxima fluidez a 60fps
       for (let i = 1; i < n; i++) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
@@ -627,7 +633,8 @@
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const first = Math.min(45, Math.max(12, Math.ceil(this.count / 3)));
+      const step1 = this.count > 250 ? 6 : 3;
+      const first = Math.min(50, Math.ceil(this.count / step1));
       let qi = 0, done = 0;
       const parallel = 4;
 
@@ -1318,8 +1325,9 @@
         const dtSec = Math.min(dt || 0.016, 0.04);
         const inActiveZone = rawP >= 0 && rawP < 1.0;
 
-        // Auto-reproducción suave y continua dentro del tramo fijado
-        if (inActiveZone && !this.autoPlayPaused) {
+        const hasMinFrames = this.frames && (this.frames[0] || this.nearest(0));
+        // Auto-reproducción suave y continua dentro del tramo fijado (espera a tener fotogramas listos)
+        if (inActiveZone && !this.autoPlayPaused && hasMinFrames) {
           // Ralentización cinematográfica suave hacia el final de la secuencia (ease-out):
           let speedFactor = 1.0;
           const isAnacleto = this.el.id === "film-04";
@@ -2920,7 +2928,7 @@
 
   function tickLoader(now) {
     if (ready) return;
-    const minT = reduce ? 0 : 2800;
+    const minT = reduce ? 0 : 3400;
     const timeCap = clamp((now - tStart) / minT);
     const goal = Math.min(loadTarget, reduce ? 1 : timeCap);
     loadShown += (goal - loadShown) * 0.08;
@@ -2946,12 +2954,20 @@
   }
 
   if (sequences.length) {
-    sequences[0].load(undefined, (p) => { loadTarget = Math.max(loadTarget, p); });
+    let p0 = 0, p1 = 0;
+    const updateBoth = () => { loadTarget = Math.max(loadTarget, (p0 + p1) * 0.5); };
+    sequences[0].load(undefined, (p) => { p0 = p; updateBoth(); });
 
-    // Precarga temprana encadenada: mientras el usuario contempla la portada, Film 02 se precarga en silencio
+    // Cartografía de Vuelo (#trazado) se precarga durante la pantalla de carga inicial
+    if (sequences[1]) {
+      sequences[1].load(undefined, (p) => { p1 = p; updateBoth(); });
+    }
+
+    // Precarga anticipada de Anacleto (Obra IV) en segundo plano para que esté lista al llegar
     setTimeout(() => {
-      if (sequences[1] && !sequences[1].set) sequences[1].load();
-    }, 1200);
+      const anacleto = sequences.find((s) => s.el && (s.el.id === "film-04" || (s.src && s.src.includes("anacleto"))));
+      if (anacleto && !anacleto.set) anacleto.load();
+    }, 1500);
 
     const seqLoader = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
