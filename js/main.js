@@ -36,13 +36,25 @@
     });
     lenis.stop();
   }
-  const scrollY = () => (lenis ? lenis.scroll : window.scrollY);
+  const scrollContainer = $("#top");
+  const isVerticalScroller = () => vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
+
+  const scrollY = () => {
+    if (lenis) return lenis.scroll;
+    if (scrollContainer && isVerticalScroller()) return scrollContainer.scrollTop;
+    return window.scrollY;
+  };
 
   function scrollToTarget(target, opts = {}) {
     const el = typeof target === "string" ? $(target) : target;
     const y = typeof target === "number" ? target : (el ? el.getBoundingClientRect().top + scrollY() : 0);
-    if (lenis) lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
-    else window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
+    if (lenis) {
+      lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
+    } else if (scrollContainer && isVerticalScroller()) {
+      scrollContainer.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
+    } else {
+      window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
+    }
   }
 
 
@@ -1147,6 +1159,10 @@
       const isFullscreen = this.isFullscreen;
       const y = scrollY();
 
+      if (!this.set && viewportEntry > 0) {
+        this.load();
+      }
+
       // Rango de evaluación extendido:
       // Permite que la secuencia empiece a reproducirse y a despertar desde el primer píxel en que asoma
       // por debajo de la pantalla (viewportEntry > 0), evitando cualquier vacío en negro o arranque tardío.
@@ -1361,8 +1377,10 @@
               }
             }
           } else {
-            if (window.scrollY < this.top + this.len) {
-              window.scrollBy(0, autoDy);
+            const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
+            const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
+            if (currentY < this.top + this.len) {
+              scroller.scrollBy(0, autoDy);
             }
           }
         }
@@ -2952,6 +2970,7 @@
       if (anacleto && !anacleto.set) anacleto.load();
     }, 1500);
 
+    const obsRoot = (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
     const seqLoader = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
         if (!en.isIntersecting) return;
@@ -2959,7 +2978,7 @@
         if (s && !s.set) s.load();
         seqLoader.unobserve(en.target);
       });
-    }, { rootMargin: "1600px 0px" });
+    }, { root: obsRoot, rootMargin: "1600px 0px" });
     sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
 
     if (choreoEl) {
