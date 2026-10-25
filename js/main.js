@@ -1368,7 +1368,7 @@
             if (userDiff < -1.5) {
               // El usuario está desplazando deliberadamente hacia atrás (reversa / scroll up):
               // Activar tregua de rebobinado para que el usuario pueda explorar hacia atrás o subir con total libertad
-              this.rewindCooldown = 1.35;
+              this.rewindCooldown = 0.45;
               this.resumeTimer = 0;
 
               const userRevLead = -userDiff;
@@ -1409,7 +1409,7 @@
             } else {
               // Avance continuo normal hacia adelante:
               // Reanudación suave y progresiva con rampa orgánica tras el periodo de gracia
-              this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.55);
+              this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.28);
               const resumeFactor = smooth(this.resumeTimer);
               const effectiveAutoDy = autoDy * resumeFactor;
 
@@ -1434,7 +1434,7 @@
 
             if (scrollDelta < -1.5) {
               // Detección de subida activa en touch / rueda / inercia nativa hacia arriba
-              this.rewindCooldown = 1.35;
+              this.rewindCooldown = 0.45;
               this.resumeTimer = 0;
               this.subpixelAcc = 0;
             } else if (scrollDelta > 2.5) {
@@ -1452,7 +1452,7 @@
               if (isUserTouching) {
                 this.subpixelAcc = 0;
               } else {
-                this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.55);
+                this.resumeTimer = Math.min(1.0, (this.resumeTimer || 0) + dtSec / 0.28);
                 const resumeFactor = smooth(this.resumeTimer);
                 const effectiveAutoDy = autoDy * resumeFactor;
 
