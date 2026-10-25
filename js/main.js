@@ -607,15 +607,15 @@
 
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
-      // Prioridad 1: Fotograma inicial para pintar de inmediato
+      // Paso 1: Fotograma inicial y final
       out.push(0); seen[0] = 1;
-      // Prioridad 2: Fotogramas pares distribuidos (cobertura suave con mitad de peticiones)
-      for (let i = 2; i < n; i += 2) {
+      // Paso 2: Cobertura total de toda la escena cada 3 frames (carga rápida y scrub instantáneo)
+      for (let i = 3; i < n; i += 3) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      // Prioridad 3: Fotogramas impares para completar fluidez cinematográfica
-      for (let i = 1; i < n; i += 2) {
+      // Paso 3: Resto de fotogramas para máxima densidad y fluidez
+      for (let i = 1; i < n; i++) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       return out;
@@ -627,9 +627,9 @@
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const first = Math.min(20, Math.max(8, Math.ceil(this.count / 15)));
+      const first = Math.min(45, Math.max(12, Math.ceil(this.count / 3)));
       let qi = 0, done = 0;
-      const parallel = 2;
+      const parallel = 4;
 
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
@@ -725,13 +725,14 @@
 
       const loadSeq = (slug, targetArr, cardIdx) => {
         const queue = [0];
-        // Peticiones escalonadas: pares primero, luego impares
-        for (let i = 2; i < count; i += 2) queue.push(i);
+        for (let i = 3; i < count; i += 3) queue.push(i);
         if (!queue.includes(count - 1)) queue.push(count - 1);
-        for (let i = 1; i < count; i += 2) queue.push(i);
+        for (let i = 1; i < count; i++) {
+          if (!queue.includes(i)) queue.push(i);
+        }
 
         let qi = 0;
-        const parallel = 2;
+        const parallel = 3;
         const next = () => {
           if (qi >= queue.length) return;
           const idx = queue[qi++];
@@ -2004,12 +2005,14 @@
       this.frames = new Array(this.count);
       const token = ++this.token;
       const queue = [0];
-      for (let i = 2; i < this.count; i += 2) queue.push(i);
+      for (let i = 3; i < this.count; i += 3) queue.push(i);
       if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
-      for (let i = 1; i < this.count; i += 2) queue.push(i);
+      for (let i = 1; i < this.count; i++) {
+        if (!queue.includes(i)) queue.push(i);
+      }
 
       let qi = 0;
-      const parallel = 2;
+      const parallel = 4;
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
         const i = queue[qi++];
@@ -2251,12 +2254,14 @@
       this.frames = new Array(this.count);
       const token = ++this.token;
       const queue = [0];
-      for (let i = 2; i < this.count; i += 2) queue.push(i);
+      for (let i = 3; i < this.count; i += 3) queue.push(i);
       if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
-      for (let i = 1; i < this.count; i += 2) queue.push(i);
+      for (let i = 1; i < this.count; i++) {
+        if (!queue.includes(i)) queue.push(i);
+      }
 
       let qi = 0;
-      const parallel = 2;
+      const parallel = 4;
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
         const i = queue[qi++];
@@ -2950,7 +2955,7 @@
         if (s && !s.set) s.load();
         seqLoader.unobserve(en.target);
       });
-    }, { rootMargin: "250px 0px" });
+    }, { rootMargin: "900px 0px" });
     sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
 
     if (choreoEl) {
@@ -2961,7 +2966,7 @@
             choreoObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: "250px 0px" });
+      }, { rootMargin: "900px 0px" });
       choreoObs.observe(choreoEl);
     }
     if (formatEl) {
@@ -2972,7 +2977,7 @@
             formatObs.unobserve(en.target);
           }
         });
-      }, { rootMargin: "250px 0px" });
+      }, { rootMargin: "900px 0px" });
       formatObs.observe(formatEl);
     }
   } else {
@@ -3740,7 +3745,7 @@
               io.disconnect();
             }
           });
-        }, { rootMargin: "250px 0px" });
+        }, { rootMargin: "800px 0px" });
         io.observe(this.sec);
       }
     }
@@ -3750,11 +3755,11 @@
       const seen = new Uint8Array(n);
       const out = [0];
       seen[0] = 1;
-      for (let i = 2; i < n; i += 2) {
+      for (let i = 3; i < n; i += 3) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      for (let i = 1; i < n; i += 2) {
+      for (let i = 1; i < n; i++) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       return out;
@@ -3769,7 +3774,7 @@
       const queue = this.order();
       let qi = 0;
       let loadedCount = 0;
-      const parallel = 2;
+      const parallel = 3;
 
       const next = () => {
         if (token !== this.token || qi >= queue.length) return;
