@@ -563,7 +563,7 @@
       this.stage.style.setProperty("--th", `${t.th}px`);
 
       if (this.isKinetic) {
-        const isMob = vw <= 900;
+        const isMob = vw <= 900 || (vw / vh < 0.95);
         let kw, kh;
         if (isMob) {
           kw = Math.min(vw * 0.92, 580);
@@ -1182,21 +1182,23 @@
         this.cur = 0;
         this.progress = 0;
         if (this.isKinetic) {
-          const isMob = vw <= 900;
-          st.setProperty("--kseq-clip-x", isMob ? "30%" : "36%");
-          st.setProperty("--kseq-clip-y", "6%");
+          const isMob = vw <= 900 || (vw / vh < 0.95);
+          const initEntryShiftY = isMob ? -vh * 0.28 : 0;
+          st.setProperty("--kseq-clip-x", isMob ? "10%" : "36%");
+          st.setProperty("--kseq-clip-y", isMob ? "3%" : "6%");
           st.setProperty("--kseq-tx", "0px");
-          st.setProperty("--kseq-ty", "0px");
-          st.setProperty("--kseq-scale", "0.94");
+          st.setProperty("--kseq-ty", `${initEntryShiftY.toFixed(1)}px`);
+          st.setProperty("--kseq-curtain-y", `${initEntryShiftY.toFixed(1)}px`);
+          st.setProperty("--kseq-scale", isMob ? "0.96" : "0.94");
           st.setProperty("--kseq-ry", "0deg");
           st.setProperty("--kseq-hud-op", "0");
           st.setProperty("--kseq-inner-hud", "0");
           st.setProperty("--kseq-axis-x", "0px");
-          st.setProperty("--cover-opacity", "0.35");
+          st.setProperty("--cover-opacity", isMob ? "0.18" : "0.35");
           st.setProperty("--frame-opacity", "1");
           st.setProperty("--outro-card-op", "0");
           st.setProperty("--outro-card-pe", "none");
-          this.setVisualFilter(10, 1);
+          this.setVisualFilter(isMob ? 4 : 10, isMob ? 0.35 : 1);
           if (this.kWingL) { this.kWingL.style.opacity = "1"; this.kWingL.style.transform = "translate3d(0,0,0)"; }
           if (this.kWingR) { this.kWingR.style.opacity = "1"; this.kWingR.style.transform = "translate3d(0,0,0)"; }
           if (this.kPanel1) this.kPanel1.style.opacity = "0";
@@ -1258,6 +1260,7 @@
           st.setProperty("--kseq-clip-y", "0%");
           st.setProperty("--kseq-tx", "0px");
           st.setProperty("--kseq-ty", "0px");
+          st.setProperty("--kseq-curtain-y", "0px");
           st.setProperty("--kseq-scale", "1");
           st.setProperty("--kseq-ry", "0deg");
           st.setProperty("--kseq-hud-op", "0");
@@ -1562,30 +1565,38 @@
          y lupa óptica 2.1x en contrapunto.
          ======================================================= */
       if (this.isKinetic) {
-        const isMob = vw <= 900;
+        const isMob = vw <= 900 || (vw / vh < 0.95);
 
-        // 1. Apertura de la hendidura central (-0.06 -> 0.24)
-        const openT = smooth(range(p, -0.06, 0.24));
-        const clipX = ((1 - openT) * (isMob ? 30 : 36)).toFixed(2);
-        const clipY = ((1 - openT) * 6).toFixed(2);
+        // 0. Progreso de aproximación / entrada al viewport
+        // viewportEntry va de 0 (cuando asoma por el borde inferior) a 1 (cuando la sección se fija en top: 0)
+        const entryProgress = clamp((y + vh - this.top) / vh, 0, 1);
+
+        // 1. Apertura de la hendidura central
+        // En móvil abre con mayor generosidad y anticipación para que la imagen se aprecie nítida desde el primer instante
+        const openT = smooth(range(p, isMob ? -0.16 : -0.06, isMob ? 0.18 : 0.24));
+        const baseClipX = isMob ? 10 : 36;
+        const baseClipY = isMob ? 3 : 6;
+        const clipX = ((1 - openT) * baseClipX).toFixed(2);
+        const clipY = ((1 - openT) * baseClipY).toFixed(2);
         st.setProperty("--kseq-clip-x", `${clipX}%`);
         st.setProperty("--kseq-clip-y", `${clipY}%`);
 
         // Revelado cromático y óptico:
-        // Ni bien comienza a reproducirse la secuencia (p > -0.14), empieza de inmediato a desaparecer
-        // el desenfoque y el blanco y negro con una transición corta y ágil
-        const wakeT = smooth(range(p, -0.14, 0.04));
+        // En móvil despierta de forma inmediata al asomar por abajo (p > -0.22)
+        const wakeT = smooth(range(p, isMob ? -0.22 : -0.14, 0.04));
         const outro = smooth(range(prog, 0.88, 1.0));
-        const cover = Math.max((1 - wakeT) * 0.32, outro * 0.38);
-        const blur = Math.max((1 - wakeT) * 10, outro * 8);
-        const gray = 1 - wakeT;
+        const cover = Math.max((1 - wakeT) * (isMob ? 0.18 : 0.32), outro * 0.38);
+        const blur = Math.max((1 - wakeT) * (isMob ? 4 : 10), outro * 8);
+        const gray = (1 - wakeT) * (isMob ? 0.35 : 1.0);
         st.setProperty("--cover-opacity", cover.toFixed(3));
         st.setProperty("--frame-opacity", "1");
         this.setVisualFilter(blur, gray);
 
         // 2. Telón tipográfico monumental partido (se abre hacia los bordes)
-        const wingMove = smooth(range(p, -0.02, 0.25));
-        const wingOp = 1 - smooth(range(p, 0.08, 0.23));
+        // En móvil el texto "Casa Hudson" permanece plenamente legible durante la entrada
+        // y se desplaza con sutil elegancia conforme avanza el film
+        const wingMove = smooth(range(p, isMob ? 0.04 : -0.02, isMob ? 0.28 : 0.25));
+        const wingOp = isMob ? (1 - smooth(range(p, 0.12, 0.26))) : (1 - smooth(range(p, 0.08, 0.23)));
         const wingShiftX = wingMove * (isMob ? vw * 0.24 : vw * 0.22);
         const wingBlur = (wingMove * 6).toFixed(1);
         if (this.kWingL) {
@@ -1601,32 +1612,41 @@
           this.kWingR.style.visibility = wingOp <= 0.005 ? "hidden" : "visible";
         }
 
-        // 3. Coreografía espacial del escenario principal:
-        //    - Acto I (0.22 -> 0.52): viaja hacia el eje izquierdo (libera espacio a la derecha)
-        //    - Acto II (0.54 -> 0.84): cruza el eje hacia la derecha y crece hacia el umbral
-        //    - Cierre (0.84 -> 0.94): regresa al centro para la tarjeta máster 4K
+        // 3. Coreografía espacial del escenario principal y desplazamiento adaptativo de entrada
         const toLeft = smooth(range(p, 0.18, 0.34)) * (1 - smooth(range(p, 0.48, 0.62)));
         const toRight = smooth(range(p, 0.50, 0.65)) * (1 - smooth(range(p, 0.80, 0.91)));
 
         const maxShiftX = isMob ? 0 : vw * 0.145;
         const ptrX = (!isMob && finePointer && !reduce) ? normMx * 8 * (1 - outro) : 0;
         const ptrY = (!isMob && finePointer && !reduce) ? normMy * 6 * (1 - outro) : 0;
+
+        // Desplazamiento adaptativo en vertical / móvil:
+        // Al asomar la sección (entryProgress: 0 -> 1 / p < 0), eleva el escenario y el telón (-vh * 0.28)
+        // para que "Casa Hudson" y la imagen aparezcan inmediatamente al finalizar la sección anterior.
+        // A medida que el usuario desliza hacia abajo, el fondo oscuro va llenando la pantalla y los elementos
+        // descienden suavemente a su posición centrada de lectura sin ningún salto ni vacío.
+        const mobEntryShiftY = isMob ? (-(1 - smooth(entryProgress)) * (vh * 0.28)) : 0;
+        const mobActiveShiftY = isMob ? (- (toLeft + toRight) * (vh * 0.085)) : 0;
+
         const stageTx = (-toLeft * maxShiftX) + (toRight * maxShiftX) + ptrX;
         const stageTy = (isMob
-          ? (- (toLeft + toRight) * (vh * 0.085))
+          ? (mobEntryShiftY + mobActiveShiftY)
           : ((toLeft * -10) + (toRight * 8))) + ptrY;
         const stageScale = 0.94 + openT * 0.06 - toLeft * 0.05 + toRight * 0.04;
         const stageRy = isMob ? 0 : (toLeft * 4.2 - toRight * 4.2 + (finePointer && !reduce ? normMx * 1.6 : 0));
 
         st.setProperty("--kseq-tx", `${stageTx.toFixed(1)}px`);
         st.setProperty("--kseq-ty", `${stageTy.toFixed(1)}px`);
+        st.setProperty("--kseq-curtain-y", `${stageTy.toFixed(1)}px`);
         st.setProperty("--kseq-scale", stageScale.toFixed(4));
         st.setProperty("--kseq-ry", `${stageRy.toFixed(2)}deg`);
         st.setProperty("--kseq-axis-x", `${(stageTx * 0.65).toFixed(1)}px`);
         st.setProperty("--img-scale", "1");
 
         // 4. HUD perimetral e interno
-        const hudOp = smooth(range(p, 0.12, 0.24)) * (1 - smooth(range(p, 0.88, 0.96)));
+        const hudOp = isMob
+          ? (smooth(range(entryProgress, 0.35, 0.92)) * (1 - smooth(range(p, 0.88, 0.96))))
+          : (smooth(range(p, 0.12, 0.24)) * (1 - smooth(range(p, 0.88, 0.96))));
         st.setProperty("--kseq-hud-op", hudOp.toFixed(3));
         st.setProperty("--kseq-hud-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         st.setProperty("--kseq-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
