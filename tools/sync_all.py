@@ -30,7 +30,8 @@ MAPPING = {
     "FINCAS": "fincas",
     "VONHARV": "vonharv",
     "RANDA1": "randa1",
-    "RANDA2": "randa2"
+    "RANDA2": "randa2",
+    "MAXCA": "maxca"
 }
 
 def update_index_html(root: Path, slug: str, count: int, version: str):

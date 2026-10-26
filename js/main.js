@@ -161,6 +161,108 @@
   const quoteMark = $(".quote__mark");
 
   /* ---------------------------------------------------------
+     MOTOR HÍBRIDO DE AUTO-REPRODUCCIÓN Y CONTROL DE SCROLL
+     Reproducción automática continua al fijarse en pantalla completa,
+     con aceleración hacia abajo, frenado inmediato al deslizar hacia arriba
+     y reanudación continua al volver a avanzar.
+     --------------------------------------------------------- */
+  function runHybridScrollEngine({
+    top,
+    len,
+    dt,
+    viewportEntry,
+    rawP,
+    baseDuration,
+    state,
+    hasFrames,
+  }) {
+    if (reduce) return;
+    const dtSec = Math.min(dt || 0.016, 0.04);
+    const isFullyInView = viewportEntry >= 0.975 || rawP >= -0.03;
+    const inActiveZone = isFullyInView && rawP < 1.0;
+
+    if (!inActiveZone || state.autoPlayPaused || !hasFrames) {
+      if (rawP >= 1.0 || viewportEntry < 0.8) {
+        state.autoPlaySuspended = false;
+        state.subpixelAcc = 0;
+      }
+      return;
+    }
+
+    // Desaceleración sutil y elegante en el tramo final (rawP > 0.85)
+    let speedFactor = 1.0;
+    if (rawP > 0.85) {
+      const tDecel = clamp((rawP - 0.85) / (1.0 - 0.85), 0, 1);
+      speedFactor = Math.max(0.60, 1.0 - Math.pow(tDecel, 1.25) * 0.40);
+    }
+
+    const autoSpeed = (len / Math.max(4, baseDuration)) * speedFactor;
+    const autoDy = autoSpeed * dtSec;
+    const y = scrollY();
+
+    if (lenis && !isVerticalScroller()) {
+      const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
+      const userDiff = targetY - y;
+
+      if (userDiff < -1.5) {
+        // El usuario desliza hacia arriba: se frena el automático inmediatamente.
+        state.autoPlaySuspended = true;
+      } else if (userDiff > 2.0) {
+        // El usuario vuelve a deslizar hacia abajo: se reinicia la autoreproducción continua
+        state.autoPlaySuspended = false;
+      }
+
+      if (!state.autoPlaySuspended) {
+        // Avance continuo hacia abajo: suma el impulso del usuario al motor continuo
+        const userForwardLead = Math.max(0, userDiff);
+        const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
+        const totalDy = autoDy + userDy;
+        const nextY = Math.min(top + len, y + totalDy);
+        const remainingLead = Math.max(0, userForwardLead - userDy);
+        lenis.scrollTo(nextY, { immediate: true });
+        if (remainingLead > 0.5) {
+          lenis.targetScroll = nextY + remainingLead;
+        }
+      }
+    } else {
+      // Modo vertical / móvil (#top) o scroll nativo sin Lenis:
+      const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
+      const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
+
+      if (state.lastTrackedY === undefined) state.lastTrackedY = currentY;
+      const scrollDelta = currentY - state.lastTrackedY;
+      state.lastTrackedY = currentY;
+
+      if (scrollDelta < -1.5) {
+        // El usuario desliza hacia arriba: se frena el automático y puede subir libremente a la sección previa
+        state.autoPlaySuspended = true;
+        state.subpixelAcc = 0;
+      } else if (scrollDelta > 2.0) {
+        // El usuario desliza hacia abajo: se reinicia el automático
+        state.autoPlaySuspended = false;
+      }
+
+      if (!state.autoPlaySuspended && currentY < top + len) {
+        if (isUserTouching) {
+          state.subpixelAcc = 0;
+        } else {
+          state.subpixelAcc = (state.subpixelAcc || 0) + autoDy;
+          if (state.subpixelAcc >= 1) {
+            const intStep = Math.floor(state.subpixelAcc);
+            state.subpixelAcc -= intStep;
+            const nextY = Math.min(top + len, currentY + intStep);
+            if (scroller === window) {
+              window.scrollTo(0, nextY);
+            } else {
+              scroller.scrollTop = nextY;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------
      MOTOR DE SECUENCIAS
      Pantalla completa → encuadre de proyección.
      Obra I: nítida con velo. Obras II–IV: nacen del negro,
@@ -1114,22 +1216,22 @@
       if (this.traceYawEl) this.traceYawEl.textContent = `${pad(yawReading, 3)}° E`;
 
       const phaseLabels = [
-        "Fase I · Trazo en el Vacío",
-        "Fase II · Ingreso a la Planta",
-        "Fase III · Recorrido Interior",
-        "Fase IV · Espejo de Agua",
+        "01 · Aproximación exterior",
+        "02 · Acceso y umbral",
+        "03 · Recorrido interior",
+        "04 · Salida al parque",
       ];
       const roomLabels = [
         "Aproximación Exterior",
-        "Umbral & Patio de Luz",
-        "Nave Principal & Galería",
-        "Lámina de Agua · Horizonte",
+        "Ingreso & Acceso Principal",
+        "Espacio Central & Galería",
+        "Salida Exterior & Parque",
       ];
       const planStates = [
-        "En aproximación",
-        "Planta desplegada · 1:100",
-        "Tránsito interior",
-        "Cartografía completa",
+        "Exterior",
+        "Ingreso",
+        "Interior",
+        "Completado",
       ];
       if (this.tracePhasePill && this.tracePhasePill.textContent !== phaseLabels[zoneIdx]) {
         this.tracePhasePill.textContent = phaseLabels[zoneIdx];
@@ -1332,117 +1434,36 @@
       let prog = 0;
 
       if (this.isHybrid) {
-        const dtSec = Math.min(dt || 0.016, 0.04);
         const isAnacleto = this.el.id === "film-04";
         const isHudson = this.el.id === "film-03";
         const isNocturno = this.el.id === "nocturno";
         const isTrace = this.el.id === "trazado" || this.isTrace;
 
-        // Umbral de activación: ni bien la sección ocupa la pantalla completa
-        // Para Anacleto, Casa Hudson, Nocturno y secuencias híbridas:
-        // estar al 97.5% en pantalla (viewportEntry >= 0.975 o rawP >= -0.03)
-        // garantiza el arranque inmediato y espontáneo desde el primer instante sin tener que dar "un poquitito más"
-        const isFullyInView = viewportEntry >= 0.975 || rawP >= -0.03;
-        const inActiveZone = isFullyInView && rawP < 1.0;
-
-        const hasMinFrames = this.frames && (this.frames[0] || this.nearest(0));
-        // Auto-reproducción suave y continua dentro del tramo fijado (espera a tener fotogramas listos)
-        if (inActiveZone && !this.autoPlayPaused && hasMinFrames) {
-          // Ralentización cinematográfica suave hacia el final de la secuencia (ease-out):
-          let speedFactor = 1.0;
-          if (isAnacleto || isHudson || isNocturno) {
-            // Desaceleración sutil y elegante en el tramo final (rawP > 0.85)
-            if (rawP > 0.85) {
-              const tDecel = clamp((rawP - 0.85) / (1.0 - 0.85), 0, 1);
-              speedFactor = Math.max(0.60, 1.0 - Math.pow(tDecel, 1.25) * 0.40);
-            }
-          } else if (rawP > 0.74) {
-            // Para Cartografía de Vuelo (#trazado): curva suave natural
-            const tDecel = clamp((rawP - 0.74) / (1.0 - 0.74), 0, 1);
-            speedFactor = Math.max(0.48, 1.0 - Math.pow(tDecel, 1.35) * 0.52);
-          }
-
-          // Duración calibrada para reproducción automática:
-          // Ritmo fluido, natural y equilibrado para cada metraje:
-          const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
-          const naturalSec = (this.count / (this.fps || 24));
-          let baseDuration;
-          if (isAnacleto) {
-            baseDuration = 10.2; // Anacleto (~10.2s)
-          } else if (isHudson) {
-            baseDuration = 11.2; // Casa Hudson (~11.2s): cadencia cinematográfica noble
-          } else if (isNocturno) {
-            baseDuration = 9.6;  // Perspectiva Pantalla Completa (~9.6s): ritmo envolvente continuo
-          } else if (isTrace) {
-            baseDuration = 12.5; // El Plano / Cartografía (~12.5s)
-          } else {
-            baseDuration = naturalSec * spanProg;
-          }
-          const autoSpeed = (this.len / Math.max(4, baseDuration)) * speedFactor;
-          const autoDy = autoSpeed * dtSec;
-
-          if (lenis && !isVerticalScroller()) {
-            const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
-            const userDiff = targetY - y;
-
-            if (userDiff < -1.5) {
-              // El usuario desliza hacia arriba: se frena el automático inmediatamente.
-              // Lenis procesa el retroceso natural sin límites, permitiendo salir hacia arriba sin trabas.
-              this.autoPlaySuspended = true;
-            } else if (userDiff > 2.0) {
-              // El usuario vuelve a deslizar hacia abajo: se reinicia la autoreproducción continua
-              this.autoPlaySuspended = false;
-            }
-
-            if (!this.autoPlaySuspended) {
-              // Avance continuo hacia abajo: suma el impulso del usuario al motor continuo
-              const userForwardLead = Math.max(0, userDiff);
-              const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
-              const totalDy = autoDy + userDy;
-              const nextY = Math.min(this.top + this.len, y + totalDy);
-              const remainingLead = Math.max(0, userForwardLead - userDy);
-              lenis.scrollTo(nextY, { immediate: true });
-              if (remainingLead > 0.5) {
-                lenis.targetScroll = nextY + remainingLead;
-              }
-            }
-          } else {
-            // Modo vertical / móvil (#top) o scroll nativo sin Lenis:
-            const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
-            const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
-
-            if (this.lastTrackedY === undefined) this.lastTrackedY = currentY;
-            const scrollDelta = currentY - this.lastTrackedY;
-            this.lastTrackedY = currentY;
-
-            if (scrollDelta < -1.5) {
-              // El usuario desliza hacia arriba: se frena el automático y puede subir libremente a la sección previa
-              this.autoPlaySuspended = true;
-              this.subpixelAcc = 0;
-            } else if (scrollDelta > 2.0) {
-              // El usuario desliza hacia abajo: se reinicia el automático
-              this.autoPlaySuspended = false;
-            }
-
-            if (!this.autoPlaySuspended && currentY < this.top + this.len) {
-              if (isUserTouching) {
-                this.subpixelAcc = 0;
-              } else {
-                this.subpixelAcc = (this.subpixelAcc || 0) + autoDy;
-                if (this.subpixelAcc >= 1) {
-                  const intStep = Math.floor(this.subpixelAcc);
-                  this.subpixelAcc -= intStep;
-                  const nextY = Math.min(this.top + this.len, currentY + intStep);
-                  if (scroller === window) {
-                    window.scrollTo(0, nextY);
-                  } else {
-                    scroller.scrollTop = nextY;
-                  }
-                }
-              }
-            }
-          }
+        const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
+        const naturalSec = (this.count / (this.fps || 24));
+        let baseDuration;
+        if (isAnacleto) {
+          baseDuration = 10.2; // Anacleto (~10.2s)
+        } else if (isHudson) {
+          baseDuration = 11.2; // Casa Hudson (~11.2s): cadencia cinematográfica noble
+        } else if (isNocturno) {
+          baseDuration = 9.6;  // Perspectiva Pantalla Completa (~9.6s): ritmo envolvente continuo
+        } else if (isTrace) {
+          baseDuration = 12.5; // El Plano / Cartografía (~12.5s)
+        } else {
+          baseDuration = naturalSec * spanProg;
         }
+
+        runHybridScrollEngine({
+          top: this.top,
+          len: this.len,
+          dt,
+          viewportEntry,
+          rawP,
+          baseDuration,
+          state: this,
+          hasFrames: this.frames && (this.frames[0] || this.nearest(0)),
+        });
 
         // Continuidad cinemática de autor:
         // 1. Aproximación con scroll (pPlayStart -> 0.0): la escena despierta y se mueve con el deslizado antes de fijarse.
@@ -2021,7 +2042,7 @@
 
   /* ---------------------------------------------------------
      FORMATO DUAL CENTRADO (16:9 ↔ 9:16)
-     Metamorfosis matemática exacta desde 16:9 a 9:16 en el centro
+     Metamorfosis 3D de Hardware: Monitor de Cine 16:9 ↔ Smartphone 9:16
      --------------------------------------------------------- */
   class FormatShowcaseSequence {
     constructor(el) {
@@ -2033,21 +2054,47 @@
 
       this.stage = $(".format-showcase__stage", el);
       this.box = $(".format-showcase__box", el);
+      this.device = $("[data-format-device]", el);
       this.player = $(".format-showcase__player", el);
       this.canvas = $(".format-showcase__canvas", el);
       this.ctx = this.canvas.getContext("2d", { alpha: false });
 
-      this.badgeRatio = $("[data-format-ratio]", el);
-      this.badgeStatus = $("[data-format-status]", el);
+      this.specEl = $("[data-format-spec]", el);
       this.resEl = $("[data-format-res]", el);
       this.fill = $("[data-format-fill]", el);
       this.frEl = $("[data-format-fr]", el);
+      this.lblL = $("[data-format-lbl-l]", el);
+      this.lblR = $("[data-format-lbl-r]", el);
 
       this.frames = [];
       this.cur = 0;
       this.lastCur = -1;
       this.dirty = true;
       this.token = 0;
+
+      this.autoPlayPaused = false;
+      this.autoPlaySuspended = false;
+      this.lastTrackedY = undefined;
+      this.subpixelAcc = 0;
+
+      // Parallax táctil / puntero 3D suave sobre el dispositivo
+      this.ptrTargetX = 0;
+      this.ptrTargetY = 0;
+      this.ptrX = 0;
+      this.ptrY = 0;
+
+      if (this.stage && !reduce) {
+        this.stage.addEventListener("pointermove", (e) => {
+          const r = this.stage.getBoundingClientRect();
+          if (!r.width || !r.height) return;
+          this.ptrTargetX = clamp(((e.clientX - r.left) / r.width - 0.5) * 2, -1, 1);
+          this.ptrTargetY = clamp(((e.clientY - r.top) / r.height - 0.5) * 2, -1, 1);
+        }, { passive: true });
+        this.stage.addEventListener("pointerleave", () => {
+          this.ptrTargetX = 0;
+          this.ptrTargetY = 0;
+        }, { passive: true });
+      }
 
       this.measure();
     }
@@ -2063,6 +2110,115 @@
         this.canvas.height = ch;
       }
       this.dirty = true;
+      this.syncGeometry(clamp((scrollY() - this.top) / this.len, 0, 1));
+    }
+
+    syncGeometry(p) {
+      // Acto 1 (0.00 - 0.10): Monitor 16:9 fijo y calmo para contemplar el máster de cine
+      // Acto 2 (0.10 - 0.84): Metamorfosis 3D viva y claramente perceptible con giro en perspectiva
+      // Acto 3 (0.84 - 1.00): Smartphone 9:16 vertical nativo aplomado y calmo
+      const morphT = smooth(range(p, 0.10, 0.84));
+      const ratioH = 16 / 9;
+      const ratioV = 9 / 16;
+      const curRatio = ratioH + (ratioV - ratioH) * morphT;
+
+      const isMobile = vw < 640;
+      const isTablet = vw < 1024;
+      const maxBoxW = Math.min(vw * (isMobile ? 0.88 : (isTablet ? 0.82 : 0.72)), 1020);
+      const maxBoxH = Math.min(vh * (isMobile ? 0.46 : (isTablet ? 0.48 : 0.50)), 540);
+
+      const standFold = smooth(range(morphT, 0.05, 0.48));
+      const standSpace = (1 - standFold) * (isMobile ? 24 : 34);
+      const availH = maxBoxH - standSpace * 0.55;
+
+      const wForMaxH = availH * curRatio;
+      let fw, fh;
+      if (wForMaxH <= maxBoxW) {
+        fh = availH;
+        fw = wForMaxH;
+      } else {
+        fw = maxBoxW;
+        fh = fw / curRatio;
+      }
+
+      fw = Math.round(fw);
+      fh = Math.round(fh);
+
+      if (this.box) {
+        this.box.style.setProperty("--player-w", `${fw}px`);
+        this.box.style.setProperty("--player-h", `${fh}px`);
+        this.box.style.setProperty("--stand-space", `${standSpace.toFixed(1)}px`);
+        if (!isMobile) {
+          const ghH = Math.min(availH, maxBoxW / ratioH);
+          const ghW = ghH * ratioH;
+          const gvH = maxBoxH;
+          const gvW = gvH * ratioV;
+          const guideOp = Math.sin(morphT * Math.PI) * 0.85;
+          this.box.style.setProperty("--guide-h-w", `${Math.round(ghW)}px`);
+          this.box.style.setProperty("--guide-h-h", `${Math.round(ghH)}px`);
+          this.box.style.setProperty("--guide-v-w", `${Math.round(gvW)}px`);
+          this.box.style.setProperty("--guide-v-h", `${Math.round(gvH)}px`);
+          this.box.style.setProperty("--guide-op", guideOp.toFixed(3));
+        }
+      }
+
+      this.player.style.setProperty("--player-w", `${fw}px`);
+      this.player.style.setProperty("--player-h", `${fh}px`);
+
+      if (this.device) {
+        const monitorOp = 1 - smooth(range(morphT, 0.08, 0.42));
+        const phoneOp = smooth(range(morphT, 0.48, 0.88));
+        const islandScale = 0.5 + 0.5 * smooth(range(morphT, 0.45, 0.85));
+        const btnExtrude = smooth(range(morphT, 0.58, 0.92));
+        const cornerOp = 1 - phoneOp * 0.82;
+
+        const devRadius = (isMobile ? 6 : 8) + ((isMobile ? 30 : 40) - (isMobile ? 6 : 8)) * smooth(range(morphT, 0.12, 0.90));
+        const screenRadius = (isMobile ? 2.5 : 3) + ((isMobile ? 23 : 31) - (isMobile ? 2.5 : 3)) * smooth(range(morphT, 0.12, 0.90));
+
+        const bezelTop = (isMobile ? 5 : 6) + ((isMobile ? 7 : 9) - (isMobile ? 5 : 6)) * morphT;
+        const bezelSide = (isMobile ? 5 : 6) + ((isMobile ? 7 : 9) - (isMobile ? 5 : 6)) * morphT;
+        const bezelBot = (isMobile ? 18 : 22) + ((isMobile ? 7 : 9) - (isMobile ? 18 : 22)) * smooth(range(morphT, 0.08, 0.58));
+
+        // Coreografía 3D visible, limpia y aplomada sobre eje vertical
+        // Empieza 100% frontal en monitor, gira claramente en perspectiva 3D (-14.5°) durante la metamorfosis,
+        // y se asienta 100% frontal en smartphone vertical. Sin balanceos raros en Z.
+        const arc = Math.sin(morphT * Math.PI);
+        const rx = reduce ? 0 : (arc * 3.6 - this.ptrY * 2.8);
+        const ry = reduce ? 0 : (arc * -14.5 + this.ptrX * 3.8);
+        const tz = reduce ? 0 : (arc * 32);
+
+        const rimX = clamp(-ry * 0.65, -11, 11);
+        const rimY = clamp(2.0 + rx * 0.45, -3, 6);
+        const shX = clamp(ry * 1.6, -28, 28);
+        const glareX = -25 + morphT * 50 - ry * 1.3;
+        const hudBotY = phoneOp * (isMobile ? -6 : -8);
+
+        const dStyle = this.device.style;
+        dStyle.setProperty("--player-w", `${fw}px`);
+        dStyle.setProperty("--player-h", `${fh}px`);
+        dStyle.setProperty("--monitor-op", monitorOp.toFixed(3));
+        dStyle.setProperty("--phone-op", phoneOp.toFixed(3));
+        dStyle.setProperty("--island-scale", islandScale.toFixed(3));
+        dStyle.setProperty("--stand-fold", standFold.toFixed(3));
+        dStyle.setProperty("--btn-extrude", btnExtrude.toFixed(3));
+        dStyle.setProperty("--corner-op", cornerOp.toFixed(3));
+        dStyle.setProperty("--dev-radius", `${devRadius.toFixed(1)}px`);
+        dStyle.setProperty("--screen-radius", `${screenRadius.toFixed(1)}px`);
+        dStyle.setProperty("--bezel-top", `${bezelTop.toFixed(1)}px`);
+        dStyle.setProperty("--bezel-side", `${bezelSide.toFixed(1)}px`);
+        dStyle.setProperty("--bezel-bot", `${bezelBot.toFixed(1)}px`);
+        dStyle.setProperty("--dev-rx", `${rx.toFixed(2)}deg`);
+        dStyle.setProperty("--dev-ry", `${ry.toFixed(2)}deg`);
+        dStyle.setProperty("--dev-rz", `0deg`);
+        dStyle.setProperty("--dev-z", `${tz.toFixed(1)}px`);
+        dStyle.setProperty("--rim-x", `${rimX.toFixed(2)}px`);
+        dStyle.setProperty("--rim-y", `${rimY.toFixed(2)}px`);
+        dStyle.setProperty("--sh-x", `${shX.toFixed(1)}px`);
+        dStyle.setProperty("--glare-x", `${glareX.toFixed(1)}%`);
+        dStyle.setProperty("--hud-bot-y", `${hudBotY.toFixed(1)}px`);
+      }
+
+      return morphT;
     }
 
     load() {
@@ -2148,6 +2304,20 @@
       const rawP = (y - this.top) / this.len;
       const p = clamp(rawP, 0, 1);
 
+      // Motor híbrido continuo (estilo Anacleto):
+      // Reproduce automáticamente al fijarse, acelera al deslizar hacia abajo,
+      // frena de inmediato al deslizar hacia arriba y reanuda suavemente.
+      runHybridScrollEngine({
+        top: this.top,
+        len: this.len,
+        dt,
+        viewportEntry,
+        rawP,
+        baseDuration: 10.5, // Formato Dual (~10.5s): metamorfosis cinematográfica fluida
+        state: this,
+        hasFrames: this.frames && (this.frames[0] || this.nearest(0)),
+      });
+
       // Pre-roll cinematográfico en aproximación previa + continuidad viva en la salida:
       const pPlayStart = -Math.min(0.50, (vh * 0.70) / this.len);
       const preShare = 0.055;
@@ -2167,8 +2337,7 @@
       }
       prog = clamp(prog, 0, 1);
 
-      // Contra-desplazamiento al entrar desde #servicios: el grupo compacto (título + reproductor 16:9 + barra)
-      // arranca en la parte alta del bloque entrante (sin vacío) y se centra suavemente al fijarse.
+      // Contra-desplazamiento al entrar desde #servicios:
       if (this.stage) {
         const entryShiftY = -(1 - smooth(viewportEntry)) * (vh * 0.16);
         this.stage.style.setProperty("--format-group-y", `${entryShiftY.toFixed(1)}px`);
@@ -2179,48 +2348,12 @@
       this.cur += (targetF - this.cur) * k;
       if (Math.abs(targetF - this.cur) < 0.002) this.cur = targetF;
 
-      // Metamorfosis: inicia en 16:9 exacto, muta gradualmente y culmina en 9:16 exacto
-      // Al estar header, box y footer agrupados (flex: 0 0 auto), conforme el player crece verticalmente
-      // de 16:9 a 9:16, el propio crecimiento empuja de forma orgánica y progresiva el título y la barra.
-      const morphT = smooth(range(p, 0.02, 0.72));
-      const ratioH = 16 / 9; // 1.777778
-      const ratioV = 9 / 16; // 0.5625
-      const curRatio = ratioH + (ratioV - ratioH) * morphT;
+      const pk = reduce ? 1 : 1 - Math.exp(-8 * dt);
+      this.ptrX += (this.ptrTargetX - this.ptrX) * pk;
+      this.ptrY += (this.ptrTargetY - this.ptrY) * pk;
 
-      const isMobile = vw < 640;
-      const isTablet = vw < 1024;
-      const maxBoxW = Math.min(vw * (isMobile ? 0.90 : (isTablet ? 0.84 : 0.74)), 1060);
-      const maxBoxH = Math.min(vh * (isMobile ? 0.48 : (isTablet ? 0.50 : 0.52)), 560);
-
-      // Dimensiones guía para 16:9 y 9:16 (Open Gate sensor guides)
-      if (this.box && !isMobile) {
-        const ghH = Math.min(maxBoxH, maxBoxW / ratioH);
-        const ghW = ghH * ratioH;
-        const gvH = maxBoxH;
-        const gvW = gvH * ratioV;
-        const guideOp = Math.sin(morphT * Math.PI) * 0.85;
-        this.box.style.setProperty("--guide-h-w", `${Math.round(ghW)}px`);
-        this.box.style.setProperty("--guide-h-h", `${Math.round(ghH)}px`);
-        this.box.style.setProperty("--guide-v-w", `${Math.round(gvW)}px`);
-        this.box.style.setProperty("--guide-v-h", `${Math.round(gvH)}px`);
-        this.box.style.setProperty("--guide-op", guideOp.toFixed(3));
-      }
-
-      const wForMaxH = maxBoxH * curRatio;
-      let fw, fh;
-      if (wForMaxH <= maxBoxW) {
-        fh = maxBoxH;
-        fw = wForMaxH;
-      } else {
-        fw = maxBoxW;
-        fh = fw / curRatio;
-      }
-
-      fw = Math.round(fw);
-      fh = Math.round(fh);
-
-      this.player.style.setProperty("--player-w", `${fw}px`);
-      this.player.style.setProperty("--player-h", `${fh}px`);
+      // Metamorfosis: inicia en 16:9 (Monitor de estudio), muta en 3D y culmina en 9:16 (Smartphone insignia)
+      const morphT = this.syncGeometry(p);
 
       if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
         this.draw(this.cur);
@@ -2237,19 +2370,12 @@
         const resH = Math.round(2160 + (3840 - 2160) * morphT);
         this.resEl.textContent = `${resW} × ${resH} PX`;
       }
-
-      if (this.badgeRatio) {
-        if (morphT < 0.10) {
-          this.badgeRatio.textContent = "16:9";
-          if (this.badgeStatus) this.badgeStatus.textContent = "Máster Horizontal";
-        } else if (morphT > 0.90) {
-          this.badgeRatio.textContent = "9:16";
-          if (this.badgeStatus) this.badgeStatus.textContent = "Corte Vertical Nativo";
-        } else {
-          this.badgeRatio.textContent = "16:9 ↔ 9:16";
-          if (this.badgeStatus) this.badgeStatus.textContent = "Transformación en vivo";
-        }
+      if (this.specEl) {
+        this.specEl.textContent = morphT > 0.65 ? "9:16 RAW · MOBILE" : "OPEN GATE · 5.1K RAW";
       }
+
+      if (this.lblL) this.lblL.classList.toggle("is-active", morphT < 0.5);
+      if (this.lblR) this.lblR.classList.toggle("is-active", morphT >= 0.5);
     }
   }
 
@@ -2314,6 +2440,11 @@
       this.isPortrait = false;
       this.fullScale = 1.0;
       this.expandShiftY = 0;
+
+      this.autoPlayPaused = false;
+      this.autoPlaySuspended = false;
+      this.lastTrackedY = undefined;
+      this.subpixelAcc = 0;
 
       this.mouseTargetX = 0;
       this.mouseTargetY = 0;
@@ -2737,8 +2868,25 @@
       const isExiting = y > this.top + this.len;
       const isPinned = !isApproaching && !isExiting;
 
+      const rawP = (y - this.top) / this.len;
+      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+
+      // Motor híbrido continuo (estilo Anacleto):
+      // Reproduce automáticamente al fijarse, acelera al deslizar hacia abajo,
+      // frena de inmediato al deslizar hacia arriba y reanuda suavemente.
+      runHybridScrollEngine({
+        top: this.top,
+        len: this.len,
+        dt,
+        viewportEntry,
+        rawP,
+        baseDuration: 8.5, // Villa Epecuén (~8.5s): plano secuencia FPV continuo
+        state: this,
+        hasFrames: this.frames && (this.frames[0] || this.getChoreoFrame(0)),
+      });
+
       const entryProgress = clamp(1 - (this.top - y) / approachWindow);
-      const p = clamp((y - this.top) / this.len);
+      const p = clamp(rawP, 0, 1);
       const exitProgress = isExiting ? clamp((y - (this.top + this.len)) / exitWindow) : 0;
 
       const pinnedEndF = 24 + Math.round(0.88 * (this.count - 1 - 24));
@@ -2828,22 +2976,22 @@
 
         if (p <= 0.20) {
           activeAct = 1;
-          phaseTxt = "Acto I · Vuelo Estabilizado";
+          phaseTxt = "01 · Aproximación";
         } else if (p < 0.44) {
           activeAct = 2;
-          phaseTxt = "Acto II · Expansión Inmersiva";
+          phaseTxt = "02 · Recorrido continuo";
         } else if (p <= 0.78) {
           activeAct = 3;
-          phaseTxt = "Acto III · Secuencia Focal en Detalle";
+          phaseTxt = "03 · Plano en detalle";
         } else {
           activeAct = 4;
-          phaseTxt = "Acto IV · Telemetría y Cierre de Vuelo";
+          phaseTxt = "04 · Cierre de toma";
         }
 
       } else {
         // SALIDA: El video se mantiene en pantalla completa como fondo continuo y transiciona suavemente hacia la siguiente obra
         activeAct = 5;
-        phaseTxt = "Descenso · Siguiente Obra";
+        phaseTxt = "Transición · Siguiente obra";
         tExpand = 1;
         deckScale = fullScale;
         deckRx = 0;
@@ -2980,8 +3128,8 @@
       if (this.rollEl) this.rollEl.textContent = `ROLL ${roll >= 0 ? "+" : ""}${roll.toFixed(1)}°`;
       if (this.coordsEl) this.coordsEl.textContent = `X: +${coordX}m · Y: ${coordY}m · Z: +${alt.toFixed(2)}m`;
       if (this.horizonEl) this.horizonEl.style.setProperty("--horizon-roll", `${roll.toFixed(2)}deg`);
-      if (this.phaseLabel) this.phaseLabel.textContent = phaseTxt;
-      if (this.livePhaseEl) this.livePhaseEl.textContent = phaseTxt;
+      if (this.phaseLabel) this.phaseLabel.textContent = "FPV · ÓPTICA 16MM";
+      if (this.livePhaseEl) this.livePhaseEl.textContent = "Registro aéreo · FPV";
 
       const effectiveP = isApproaching
         ? (entryProgress * 0.10)
@@ -3125,6 +3273,14 @@
       if (nocturno && !nocturno.set) nocturno.load();
     }, 3600);
 
+    setTimeout(() => {
+      if (choreoSeq && (!choreoSeq.frames || !choreoSeq.frames.length)) choreoSeq.load();
+    }, 1800);
+
+    setTimeout(() => {
+      if (formatSeq && (!formatSeq.frames || !formatSeq.frames.length)) formatSeq.load();
+    }, 2800);
+
     const obsRoot = (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
     const seqLoader = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
@@ -3228,8 +3384,11 @@
      --------------------------------------------------------- */
   function goTo(href) {
     if (!href || href === "#") return;
-    const target = href === "#top" ? 0 : $(href);
+    let target = href === "#top" ? 0 : $(href);
     if (target === null) return;
+    if (href === "#repertorio" && typeof repTransition !== "undefined" && repTransition && repTransition.morphEndY > 0) {
+      target = repTransition.morphEndY;
+    }
     const wasOpen = body.classList.contains("index-open");
     if (wasOpen) {
       setIndex(false);
@@ -4039,9 +4198,540 @@
   const repCards = $$("[data-rep-card]").map((el) => new RepertorioCard(el));
   const repTheater = new RepertorioTheater();
 
+  /* ---------------------------------------------------------
+     RepertorioTransition — Coreografía Cinética de Diapasón
+     Transición entre Obra II (Secuencia Residencial) y el Catálogo:
+     1. 6 persianas arquitectónicas funden el blanco de Obra II a negro cine.
+     2. 6 franjas verticales ("teclas de piano") entran de forma escalonada
+        con las portadas de los 6 videos y se deslizan en contrapunto.
+     3. En horizontal (Desktop/Tablet): cada franja vertical se transforma
+        espacialmente y encastra con precisión sub-píxel en la grilla 3x2 / 2x3.
+     4. En vertical (Mobile): las 6 franjas verticales se pliegan primero en
+        6 cintas horizontales apiladas en pantalla y luego se expanden en la
+        columna vertical 1x6 de videos.
+     --------------------------------------------------------- */
+  class RepertorioTransition {
+    constructor(secEl, cards) {
+      this.sec = secEl;
+      this.cards = cards || [];
+      if (!this.sec || !this.cards.length) return;
+
+      this.stage = $("[data-rep-stage]", this.sec);
+      this.runway = $("[data-rep-runway]", this.sec);
+      this.bodyEl = $("[data-rep-body]", this.sec);
+      this.headEl = $("[data-rep-head]", this.sec);
+      this.gridEl = $("[data-rep-grid]", this.sec);
+      this.keysWrap = $("[data-rep-keys]", this.sec);
+      this.shutters = $$("[data-rep-shutter]", this.sec);
+
+      this.hudEl = $("[data-rep-stage-hud]", this.sec);
+      this.footEl = $("[data-rep-stage-foot]", this.sec);
+      this.bgTitleEl = $("[data-rep-stage-title]", this.sec);
+      this.phaseEl = $("[data-rep-stage-phase]", this.sec);
+      this.modeEl = $("[data-rep-stage-mode]", this.sec);
+      this.pctEl = $("[data-rep-stage-pct]", this.sec);
+      this.barEl = $("[data-rep-stage-bar]", this.sec);
+      this.cotaEl = $("[data-rep-stage-cota]", this.sec);
+
+      this.keyEls = [];
+      this.cardTargets = [];
+      this.keyRects = [];
+      this.stackRects = [];
+
+      this.secTop = 0;
+      this.secHeight = 0;
+      this.morphEndY = 0;
+      this.morphLen = 1;
+      this.isMobile = false;
+      this.isTablet = false;
+      this.lastZone = -1;
+      this.curP = 0;
+      this.curEntryP = 0;
+      this.initialized = false;
+
+      if (reduce) {
+        if (this.stage) this.stage.style.display = "none";
+        if (this.runway) this.runway.style.display = "none";
+        this.sec.classList.remove("repertorio--choreo");
+        return;
+      }
+
+      this.buildKeys();
+      this.measure();
+    }
+
+    buildKeys() {
+      if (!this.keysWrap) return;
+      this.keysWrap.innerHTML = "";
+      this.keyEls = this.cards.map((card, i) => {
+        const el = card.el;
+        const posterSrc = card.poster ? card.poster.getAttribute("src") : "";
+        const posterAlt = card.poster ? card.poster.getAttribute("alt") : "";
+        const badge = card.badge || `SEQ · ${pad(i + 1)}`;
+        const titleNode = $(".rep-card__title", el);
+        const titleHTML = titleNode ? titleNode.innerHTML : (card.title || "");
+        const locNode = $(".rep-card__loc", el);
+        const locTxt = locNode ? locNode.textContent : "";
+        const lensNode = $(".rep-card__lens", el);
+        const lensTxt = lensNode ? lensNode.textContent : "";
+        const takeNode = $(".rep-card__take", el);
+        const takeTxt = takeNode ? takeNode.textContent : "";
+        const idxStr = pad(i + 1);
+
+        const key = document.createElement("div");
+        key.className = "rep-key";
+        key.dataset.repKey = String(i);
+        key.innerHTML = `
+          <div class="rep-key__screen">
+            <img class="rep-key__poster" src="${posterSrc}" alt="${posterAlt}" decoding="async">
+            <div class="rep-key__veil"></div>
+
+            <div class="rep-key__spine">
+              <div class="rep-key__spine-top">
+                <span class="rep-key__spine-idx">${idxStr}</span>
+                <span class="rep-key__spine-rule"></span>
+              </div>
+              <div class="rep-key__spine-bot">
+                <span class="rep-key__spine-title">${titleHTML}</span>
+                <span class="rep-key__spine-tag">${lensTxt || badge}</span>
+              </div>
+            </div>
+
+            <div class="rep-key__ribbon">
+              <div class="rep-key__ribbon-left">
+                <span class="rep-key__ribbon-idx">${idxStr}</span>
+                <span class="rep-key__ribbon-title">${titleHTML}</span>
+              </div>
+              <span class="rep-key__ribbon-tag">${lensTxt || badge}</span>
+            </div>
+
+            <div class="rep-card__hud-top">
+              <span class="rep-card__badge">${badge}</span>
+              <span class="rep-card__rec"><i class="rep-card__rec-dot"></i><span>24 FPS</span></span>
+            </div>
+            <div class="rep-card__reticle">
+              <span class="rep-card__cross"></span>
+            </div>
+            <div class="rep-card__play-cover">
+              <span class="rep-card__play-btn-main">
+                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19.5,12 8,19"/></svg>
+              </span>
+            </div>
+            <div class="rep-card__bar"><i></i></div>
+          </div>
+          <footer class="rep-card__info">
+            <div class="rep-card__meta-top">
+              <span class="rep-card__loc">${locTxt}</span>
+              <span class="rep-card__lens">${lensTxt}</span>
+            </div>
+            <h3 class="rep-card__title">${titleHTML}</h3>
+            <div class="rep-card__meta-bot">
+              <span class="rep-card__take">${takeTxt}</span>
+              <span class="rep-card__tc">00:00:00</span>
+            </div>
+          </footer>
+        `;
+        this.keysWrap.appendChild(key);
+        return {
+          el: key,
+          screenEl: $(".rep-key__screen", key),
+          posterEl: $(".rep-key__poster", key),
+          infoEl: $(".rep-card__info", key),
+        };
+      });
+    }
+
+    measure() {
+      if (!this.sec || reduce || !this.bodyEl || !this.gridEl) return;
+
+      // Limpiar temporalmente transformaciones para medir coordenadas reales de flujo en el documento
+      const prevBodyTransform = this.bodyEl.style.transform;
+      this.bodyEl.style.transform = "none";
+
+      const scroll = scrollY();
+      this.isMobile = vw <= 768;
+      this.isTablet = vw > 768 && vw <= 1080;
+
+      // Ajustar altura de la pista de coreografía antes de medir
+      const runwayVh = this.isMobile ? 2.05 : 2.15;
+      if (this.runway) {
+        this.runway.style.height = `${Math.round(vh * runwayVh)}px`;
+      }
+
+      const secRect = this.sec.getBoundingClientRect();
+      this.secTop = secRect.top + scroll;
+      this.secHeight = this.sec.offsetHeight;
+
+      const headRect = this.headEl ? this.headEl.getBoundingClientRect() : secRect;
+      const gridRect = this.gridEl.getBoundingClientRect();
+      this.headDocTop = headRect.top + scroll;
+      this.gridDocTop = gridRect.top + scroll;
+      this.gridHeight = gridRect.height;
+
+      // Calcular el punto exacto de scroll (morphEndY) donde las 6 franjas encastran en el catálogo real
+      if (this.isMobile) {
+        const navClearMob = clamp(vh * 0.088, 66, 82);
+        this.morphEndY = this.headDocTop - navClearMob;
+      } else if (this.isTablet) {
+        const navClearTab = clamp(vh * 0.095, 76, 96);
+        this.morphEndY = this.headDocTop - navClearTab;
+      } else {
+        const navClearDesk = clamp(vh * 0.095, 82, 104);
+        const headToGridBot = (this.gridDocTop + this.gridHeight) - this.headDocTop;
+        const availH = vh - navClearDesk - 20;
+        if (headToGridBot <= availH) {
+          const extra = Math.max(0, availH - headToGridBot);
+          this.morphEndY = this.headDocTop - (navClearDesk + extra * 0.32);
+        } else {
+          // Si la pantalla es baja de altura, priorizar que las 2 filas de la grilla 3x2 queden enmarcadas
+          const idealGridTop = Math.max(navClearDesk + 10, (vh - this.gridHeight) * 0.54);
+          this.morphEndY = this.gridDocTop - idealGridTop;
+        }
+      }
+
+      this.morphLen = Math.max(vh * 0.8, this.morphEndY - this.secTop);
+
+      // Medir las coordenadas exactas de destino (viewport en y = morphEndY) de cada una de las 6 tarjetas reales
+      this.cardTargets = this.cards.map((c) => {
+        const cr = c.el.getBoundingClientRect();
+        const sr = c.screen ? c.screen.getBoundingClientRect() : cr;
+        const docTop = cr.top + scroll;
+        const docLeft = cr.left;
+        return {
+          left: docLeft,
+          top: docTop - this.morphEndY,
+          width: cr.width,
+          height: cr.height,
+          screenH: sr.height,
+          infoH: Math.max(0, cr.height - sr.height),
+        };
+      });
+
+      // Calcular la geometría inicial de las 6 Franjas Verticales ("Teclas de Piano")
+      const n = this.cards.length;
+      if (this.isMobile) {
+        const padX = 16;
+        const stageW = vw - padX * 2;
+        const gap = 6;
+        const keyW = (stageW - gap * (n - 1)) / n;
+        const keyH = Math.round(clamp(vh * 0.52, 290, 440));
+        const baseY = Math.round(vh * 0.51 - keyH * 0.5);
+
+        this.keyRects = this.cards.map((_, i) => ({
+          left: padX + i * (keyW + gap),
+          top: baseY,
+          width: keyW,
+          height: keyH,
+        }));
+
+        // Estado intermedio en móvil: 6 cintas panorámicas horizontales apiladas una sobre otra en pantalla
+        const stackTop = Math.round(clamp(vh * 0.145, 92, 118));
+        const stackBot = Math.round(vh - clamp(vh * 0.08, 48, 68));
+        const stackAvailH = Math.max(320, stackBot - stackTop);
+        const sliceGap = 8;
+        const sliceH = Math.floor((stackAvailH - sliceGap * (n - 1)) / n);
+        const refTarget = this.cardTargets[0] || { left: padX, width: stageW };
+
+        this.stackRects = this.cards.map((_, i) => ({
+          left: refTarget.left,
+          top: stackTop + i * (sliceH + sliceGap),
+          width: refTarget.width,
+          height: sliceH,
+        }));
+      } else {
+        const padX = Math.max(24, Math.min(60, vw * 0.036));
+        const maxStageW = Math.min(vw - padX * 2, 1600);
+        const stageLeft = (vw - maxStageW) * 0.5;
+        const gap = Math.round(clamp(vw * 0.011, 10, 18));
+        const keyW = (maxStageW - gap * (n - 1)) / n;
+        const keyH = Math.round(clamp(vh * 0.60, 350, 590));
+        const baseY = Math.round(vh * 0.52 - keyH * 0.5);
+
+        this.keyRects = this.cards.map((_, i) => ({
+          left: stageLeft + i * (keyW + gap),
+          top: baseY,
+          width: keyW,
+          height: keyH,
+        }));
+      }
+
+      this.bodyEl.style.transform = prevBodyTransform;
+      this.initialized = true;
+      this.update(0.016, true);
+    }
+
+    update(dt, force = false) {
+      if (!this.sec || reduce || !this.initialized) return;
+
+      const y = scrollY();
+      // Fuera de rango amplio: limpiar o mantener estado extremo sin gastar CPU
+      if (y + vh < this.secTop - vh * 0.5) {
+        if (this.stage && this.stage.style.visibility !== "hidden") {
+          this.stage.style.visibility = "hidden";
+          this.stage.style.opacity = "0";
+        }
+        return;
+      }
+
+      if (y > this.secTop + this.secHeight + vh * 0.5) {
+        return;
+      }
+
+      const rawEntry = clamp((y + vh - this.secTop) / vh, 0, 1);
+      const rawP = (y - this.secTop) / this.morphLen;
+
+      // Suavizado inercial ligero para que el movimiento de las teclas sea sedoso incluso con rueda de ratón discreta
+      const k = force ? 1 : Math.min(1, 1 - Math.exp(-18 * (dt || 0.016)));
+      this.curEntryP += (rawEntry - this.curEntryP) * k;
+      this.curP += (rawP - this.curP) * k;
+      if (Math.abs(rawEntry - this.curEntryP) < 0.0005) this.curEntryP = rawEntry;
+      if (Math.abs(rawP - this.curP) < 0.0005) this.curP = rawP;
+
+      const entryP = this.curEntryP;
+      const p = clamp(this.curP, 0, 1);
+
+      // Si ya superó por completo la transición (rawP >= 1.02), liberar el flujo natural del catálogo
+      if (rawP >= 1.02 && this.curP >= 0.998) {
+        if (this.stage && this.stage.style.visibility !== "hidden") {
+          this.stage.style.opacity = "0";
+          this.stage.style.visibility = "hidden";
+        }
+        if (this.bodyEl && this.bodyEl.style.transform !== "none") {
+          this.bodyEl.style.transform = "none";
+        }
+        if (this.headEl && this.headEl.style.opacity !== "1") {
+          this.headEl.style.opacity = "1";
+          this.headEl.style.transform = "none";
+        }
+        if (this.gridEl && this.gridEl.style.opacity !== "1") {
+          this.gridEl.style.opacity = "1";
+          this.gridEl.style.pointerEvents = "auto";
+        }
+        return;
+      }
+
+      // Mostrar escenario sticky durante la transición
+      if (this.stage) {
+        const stageFadeOut = 1 - smooth(range(p, 0.92, 0.995));
+        this.stage.style.visibility = stageFadeOut <= 0.002 ? "hidden" : "visible";
+        this.stage.style.opacity = stageFadeOut.toFixed(3);
+      }
+
+      // 1. Mantener .repertorio__body anclado exactamente en sus coordenadas de destino mientras rawP <= 1.0
+      //    Así, en el momento del crossfade (p: 0.88 -> 0.99), las tarjetas reales y las franjas transformadas
+      //    están 100% superpuestas píxel a píxel sin deriva vertical.
+      if (this.bodyEl) {
+        if (rawP < 1.0) {
+          const shiftY = y - this.morphEndY;
+          this.bodyEl.style.transform = `translate3d(0, ${shiftY.toFixed(1)}px, 0)`;
+        } else {
+          this.bodyEl.style.transform = "none";
+        }
+      }
+
+      //Aparición progresiva del cabezal real del catálogo (.repertorio__head) y la grilla real (.repertorio__grid)
+      if (this.headEl) {
+        const headOp = smooth(range(p, 0.68, 0.91));
+        const headTy = (1 - headOp) * 18;
+        this.headEl.style.opacity = headOp.toFixed(3);
+        this.headEl.style.transform = headTy > 0.1 ? `translate3d(0, ${headTy.toFixed(1)}px, 0)` : "none";
+      }
+      if (this.gridEl) {
+        const gridOp = smooth(range(p, 0.89, 0.975));
+        this.gridEl.style.opacity = gridOp.toFixed(3);
+        this.gridEl.style.pointerEvents = gridOp > 0.85 ? "auto" : "none";
+      }
+
+      // 2. Persianas arquitectónicas (6 columnas oscuras que cierran en cascada sobre el blanco de Obra II)
+      const combinedEntry = entryP + Math.max(0, this.curP) * 2.1;
+      if (this.shutters && this.shutters.length) {
+        this.shutters.forEach((sh, i) => {
+          const stStart = 0.04 + i * 0.085;
+          const stEnd = 0.62 + i * 0.085;
+          const sProg = smooth(range(combinedEntry, stStart, stEnd));
+          const tyPct = (1 - sProg) * 102;
+          sh.style.transform = `translate3d(0, ${tyPct.toFixed(2)}%, 0)`;
+          const edgeOp = sProg < 0.99 ? 0.9 : Math.max(0, 1 - range(p, 0.05, 0.25));
+          sh.style.setProperty("--shutter-edge-op", edgeOp.toFixed(2));
+        });
+      }
+
+      // 3. HUD y título ambiental del escenario de transición
+      const hudIn = smooth(range(combinedEntry, 0.55, 1.05));
+      const hudOut = 1 - smooth(range(p, 0.64, 0.80));
+      const hudOp = hudIn * hudOut;
+      if (this.hudEl) {
+        this.hudEl.style.opacity = hudOp.toFixed(3);
+        this.hudEl.style.transform = `translate3d(0, ${((1 - hudOp) * -10).toFixed(1)}px, 0)`;
+      }
+      if (this.footEl) {
+        const footOp = hudIn * (1 - smooth(range(p, 0.78, 0.92)));
+        this.footEl.style.opacity = footOp.toFixed(3);
+        this.footEl.style.transform = `translate3d(0, ${((1 - footOp) * 10).toFixed(1)}px, 0)`;
+      }
+      if (this.bgTitleEl) {
+        const bgOp = smooth(range(combinedEntry, 0.65, 1.1)) * (1 - smooth(range(p, 0.44, 0.66)));
+        const bgScale = 0.96 + smooth(range(p, 0.0, 0.5)) * 0.06;
+        this.bgTitleEl.style.opacity = bgOp.toFixed(3);
+        this.bgTitleEl.style.transform = `translate3d(-50%, -50%, 0) scale(${bgScale.toFixed(3)})`;
+      }
+
+      // Actualizar lecturas de fase y telemetría
+      const pctNum = Math.round(p * 100);
+      if (this.pctEl) this.pctEl.textContent = `${pad(pctNum)}%`;
+      if (this.barEl) this.barEl.style.transform = `scaleX(${p.toFixed(3)})`;
+
+      const zone = p < 0.36 ? 0 : (p < 0.76 ? 1 : 2);
+      if (zone !== this.lastZone) {
+        if (this.lastZone !== -1 && entryP > 0.8) {
+          const notes = [440, 554.37, 659.25];
+          playTactileTick(notes[zone] || 520, 0.028, 0.02);
+        }
+        this.lastZone = zone;
+        if (this.phaseEl) {
+          const phases = this.isMobile
+            ? ["01 · Teclas Escalonadas", "02 · Pliegue Horizontal", "03 · Catálogo Vertical"]
+            : ["01 · Diapasón Escalonado", "02 · Metamorfosis Espacial", "03 · Encastre en Grilla"];
+          this.phaseEl.textContent = phases[zone];
+        }
+        if (this.modeEl) {
+          this.modeEl.textContent = this.isMobile
+            ? (zone === 0 ? "06 Franjas Verticales" : (zone === 1 ? "06 Cintas Apiladas" : "Columna 1×6 · 16:9"))
+            : (zone === 0 ? "06 Franjas en Contrapunto" : (zone === 1 ? "Expansión a Formato 16:9" : "Grilla de Catálogo 3×2"));
+        }
+        if (this.cotaEl) {
+          this.cotaEl.textContent = zone === 2 ? "Catálogo Activo · 4K" : "06 Franjas · 24 FPS";
+        }
+      }
+
+      // 4. Coreografía de cada una de las 6 Franjas ("Teclas de Piano") -> Tarjetas de Video
+      const stepUnit = this.isMobile ? 26 : 46;
+
+      this.keyEls.forEach((item, i) => {
+        const kRect = this.keyRects[i];
+        const tRect = this.cardTargets[i];
+        if (!kRect || !tRect) return;
+
+        // A. Entrada escalonada desde abajo (una tras otra de izquierda a derecha)
+        const eStart = 0.12 + i * 0.092;
+        const eEnd = 0.78 + i * 0.092;
+        const eProg = smooth(range(combinedEntry, eStart, eEnd));
+        const entryLiftY = (1 - eProg) * (vh * 0.44 + i * 36);
+
+        // B. Escalón de "Teclas de Piano" (cada franja a la derecha un escalón más abajo, moviéndose con el scroll)
+        //    - En p = 0.00: escalera diagonal marcada (izquierda arriba -> derecha abajo: (i - 2.5) * stepUnit).
+        //    - A medida que se desliza (p: 0.00 -> 0.40): las franjas se deslizan en contrapunto armónico
+        //      (las altas bajan, las bajas suben como teclas pulsadas en ola) hasta alinearse antes de abrirse.
+        const pianoPhase = clamp(p / 0.42, 0, 1);
+        const alignEnvelope = 1 - smooth(range(p, 0.28, 0.44));
+        const diagonalSlope = Math.cos(pianoPhase * Math.PI * 0.92);
+        const stairBase = (i - 2.5) * stepUnit * diagonalSlope * alignEnvelope;
+        const harmonicWave = Math.sin(pianoPhase * Math.PI * 1.85 + i * 0.85) * (this.isMobile ? 15 : 28) * Math.sin(pianoPhase * Math.PI);
+        const pianoY = kRect.top + entryLiftY + stairBase + harmonicWave;
+
+        let curX, curY, curW, curH, curScreenH;
+        let spineOp = 1, ribbonOp = 0, cardUiOp = 0, borderRadius = 4;
+        let bankDeg = 0;
+        let morphT = 0;
+
+        if (!this.isMobile) {
+          // =========================================================
+          // VERSIÓN HORIZONTAL (ESCRITORIO / TABLET):
+          // De las 6 Franjas Verticales Escalonadas -> Directo a su posición 3x2 / 2x3
+          // =========================================================
+          const mStart = 0.36 + i * 0.036;
+          const mEnd = 0.87 + i * 0.014;
+          morphT = smooth(range(p, mStart, mEnd));
+          const arc = Math.sin(morphT * Math.PI);
+
+          // Trayectoria curva elegante hacia su casillero en la grilla
+          const rowArcY = (i < 3 ? -1 : 1) * arc * 16;
+          curX = kRect.left + (tRect.left - kRect.left) * morphT;
+          curY = pianoY + (tRect.top - pianoY) * morphT + rowArcY;
+          curW = kRect.width + (tRect.width - kRect.width) * morphT;
+          curH = kRect.height + (tRect.height - kRect.height) * morphT;
+
+          // La pantalla de video pasa de ocupar el 100% de la franja vertical a la altura 16:9 exacta de la tarjeta
+          const startScreenH = kRect.height;
+          curScreenH = startScreenH + (tRect.screenH - startScreenH) * morphT;
+
+          // Sutil alabeo espacial durante el vuelo hacia su columna/fila
+          const dxNorm = (tRect.left - kRect.left) / Math.max(1, vw);
+          bankDeg = arc * dxNorm * 3.8;
+
+          spineOp = 1 - smooth(range(morphT, 0.08, 0.46));
+          cardUiOp = smooth(range(morphT, 0.50, 0.92));
+          borderRadius = 4 + morphT * 2;
+        } else {
+          // =========================================================
+          // VERSIÓN VERTICAL (MÓVIL):
+          // Fase 1 (p: 0.00 -> 0.34): 6 Franjas Verticales Escalonadas lado a lado (| | | | | |)
+          // Fase 2 (p: 0.32 -> 0.64): Pliegue en 6 Cintas Horizontales apiladas una sobre otra en pantalla (≡)
+          // Fase 3 (p: 0.62 -> 0.92): Expansión de cada cinta al video 16:9 completo en la columna vertical
+          // =========================================================
+          const sRect = this.stackRects[i] || tRect;
+          const m1 = smooth(range(p, 0.30 + i * 0.028, 0.60 + i * 0.016));
+          const m2 = smooth(range(p, 0.60 + i * 0.022, 0.89 + i * 0.012));
+          morphT = m1 * 0.5 + m2 * 0.5;
+
+          // Interpolación Etapa 1 -> Etapa 2 (Vertical a Cintas Horizontales Apiladas)
+          const midX = kRect.left + (sRect.left - kRect.left) * m1;
+          const midY = pianoY + (sRect.top - pianoY) * m1;
+          const midW = kRect.width + (sRect.width - kRect.width) * m1;
+          const midH = kRect.height + (sRect.height - kRect.height) * m1;
+
+          // Interpolación Etapa 2 -> Etapa 3 (Cintas Apiladas a Tarjetas 16:9 Reales del Catálogo)
+          curX = midX + (tRect.left - midX) * m2;
+          curY = midY + (tRect.top - midY) * m2;
+          curW = midW + (tRect.width - midW) * m2;
+          curH = midH + (tRect.height - midH) * m2;
+
+          const midScreenH = midH;
+          curScreenH = midScreenH + (tRect.screenH - midScreenH) * m2;
+
+          spineOp = 1 - smooth(range(m1, 0.10, 0.55));
+          ribbonOp = smooth(range(m1, 0.45, 0.88)) * (1 - smooth(range(m2, 0.08, 0.45)));
+          cardUiOp = smooth(range(m2, 0.42, 0.90));
+          borderRadius = 4 + m2 * 1;
+        }
+
+        // Parallax óptico interno del fotograma mientras la franja se mueve y encuadra
+        const imgScale = 1 + (1 - morphT) * 0.16;
+        const imgPanX = (1 - morphT) * ((2.5 - i) * 3.2);
+        const imgPanY = (1 - morphT) * (Math.sin(pianoPhase * Math.PI + i * 0.7) * 4.5);
+        const imgBright = 0.84 + morphT * 0.16;
+        const keyGleam = Math.sin(eProg * Math.PI * 0.5) * (1 - morphT);
+
+        const st = item.el.style;
+        st.opacity = eProg.toFixed(3);
+        st.width = `${curW.toFixed(1)}px`;
+        st.height = `${curH.toFixed(1)}px`;
+        st.borderRadius = `${borderRadius.toFixed(1)}px`;
+        st.transform = bankDeg !== 0
+          ? `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0) rotateZ(${bankDeg.toFixed(2)}deg)`
+          : `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0)`;
+
+        st.setProperty("--key-screen-h", `${curScreenH.toFixed(1)}px`);
+        st.setProperty("--key-spine-op", spineOp.toFixed(3));
+        st.setProperty("--key-ribbon-op", ribbonOp.toFixed(3));
+        st.setProperty("--key-card-ui-op", cardUiOp.toFixed(3));
+        st.setProperty("--key-img-scale", imgScale.toFixed(3));
+        st.setProperty("--key-img-x", `${imgPanX.toFixed(1)}%`);
+        st.setProperty("--key-img-y", `${imgPanY.toFixed(1)}%`);
+        st.setProperty("--key-img-bright", imgBright.toFixed(3));
+        st.setProperty("--key-gleam", keyGleam.toFixed(3));
+      });
+    }
+  }
+
+  const repTransition = new RepertorioTransition(repertorio, repCards);
+
   function measureRepertorio() {
     if (repTheater && repTheater.isOpen) {
       repTheater.resizeCanvas();
+    }
+    if (repTransition) {
+      repTransition.measure();
     }
     if (!repCards || !repCards.length) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -4062,6 +4752,9 @@
   }
 
   function updateRepertorio(dt) {
+    if (repTransition) {
+      repTransition.update(dt);
+    }
     if (repTheater && repTheater.isOpen) {
       repTheater.update(dt);
       return;
@@ -4507,10 +5200,10 @@
   const methodSteps = $$("[data-method-step]");
   const methodPhase = $("[data-method-phase]");
   const METHOD_PHASE_NAMES = [
-    "FASE 01 · RELEVAMIENTO SOLAR",
-    "FASE 02 · RODAJE EQUIPO MÍNIMO",
-    "FASE 03 · MONTAJE & SONIDO",
-    "FASE 04 · COLOR & ENTREGA",
+    "FASE 01 · ANÁLISIS & PLANIFICACIÓN",
+    "FASE 02 · DISEÑO DE TRAYECTORIA",
+    "FASE 03 · PRODUCCIÓN EN VUELO",
+    "FASE 04 · EDICIÓN & ENTREGA",
   ];
   let lastMethodIdx = -1;
 
@@ -4591,8 +5284,8 @@
   function measureAll() {
     vw = innerWidth; vh = innerHeight;
     root.style.setProperty("--vh", `${vh}px`);
-    measureSvc();
     measureRepertorio();
+    measureSvc();
     measureEditorial();
     measureSeqs();
   }
