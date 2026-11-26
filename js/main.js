@@ -1,6 +1,6 @@
 /* =========================================================
    FURLAN — CINE DE ARQUITECTURA
-   Motor de proyección, scroll y microinteracciones.
+   Motor optimizado de proyección, scroll y microinteracciones.
    ========================================================= */
 (() => {
   "use strict";
@@ -29,15 +29,17 @@
   let lenis = null;
   if (window.Lenis && !reduce && finePointer) {
     lenis = new window.Lenis({
-      duration: 1.2,
+      duration: 1.15,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       wheelMultiplier: 1,
       smoothWheel: true,
     });
     lenis.stop();
   }
+
   const scrollContainer = $("#top");
-  const isVerticalScroller = () => vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
+  const isVerticalScroller = () =>
+    vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
 
   let isUserTouching = false;
   window.addEventListener("touchstart", () => { isUserTouching = true; }, { passive: true });
@@ -54,24 +56,92 @@
     const el = typeof target === "string" ? $(target) : target;
     const y = typeof target === "number" ? target : (el ? el.getBoundingClientRect().top + scrollY() : 0);
     if (scrollContainer && isVerticalScroller()) {
-      scrollContainer.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
+      if (reduce || opts.immediate) {
+        scrollContainer.scrollTop = y;
+      } else {
+        scrollContainer.scrollTo({ top: y, behavior: "smooth" });
+      }
     } else if (lenis) {
-      lenis.scrollTo(y, { duration: opts.duration || 1.8, immediate: !!opts.immediate });
+      lenis.scrollTo(y, { duration: opts.duration || 1.35, immediate: !!opts.immediate });
     } else {
       window.scrollTo({ top: y, behavior: reduce || opts.immediate ? "auto" : "smooth" });
     }
   }
 
+  function bindTimelineScrub(scrubEl, onSeek, onStateChange) {
+    if (!scrubEl) return;
+    let activeId = null;
 
+    const ratioFromClientX = (clientX) => {
+      const rect = scrubEl.getBoundingClientRect();
+      if (!rect.width) return null;
+      return clamp((clientX - rect.left) / rect.width);
+    };
+
+    const setScrubbing = (active) => {
+      scrubEl.classList.toggle("is-scrubbing", active);
+      if (onStateChange) onStateChange(active);
+    };
+
+    scrubEl.addEventListener("pointerdown", (e) => {
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
+      e.preventDefault();
+      e.stopPropagation();
+      activeId = e.pointerId;
+      try { scrubEl.setPointerCapture(e.pointerId); } catch (_) {}
+      setScrubbing(true);
+      const r = ratioFromClientX(e.clientX);
+      if (r !== null) onSeek(r, { immediate: e.pointerType !== "mouse" });
+    }, { passive: false });
+
+    scrubEl.addEventListener("pointermove", (e) => {
+      if (activeId !== e.pointerId) return;
+      e.preventDefault();
+      const r = ratioFromClientX(e.clientX);
+      if (r !== null) onSeek(r, { immediate: true });
+    }, { passive: false });
+
+    const endScrub = (e) => {
+      if (activeId !== e.pointerId) return;
+      activeId = null;
+      try { scrubEl.releasePointerCapture(e.pointerId); } catch (_) {}
+      setScrubbing(false);
+    };
+    scrubEl.addEventListener("pointerup", endScrub);
+    scrubEl.addEventListener("pointercancel", endScrub);
+    scrubEl.addEventListener("lostpointercapture", () => {
+      if (activeId !== null) {
+        activeId = null;
+        setScrubbing(false);
+      }
+    });
+  }
 
   /* ---------------------------------------------------------
-     Cursor con anillo óptico inercial y micro-física magnética
+     Cursor con anillo óptico inercial y atracción magnética
      --------------------------------------------------------- */
   const cursor = $(".cursor");
   const cursorRing = $(".cursor__ring");
   const cursorLabel = $(".cursor__label");
   let mx = -200, my = -200, cx = -200, cy = -200, rx = -200, ry = -200;
   let normMx = 0, normMy = 0;
+
+  function bindCursorTarget(el) {
+    if (!finePointer || !cursor || !el) return;
+    el.addEventListener("mouseenter", () => {
+      const label = el.dataset.cursor;
+      if (label) {
+        cursorLabel.textContent = label;
+        body.classList.add("cursor-label");
+      } else {
+        body.classList.add("cursor-link");
+      }
+      playTactileTick(740, 0.015, 0.01);
+    });
+    el.addEventListener("mouseleave", () => {
+      body.classList.remove("cursor-label", "cursor-link");
+    });
+  }
 
   if (finePointer && cursor) {
     body.classList.add("has-cursor");
@@ -82,24 +152,8 @@
       normMy = (my / Math.max(1, vh) - 0.5) * 2;
     }, { passive: true });
 
-    const bindCursor = (el) => {
-      el.addEventListener("mouseenter", () => {
-        const label = el.dataset.cursor;
-        if (label) {
-          cursorLabel.textContent = label;
-          body.classList.add("cursor-label");
-        } else {
-          body.classList.add("cursor-link");
-        }
-        playTactileTick(740, 0.015, 0.01);
-      });
-      el.addEventListener("mouseleave", () => {
-        body.classList.remove("cursor-label", "cursor-link");
-      });
-    };
-    $$("a, button, .seq__scrub, [data-cursor]").forEach(bindCursor);
+    $$("a, button, .seq__scrub, [data-cursor]").forEach(bindCursorTarget);
 
-    // Atracción magnética sutil en controles clave
     $$("[data-magnetic]").forEach((el) => {
       const strength = parseFloat(el.dataset.magnetic) || 0.22;
       el.addEventListener("mousemove", (e) => {
@@ -116,7 +170,7 @@
   }
 
   /* ---------------------------------------------------------
-     Texto palabra por palabra (tinta que aparece con el scroll)
+     Texto palabra por palabra (nítido, sin desenfoque)
      --------------------------------------------------------- */
   function splitWords(el) {
     const nodes = Array.from(el.childNodes);
@@ -124,8 +178,7 @@
     const allWords = [];
     nodes.forEach((n) => {
       const isEl = n.nodeType === 1;
-      const text = n.textContent;
-      const words = text.split(/\s+/).filter(Boolean);
+      const words = n.textContent.split(/\s+/).filter(Boolean);
       words.forEach((w) => {
         allWords.push({ w, isEl, tag: isEl ? n.tagName.toLowerCase() : null });
       });
@@ -142,9 +195,7 @@
         s.textContent = item.w;
       }
       el.appendChild(s);
-      if (idx < allWords.length - 1) {
-        el.appendChild(document.createTextNode(" "));
-      }
+      if (idx < allWords.length - 1) el.appendChild(document.createTextNode(" "));
     });
   }
 
@@ -158,74 +209,51 @@
     lines: $$(".ln", el),
   }));
 
-  const quoteMark = $(".quote__mark");
-
   /* ---------------------------------------------------------
      MOTOR HÍBRIDO DE AUTO-REPRODUCCIÓN Y CONTROL DE SCROLL
-     Reproducción automática continua al fijarse en pantalla completa,
-     con aceleración hacia abajo, frenado inmediato al deslizar hacia arriba
-     y reanudación continua al volver a avanzar.
      --------------------------------------------------------- */
-  function runHybridScrollEngine({
-    top,
-    len,
-    dt,
-    viewportEntry,
-    rawP,
-    baseDuration,
-    state,
-    hasFrames,
-  }) {
+  function runHybridScrollEngine({ top, len, dt, viewportEntry, rawP, baseDuration, speedScale = 1, peekPx: customPeekPx, minSpeed = 0.45, state, hasFrames, isHero }) {
     if (reduce) return;
     const dtSec = Math.min(dt || 0.016, 0.04);
-    const isFullyInView = viewportEntry >= 0.975 || rawP >= -0.03;
-    const inActiveZone = isFullyInView && rawP < 1.0;
+    const peekPx = customPeekPx !== undefined ? customPeekPx : Math.round(Math.min(vh * 0.13, 105));
+    const endY = top + len + peekPx;
+    const y = scrollY();
+    const isFullyInView = isHero ? (rawP >= 0.025) : (viewportEntry >= 0.975 || rawP >= -0.03);
+    const inActiveZone = isFullyInView && y < endY - 0.5;
 
     if (!inActiveZone || state.autoPlayPaused || !hasFrames) {
-      if (rawP >= 1.0 || viewportEntry < 0.8) {
+      if (y >= endY - 0.5 || (!isHero && viewportEntry < 0.8) || (isHero && rawP < 0.015)) {
         state.autoPlaySuspended = false;
         state.subpixelAcc = 0;
       }
       return;
     }
 
-    // Desaceleración sutil y elegante en el tramo final (rawP > 0.85)
-    let speedFactor = 1.0;
-    if (rawP > 0.85) {
-      const tDecel = clamp((rawP - 0.85) / (1.0 - 0.85), 0, 1);
-      speedFactor = Math.max(0.60, 1.0 - Math.pow(tDecel, 1.25) * 0.40);
+    let speedFactor = speedScale;
+    if (rawP > 0.84) {
+      const tDecel = clamp((rawP - 0.84) / (0.16 + peekPx / Math.max(1, len)), 0, 1);
+      speedFactor *= Math.max(minSpeed, 1.0 - Math.pow(tDecel, 1.15) * (1.0 - minSpeed));
     }
 
     const autoSpeed = (len / Math.max(4, baseDuration)) * speedFactor;
     const autoDy = autoSpeed * dtSec;
-    const y = scrollY();
 
     if (lenis && !isVerticalScroller()) {
       const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
       const userDiff = targetY - y;
 
-      if (userDiff < -1.5) {
-        // El usuario desliza hacia arriba: se frena el automático inmediatamente.
-        state.autoPlaySuspended = true;
-      } else if (userDiff > 2.0) {
-        // El usuario vuelve a deslizar hacia abajo: se reinicia la autoreproducción continua
-        state.autoPlaySuspended = false;
-      }
+      if (userDiff < -1.5) state.autoPlaySuspended = true;
+      else if (userDiff > 2.0) state.autoPlaySuspended = false;
 
       if (!state.autoPlaySuspended) {
-        // Avance continuo hacia abajo: suma el impulso del usuario al motor continuo
         const userForwardLead = Math.max(0, userDiff);
         const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
-        const totalDy = autoDy + userDy;
-        const nextY = Math.min(top + len, y + totalDy);
+        const nextY = Math.min(endY, y + autoDy + userDy);
         const remainingLead = Math.max(0, userForwardLead - userDy);
         lenis.scrollTo(nextY, { immediate: true });
-        if (remainingLead > 0.5) {
-          lenis.targetScroll = nextY + remainingLead;
-        }
+        if (remainingLead > 0.5) lenis.targetScroll = nextY + remainingLead;
       }
     } else {
-      // Modo vertical / móvil (#top) o scroll nativo sin Lenis:
       const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
       const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
 
@@ -234,15 +262,13 @@
       state.lastTrackedY = currentY;
 
       if (scrollDelta < -1.5) {
-        // El usuario desliza hacia arriba: se frena el automático y puede subir libremente a la sección previa
         state.autoPlaySuspended = true;
         state.subpixelAcc = 0;
       } else if (scrollDelta > 2.0) {
-        // El usuario desliza hacia abajo: se reinicia el automático
         state.autoPlaySuspended = false;
       }
 
-      if (!state.autoPlaySuspended && currentY < top + len) {
+      if (!state.autoPlaySuspended && currentY < endY - 0.5) {
         if (isUserTouching) {
           state.subpixelAcc = 0;
         } else {
@@ -250,12 +276,9 @@
           if (state.subpixelAcc >= 1) {
             const intStep = Math.floor(state.subpixelAcc);
             state.subpixelAcc -= intStep;
-            const nextY = Math.min(top + len, currentY + intStep);
-            if (scroller === window) {
-              window.scrollTo(0, nextY);
-            } else {
-              scroller.scrollTop = nextY;
-            }
+            const nextY = Math.min(endY, currentY + intStep);
+            if (scroller === window) window.scrollTo(0, nextY);
+            else scroller.scrollTop = nextY;
           }
         }
       }
@@ -264,9 +287,6 @@
 
   /* ---------------------------------------------------------
      MOTOR DE SECUENCIAS
-     Pantalla completa → encuadre de proyección.
-     Obra I: nítida con velo. Obras II–IV: nacen del negro,
-     desenfocadas, y se revelan mientras se reencuadran.
      --------------------------------------------------------- */
   class Sequence {
     constructor(el) {
@@ -275,16 +295,17 @@
       this.isFullscreen = el.classList.contains("seq--fullscreen");
       this.isTrace = el.classList.contains("seq--trace");
       this.isKinetic = el.classList.contains("seq--kinetic");
-      this.isFiesta = el.id === "film-02" || el.classList.contains("seq--fiesta");
-      this.isHybrid = el.dataset.mode === "hybrid" || el.classList.contains("seq--trace") || el.id === "trazado" || el.id === "film-04" || el.id === "film-03" || el.id === "nocturno";
+      this.isCinema = el.classList.contains("seq--cinema");
+      this.isHybrid = el.dataset.mode === "hybrid" || this.isTrace || this.isKinetic || this.isCinema || this.isHero;
       this.autoPlayPaused = false;
       this.autoPlaySuspended = false;
       this.lastTrackedY = undefined;
+
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
       this.version = el.dataset.version || "";
-      this.fps = +el.dataset.fps || 25;
-      this.durationSec = Math.round(this.count / this.fps);
+      this.fps = +el.dataset.fps || 24;
+      this.customDuration = parseFloat(el.dataset.duration) || 0;
 
       this.stage = $(".seq__stage", el);
       this.media = $(".seq__media", el);
@@ -294,80 +315,26 @@
       this.hero = $("[data-seq-hero]", el);
       this.lead = $("[data-seq-lead]", el);
 
-      // Elementos específicos de secuencia Cinética (Obra III · Casa Hudson)
       if (this.isKinetic) {
         this.kWingL = $("[data-kseq-wing-l]", el);
         this.kWingR = $("[data-kseq-wing-r]", el);
-        this.kLoupeBox = $("[data-kseq-loupe-box]", el);
-        this.kLoupeCanvas = $("[data-kseq-loupe]", el);
-        this.kLoupeCtx = this.kLoupeCanvas ? this.kLoupeCanvas.getContext("2d", { alpha: false }) : null;
-        if (this.kLoupeCanvas) {
-          this.kLoupeCanvas.width = 360;
-          this.kLoupeCanvas.height = 414;
-        }
-        this.kPanel1 = $("[data-kseq-panel-1]", el);
-        this.kPanel2 = $("[data-kseq-panel-2]", el);
-        this.kCota1 = $("[data-kseq-cota-1]", el);
-        this.kCota2 = $("[data-kseq-cota-2]", el);
         this.kPhase = $("[data-kseq-phase]", el);
-        this.kDist = $("[data-kseq-dist]", el);
-        this.kFocal = $("[data-kseq-focal]", el);
-        this.kCropLabel = $("[data-kseq-crop-label]", el);
       }
 
-      // Elementos específicos de secuencia de Fiestas & Eventos (Obra II · Vonharv + Randa I & II)
-      if (this.isFiesta) {
-        this.randaBox = $("[data-seq-randa]", el);
-        this.randaFlare = $(".seq__randa-flare", el);
-        this.randaCanvases = [
-          $("[data-randa-canvas='1']", el),
-          $("[data-randa-canvas='2']", el),
-        ];
-        this.randaCtxs = this.randaCanvases.map((c) => (c ? c.getContext("2d", { alpha: false }) : null));
-        this.randaPosters = $$(".seq__randa-poster", el);
-        this.randaCards = $$(".seq__randa-card", el);
-        this.randaBadge = $(".seq__randa-badge", el);
-        this.randaTc = $("[data-randa-tc]", el);
-        this.randaFr1 = $("[data-randa-fr='1']", el);
-        this.randaFr2 = $("[data-randa-fr='2']", el);
-        this.randaCount = 208;
-        this.randa1Frames = [];
-        this.randa2Frames = [];
-        this.randaLoaded = false;
-        this.randaLoading = false;
-        this.randaCur = 0;
-        this.lastRandaCur = -1;
-        this.lastRandaFr = -1;
-        this._randaCompleteSet = false;
+      if (this.isCinema) {
+        this.cinemaPrelude = $("[data-cinema-prelude]", el);
       }
 
-      // Elementos específicos de secuencia Fullscreen
-      this.fsOverlay = $(".seq-fs__overlay", el);
-      this.fsActs = $$(".seq-fs__act", el).map((n) => ({
-        n,
-        r: n.dataset.fsAct.split(",").map(Number),
-      }));
-      this.fsBar = $("[data-fs-bar]", el);
-      this.fsTc = $("[data-fs-tc]", el);
-      this.fsRailDots = $$("[data-fs-rail-dot]", el);
-      this.fsRailFill1 = $("[data-fs-rail-fill]", el);
-      this.fsRailFill2 = $("[data-fs-rail-fill-2]", el);
-
-      // Elementos específicos de Cartografía de Vuelo y Planta Arquitectónica (#trazado)
       if (this.isTrace) {
-        this.traceCamera = $("[data-trace-camera]", el);
         this.tracePathCore = $("#tracePathCore", el);
         this.tracePathGlow = $("#tracePathGlow", el);
-        this.tracePathGhost = $("#tracePathGhost", el);
         this.traceDrone = $("[data-trace-drone]", el);
         this.traceDroneRot = $("[data-trace-drone-rot]", el);
         this.traceDroneTxt = $("[data-trace-drone-txt]", el);
         this.traceWakeRing = $("[data-trace-wake]", el);
 
-        // Elementos formato vertical (mobile / portrait)
         this.tracePathCoreV = $("#tracePathCoreV", el);
         this.tracePathGlowV = $("#tracePathGlowV", el);
-        this.tracePathGhostV = $("#tracePathGhostV", el);
         this.traceDroneV = $("[data-trace-drone-v]", el);
         this.traceDroneRotV = $("[data-trace-drone-rot-v]", el);
         this.traceDroneTxtV = $("[data-trace-drone-txt-v]", el);
@@ -379,6 +346,7 @@
         this.tracePlanStateEl = $("[data-trace-plan-state]", el);
         this.traceDistEl = $("[data-trace-dist]", el);
         this.traceRoomNameEl = $("[data-trace-room-name]", el);
+        this.traceTcEl = $("[data-trace-tc]", el);
         this.traceRooms = $$("[data-trace-room]", el);
         this.traceRoomsV = $$("[data-trace-room-v]", el);
         this.traceWps = $$("[data-trace-wp]", el);
@@ -387,9 +355,9 @@
           n,
           r: n.dataset.traceAct.split(",").map(Number),
         }));
-        this.traceSecBtns = $$("[data-trace-jump]", el);
         this.traceCur = 0;
         this.lastTraceZone = -1;
+
         this.tracePathLen = 1034;
         if (this.tracePathCore && typeof this.tracePathCore.getTotalLength === "function") {
           try {
@@ -421,78 +389,6 @@
           this.tracePathGlowV.style.strokeDasharray = `${this.tracePathLenV}`;
           this.tracePathGlowV.style.strokeDashoffset = `${this.tracePathLenV}`;
         }
-
-        if (this.traceSecBtns && this.traceSecBtns.length) {
-          this.traceSecBtns.forEach((btn) => {
-            btn.addEventListener("click", (e) => {
-              e.stopPropagation();
-              const targetP = parseFloat(btn.dataset.traceJump) || 0;
-              this.seekToProgress(clamp(targetP));
-              playTactileTick(680, 0.025, 0.02);
-            });
-          });
-        }
-
-        // Motor híbrido: Entrada con scroll + Colchón sticky nativo + Proyección autónoma asistida
-        this.isHybrid = true;
-        this.autoPlayProg = 0;
-        this.autoPlayActive = false;
-        this.autoPlayPaused = false;
-        this.entranceComplete = false;
-        this.inView = false;
-        this.entranceScrubMax = 0.16;
-        this.scrollBoost = 0;
-        this.loopHoldTimer = 0;
-        this.takeoverTimer = 0;
-        this.takeoverMode = "auto";
-        this.lastHybridY = undefined;
-
-        this.traceTakeover = $("[data-trace-takeover]", el);
-        this.traceTakeoverRing = $("[data-trace-takeover-ring]", el);
-        this.traceTakeoverTitle = $("[data-trace-takeover-title]", el);
-        this.traceTakeoverSub = $("[data-trace-takeover-sub]", el);
-        this.traceRadialProg = $("[data-trace-radial-prog]", el);
-        this.traceTcEl = $("[data-trace-tc]", el);
-        this.traceSegBtns = $$("[data-trace-seg]", el);
-        this.traceSegFills = $$("[data-trace-seg-fill]", el);
-
-        this.traceStatusBadge = $("[data-trace-status-badge]", el);
-        this.traceStatusText = $("[data-trace-status-text]", el);
-        this.tracePlayToggle = $("[data-trace-play-toggle]", el);
-        this.tracePlayIcon = $("[data-trace-play-icon]", el);
-        this.tracePlayLabel = $("[data-trace-play-label]", el);
-        this.traceSkipBtn = $("[data-trace-skip-btn]", el);
-        this.traceHeaderSkip = $("[data-trace-header-skip]", el);
-        this.traceHint = $("[data-trace-hint]", el);
-
-        if (this.tracePlayToggle) {
-          this.tracePlayToggle.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.togglePlayPause();
-          });
-        }
-
-        if (this.traceSkipBtn) {
-          this.traceSkipBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.skipSection();
-          });
-        }
-
-        if (this.traceHeaderSkip) {
-          this.traceHeaderSkip.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.skipSection();
-          });
-        }
-
-        if (this.media) {
-          this.media.addEventListener("click", () => {
-            if (this.entranceComplete) {
-              this.togglePlayPause();
-            }
-          });
-        }
       }
 
       this.chapters = $$(".chapter", el).map((n) => ({
@@ -503,35 +399,10 @@
 
       this.tcEl = $("[data-tc]", el);
       this.frEl = $("[data-hud-fr]", el);
-      this.scrub = $(".seq__scrub", el) || $(".seq-fs__scrub", el);
-      this.scrubTrack = $(".seq__track", el) || $(".seq-fs__bar", el);
-      this.scrubFill = $("[data-scrub-fill]", el) || $("[data-fs-bar]", el);
+      this.scrub = $(".seq__scrub", el);
+      this.scrubTrack = $(".seq__track", el);
+      this.scrubFill = $("[data-scrub-fill]", el);
       this.outroCard = $("[data-seq-outro]", el);
-      if (this.outroCard) {
-        this.gleamAngle = 45;
-        this.outroGleamOp = 0;
-      }
-
-      // Generar marcas de capítulo sobre la línea de tiempo
-      if (this.scrubTrack && this.chapters.length && !this.isKinetic) {
-        const pStart = this.isHero ? 0.0 : -0.16;
-        const pEnd = 0.88;
-        this.chapters.forEach((ch) => {
-          const tick = document.createElement("span");
-          tick.className = "seq__ch-tick";
-          const posPct = clamp((ch.r[0] - pStart) / (pEnd - pStart)) * 100;
-          tick.style.left = `${posPct.toFixed(1)}%`;
-          this.scrubTrack.appendChild(tick);
-          ch.tick = tick;
-        });
-      }
-
-      if (this.isFiesta && this.scrubTrack) {
-        const tickR = document.createElement("span");
-        tickR.className = "seq__ch-tick";
-        tickR.style.left = "42%";
-        this.scrubTrack.appendChild(tickR);
-      }
 
       this.frames = [];
       this.cur = 0;
@@ -543,47 +414,25 @@
       this.lastScrollPos = undefined;
       this.tiltRx = 0;
       this.tiltRy = 0;
-      this.isLoupeVisible = false;
 
       if (this.isHybrid && !this.isTrace && this.media) {
         this.media.addEventListener("click", (e) => {
-          if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq-fs__yt-wrap, .seq-fs__scrub, .seq__scrub")) return;
+          if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq__scrub")) return;
           this.togglePlayPause();
         });
-        if (this.stage && this.isFullscreen) {
-          this.stage.addEventListener("click", (e) => {
-            if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq-fs__yt-wrap, .seq-fs__scrub, .seq__scrub")) return;
-            this.togglePlayPause();
-          });
-        }
       }
       this.bindScrub();
       this.measure();
-      if (!this.isHero) this.setVisualFilter(16, 1);
+      if (!this.isHero && !this.isKinetic && !this.isCinema) this.setVisualFilter(10, 1);
     }
 
     bindScrub() {
       if (!this.scrub) return;
-      const fromEvent = (e) => {
-        const rect = this.scrub.getBoundingClientRect();
-        const x = e.touches ? e.touches[0].clientX : e.clientX;
-        if (x === undefined) return;
-        this.seekToProgress(clamp((x - rect.left) / rect.width));
-      };
-      const start = (e, moveEv, endEv) => {
-        if (!e.target.closest("[data-trace-jump]")) {
-          fromEvent(e);
-        }
-        const onMove = (ev) => fromEvent(ev);
-        const onEnd = () => {
-          removeEventListener(moveEv, onMove);
-          removeEventListener(endEv, onEnd);
-        };
-        addEventListener(moveEv, onMove, { passive: true });
-        addEventListener(endEv, onEnd);
-      };
-      this.scrub.addEventListener("mousedown", (e) => start(e, "mousemove", "mouseup"));
-      this.scrub.addEventListener("touchstart", (e) => start(e, "touchmove", "touchend"), { passive: true });
+      bindTimelineScrub(
+        this.scrub,
+        (r, opts) => this.seekToProgress(r, opts),
+        (active) => { this.isScrubbing = active; }
+      );
       this.scrub.addEventListener("keydown", (e) => {
         const step = e.shiftKey ? 0.1 : 0.04;
         const cur = this.progress || 0;
@@ -592,71 +441,41 @@
       });
     }
 
-    seekToProgress(progress) {
+    seekToProgress(progress, opts = {}) {
       const targetP = clamp(progress, 0, 1);
       const targetY = this.top + targetP * this.len;
-      if (scrollContainer && isVerticalScroller()) scrollToTarget(targetY, { duration: 0.6 });
-      else if (lenis) lenis.scrollTo(targetY, { duration: 0.6 });
-      else scrollToTarget(targetY, { duration: 0.6 });
+      scrollToTarget(targetY, { duration: 0.45, immediate: !!opts.immediate });
     }
 
     togglePlayPause() {
       if (!this.isHybrid) return;
       if (this.progress >= 0.99) {
-        this.seekToProgress(0.01);
+        this.seekToProgress(0.03);
         this.autoPlayPaused = false;
         playTactileTick(720, 0.025, 0.02);
         return;
       }
       this.autoPlayPaused = !this.autoPlayPaused;
       playTactileTick(this.autoPlayPaused ? 480 : 660, 0.02, 0.015);
-      this.updateControlsUI();
-    }
-
-    restartAutoPlay() {
-      this.seekToProgress(0.01);
-      this.autoPlayPaused = false;
-      this.autoPlayActive = true;
-      playTactileTick(720, 0.025, 0.02);
-      this.updateControlsUI();
-    }
-
-    skipSection() {
-      playTactileTick(560, 0.025, 0.02);
-      this.takeoverTimer = 0;
-      if (this.traceTakeover) this.traceTakeover.classList.remove("is-visible");
-      const nextTarget = this.el.nextElementSibling || $("#film-03") || $("#film-02");
-      if (nextTarget) {
-        scrollToTarget(nextTarget, { duration: 1.15 });
-      } else {
-        const nextY = this.top + this.len + vh;
-        scrollToTarget(nextY, { duration: 1.15 });
-      }
-    }
-
-    updateControlsUI() {
-      // Interfaz limpia: la barra de tiempo y telemetría de recorrido se actualizan directamente
     }
 
     pickSet() {
-      if (this.isKinetic) return "lg";
+      // #propiedad y #film-03 siempre horizontales 16:9 (tanto en escritorio como en vertical)
+      if (this.isKinetic || this.isCinema) return "lg";
       return vw / vh < 0.9 ? "pt" : "lg";
     }
 
-    /* Tamaño del encuadre final (16:9 horizontal / 9:16 vertical) */
     target() {
-      const portrait = vw / vh < 0.9 || vw <= 640;
+      const portrait = vw / vh < 0.9 || vw <= 680;
       let tw, th;
       if (portrait) {
-        // En vertical / móvil: proporción equilibrada con mayor presencia visual y margen compacto
-        th = Math.min(vh * 0.68, 660);
+        th = Math.min(vh * 0.66, 640);
         tw = th * 9 / 16;
-        if (tw > vw * 0.90) { tw = vw * 0.90; th = tw * 16 / 9; }
+        if (tw > vw * 0.88) { tw = vw * 0.88; th = tw * 16 / 9; }
       } else {
-        // En horizontal / escritorio: encuadre de cine amplio y de alto impacto
-        tw = Math.min(vw * 0.88, 1480);
+        tw = Math.min(vw * 0.86, 1420);
         th = tw * 9 / 16;
-        const maxH = Math.min(vh * 0.74, vh - 190);
+        const maxH = Math.min(vh * 0.72, vh - 190);
         if (th > maxH) { th = maxH; tw = th * 16 / 9; }
       }
       return { tw: Math.round(tw), th: Math.round(th) };
@@ -666,7 +485,7 @@
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.min(1920, Math.round(vw * dpr));
       const h = Math.min(1680, Math.round(vh * dpr));
-      if (this.canvas.width !== w || this.canvas.height !== h) {
+      if (!this.isKinetic && !this.isCinema && (this.canvas.width !== w || this.canvas.height !== h)) {
         this.canvas.width = w;
         this.canvas.height = h;
         this.dirty = true;
@@ -675,7 +494,8 @@
       this.len = Math.max(1, this.el.offsetHeight - vh);
 
       const t = this.target();
-      this.tw = t.tw; this.th = t.th;
+      this.tw = t.tw;
+      this.th = t.th;
       this.stage.style.setProperty("--tw", `${t.tw}px`);
       this.stage.style.setProperty("--th", `${t.th}px`);
 
@@ -683,17 +503,12 @@
         const isMob = vw <= 900 || (vw / vh < 0.95);
         let kw, kh;
         if (isMob) {
-          kw = Math.min(vw * 0.92, 580);
+          kw = Math.min(vw * 0.92, 540);
           kh = Math.round(kw * (9 / 16));
-          const maxKh = Math.min(vh * 0.44, vh - 180);
-          if (kh > maxKh) {
-            kh = maxKh;
-            kw = Math.round(kh * (16 / 9));
-          }
         } else {
-          kw = Math.min(vw * 0.58, 1020);
+          kw = Math.min(vw * 0.68, 980);
           kh = Math.round(kw * (9 / 16));
-          const maxKh = Math.min(vh * 0.64, vh - 210);
+          const maxKh = Math.min(vh * 0.62, vh - 220);
           if (kh > maxKh) {
             kh = maxKh;
             kw = Math.round(kh * (16 / 9));
@@ -704,7 +519,6 @@
         this.stage.style.setProperty("--kseq-w", `${this.kw}px`);
         this.stage.style.setProperty("--kseq-h", `${this.kh}px`);
 
-        // Canvas 16:9 exacto para la secuencia cinética: 0 crop y 0 zoom tanto en móvil como en escritorio
         const cw = Math.round(this.kw * dpr);
         const ch = Math.round(this.kh * dpr);
         if (this.canvas.width !== cw || this.canvas.height !== ch) {
@@ -714,18 +528,38 @@
         }
       }
 
-      if (this.isFiesta && this.randaCanvases) {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        this.randaCanvases.forEach((c) => {
-          if (!c) return;
-          const rect = c.getBoundingClientRect();
-          const cw = Math.round((rect.width || 540) * dpr);
-          const ch = Math.round((rect.height || 304) * dpr);
-          if (c.width !== cw || c.height !== ch) {
-            c.width = cw;
-            c.height = ch;
+      if (this.isCinema) {
+        const isMob = vw <= 900 || (vw / vh < 0.95);
+        let cwBox, chBox;
+        if (isMob) {
+          cwBox = Math.min(vw * 0.92, 600);
+          chBox = Math.round(cwBox * (9 / 16));
+          const maxCh = Math.max(160, vh - 190);
+          if (chBox > maxCh) {
+            chBox = maxCh;
+            cwBox = Math.round(chBox * (16 / 9));
           }
-        });
+        } else {
+          cwBox = Math.min(vw * 0.82, 1320);
+          chBox = Math.round(cwBox * (9 / 16));
+          const maxCh = Math.min(vh * 0.70, vh - 210);
+          if (chBox > maxCh) {
+            chBox = maxCh;
+            cwBox = Math.round(chBox * (16 / 9));
+          }
+        }
+        this.cwBox = Math.round(cwBox);
+        this.chBox = Math.round(chBox);
+        this.el.style.setProperty("--cinema-w", `${this.cwBox}px`);
+        this.el.style.setProperty("--cinema-h", `${this.chBox}px`);
+
+        const cw = Math.round(this.cwBox * dpr);
+        const ch = Math.round(this.chBox * dpr);
+        if (this.canvas.width !== cw || this.canvas.height !== ch) {
+          this.canvas.width = cw;
+          this.canvas.height = ch;
+          this.dirty = true;
+        }
       }
 
       const set = this.pickSet();
@@ -738,12 +572,10 @@
     order() {
       const n = this.count, seen = new Uint8Array(n), out = [];
       out.push(0); seen[0] = 1;
-      // Paso 1: Cobertura densa inicial cada 2 fotogramas (paso 2 = 12fps continuo de inmediato)
-      for (let i = 2; i < n; i += 2) {
+      for (let i = 3; i < n; i += 3) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
       if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      // Paso 2: Intercalar fotogramas impares restantes para fluidez completa
       for (let i = 1; i < n; i += 2) {
         if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
@@ -759,7 +591,7 @@
       const token = ++this.token;
       this.frames = new Array(this.count);
       const queue = this.order();
-      const first = Math.min(40, Math.ceil(this.count / 2));
+      const first = Math.min(18, Math.ceil(this.count * 0.25));
       let qi = 0, done = 0;
       const parallel = 4;
 
@@ -777,14 +609,12 @@
             this.el.classList.add("has-canvas");
             this.draw(0);
           }
-          if (Math.abs(i - Math.round(this.cur)) <= 2) {
-            this.dirty = true;
-          }
+          if (Math.abs(i - Math.round(this.cur)) <= 2) this.dirty = true;
           next();
         };
         img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
         img.onerror = () => finish(false);
-        const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
+        const vParam = this.version ? `?v=${this.version}` : "";
         img.src = `${this.src}/${set}/${pad(i + 1, 4)}.webp${vParam}`;
       };
       for (let k = 0; k < parallel; k++) next();
@@ -793,26 +623,15 @@
     nearest(i) {
       const f = this.frames;
       if (f[i]) return f[i];
-      const targetSet = this.set || this.pickSet();
-      const donor = typeof sequences !== "undefined" && sequences[0];
-      if (donor && donor !== this && donor.src === this.src && donor.set === targetSet && donor.frames && donor.frames[i]) {
-        return donor.frames[i];
-      }
       for (let d = 1; d < this.count; d++) {
         if (f[i - d]) return f[i - d];
         if (f[i + d]) return f[i + d];
-        if (donor && donor !== this && donor.src === this.src && donor.set === targetSet && donor.frames) {
-          if (donor.frames[i - d]) return donor.frames[i - d];
-          if (donor.frames[i + d]) return donor.frames[i + d];
-        }
       }
       return null;
     }
 
     draw(pos) {
-      const n = this.count;
-      const f = Math.round(clamp(pos, 0, n - 1));
-
+      const f = Math.round(clamp(pos, 0, this.count - 1));
       const img = this.nearest(f);
       if (!img || !img.naturalWidth) return;
       if (this.lastDrawnImg === img && !this.dirty) return;
@@ -840,143 +659,24 @@
       this.dirty = false;
     }
 
-    loadRanda() {
-      if (this.randaLoading || this.randaLoaded) return;
-      this.randaLoading = true;
-      const count = this.randaCount || 208;
-      this.randa1Frames = new Array(count);
-      this.randa2Frames = new Array(count);
-
-      const loadSeq = (slug, targetArr, cardIdx) => {
-        const queue = [0];
-        for (let i = 3; i < count; i += 3) queue.push(i);
-        if (!queue.includes(count - 1)) queue.push(count - 1);
-        for (let i = 1; i < count; i++) {
-          if (!queue.includes(i)) queue.push(i);
-        }
-
-        let qi = 0;
-        const parallel = 3;
-        const next = () => {
-          if (qi >= queue.length) return;
-          const idx = queue[qi++];
-          const img = new Image();
-          img.decoding = "async";
-          const finish = (ok) => {
-            if (ok) targetArr[idx] = img;
-            if (idx === 0 && ok) {
-              if (this.randaCards && this.randaCards[cardIdx]) {
-                this.randaCards[cardIdx].classList.add("has-canvas");
-              }
-              this.drawRanda(0);
-            }
-            next();
-          };
-          img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
-          img.onerror = () => finish(false);
-          img.src = `assets/seq/${slug}/lg/${pad(idx + 1, 4)}.webp?v=1792892959`;
-        };
-        for (let k = 0; k < parallel; k++) next();
-      };
-
-      loadSeq("randa1", this.randa1Frames, 0);
-      loadSeq("randa2", this.randa2Frames, 1);
-      this.randaLoaded = true;
-    }
-
-    nearestRanda(num, i) {
-      const f = num === 1 ? this.randa1Frames : this.randa2Frames;
-      if (!f) return null;
-      if (f[i]) return f[i];
-      for (let d = 1; d < this.randaCount; d++) {
-        if (f[i - d]) return f[i - d];
-        if (f[i + d]) return f[i + d];
-      }
-      return null;
-    }
-
-    drawRanda(pos) {
-      if (!this.randaCanvases) return;
-      const n = this.randaCount;
-      const f = Math.round(clamp(pos, 0, n - 1));
-
-      if (!this.lastRandaImgs) this.lastRandaImgs = [];
-
-      [1, 2].forEach((num, idx) => {
-        const c = this.randaCanvases[idx];
-        const ctx = this.randaCtxs[idx];
-        if (!c || !ctx) return;
-
-        const img = this.nearestRanda(num, f);
-        if (!img || !img.naturalWidth) return;
-        if (this.lastRandaImgs[idx] === img) return;
-
-        const cw = c.width, ch = c.height;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "low";
-        ctx.drawImage(img, 0, 0, cw, ch);
-        this.lastRandaImgs[idx] = img;
-      });
-    }
-
     setVisualFilter(blurPx, grayVal = 0) {
       const b = Math.max(0, Math.round(blurPx * 10) / 10);
       const g = Math.max(0, Math.min(1, Math.round(grayVal * 100) / 100));
       if (b === this.lastBlur && g === this.lastGray) return;
       this.lastBlur = b;
       this.lastGray = g;
-
       const parts = [];
       if (b > 0.05) parts.push(`blur(${b}px)`);
       if (g > 0.01) parts.push(`grayscale(${g})`);
       const f = parts.length ? parts.join(" ") : "none";
-
       this.canvas.style.filter = f;
       if (this.posterImg) this.posterImg.style.filter = f;
     }
 
-    setBlur(px) {
-      this.setVisualFilter(px, 0);
-    }
-
-    setText(el, o, ty, blur) {
+    setText(el, o, ty) {
       el.style.opacity = o.toFixed(3);
       el.style.transform = ty ? `translate3d(0, ${ty.toFixed(2)}vh, 0)` : "none";
-      el.style.filter = blur > 0.1 ? `blur(${blur.toFixed(1)}px)` : "none";
       el.style.visibility = o <= 0.001 ? "hidden" : "visible";
-    }
-
-    updateOutroGleam(p, dt) {
-      if (!this.outroCard) return;
-
-      // Despierta de forma sutil justo cuando la secuencia termina y la pantalla se funde a negro (p >= 0.74)
-      const inRange = p >= 0.74 && p < 1.25;
-      const targetOp = inRange
-        ? (p >= 1.0 ? Math.max(0, 1 - (p - 1.0) * 4) : smooth(range(p, 0.74, 0.84)))
-        : 0;
-
-      if (targetOp <= 0.001) {
-        if (this.outroGleamOp !== 0) {
-          this.outroCard.style.setProperty("--outro-gleam-op", "0");
-          this.outroGleamOp = 0;
-        }
-        return;
-      }
-
-      // Los destellos del contorno giran exclusivamente ligados al scroll (arriba y abajo)
-      const targetAngle = 45 + (p - 0.74) * 540;
-
-      if (this.gleamAngle === undefined) this.gleamAngle = targetAngle;
-      const kAngle = dt ? Math.min(1, 1 - Math.exp(-14 * dt)) : 0.20;
-
-      let diff = (targetAngle - this.gleamAngle) % 360;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-      this.gleamAngle += diff * kAngle;
-
-      this.outroGleamOp = targetOp;
-      this.outroCard.style.setProperty("--outro-gleam-op", targetOp.toFixed(3));
-      this.outroCard.style.setProperty("--gradient-angle", `${this.gleamAngle.toFixed(1)}deg`);
     }
 
     updateTrace(traceTarget, p, viewportEntry, dt) {
@@ -986,14 +686,12 @@
       if (Math.abs(traceTarget - this.traceCur) < 0.001) this.traceCur = traceTarget;
       const tp = clamp(this.traceCur, 0, 1);
 
-      // Desplazamiento de entrada y visibilidad de HUD
       const entryShiftY = -(1 - smooth(viewportEntry)) * (vh * 0.14);
       const outro = smooth(range(p, 0.92, 1.15));
       const hudOp = smooth(range(viewportEntry, 0.10, 0.58)) * (1 - outro * 0.85);
       st.setProperty("--trace-entry-y", `${entryShiftY.toFixed(1)}px`);
       st.setProperty("--trace-hud-op", hudOp.toFixed(3));
 
-      // 1. Posición milimétrica del punto óptico y dibujo progresivo del recorrido
       const totalLen = this.tracePathLen || 1034;
       const curLen = tp * totalLen;
       const dashOffset = (totalLen - curLen).toFixed(1);
@@ -1007,28 +705,20 @@
           const p1 = this.tracePathCore.getPointAtLength(Math.max(0, curLen - 6));
           const p2 = this.tracePathCore.getPointAtLength(Math.min(totalLen, curLen + 6));
           const tangentDeg = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
-
-          // Lógica de encuadre cinematográfico horizontal:
-          // Al cruzar el umbral (tp: 0.22 -> 0.44), el cono óptico gira sutilmente hacia el Patio de Luz Norte (-24°).
-          // Al recorrer la Nave Principal (tp: 0.46 -> 0.76), barre suavemente hacia el estar y comedor (+16°).
           const patioLook = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -24;
           const naveLook = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
           const coneDeg = tangentDeg + patioLook + naveLook;
           yawReading = Math.round((90 + coneDeg + 360) % 360);
-
           this.traceDrone.setAttribute("transform", `translate(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
-          if (this.traceDroneRot) {
-            this.traceDroneRot.setAttribute("transform", `rotate(${coneDeg.toFixed(1)})`);
-          }
+          if (this.traceDroneRot) this.traceDroneRot.setAttribute("transform", `rotate(${coneDeg.toFixed(1)})`);
         } catch (_) {}
       }
 
-      // 1b. Posición y ángulo para formato Vertical (Mobile / Portrait)
       if (this.tracePathCoreV) {
         const totalLenV = this.tracePathLenV || 690;
         const curLenV = tp * totalLenV;
         const dashOffsetV = (totalLenV - curLenV).toFixed(1);
-        if (this.tracePathCoreV) this.tracePathCoreV.style.strokeDashoffset = dashOffsetV;
+        this.tracePathCoreV.style.strokeDashoffset = dashOffsetV;
         if (this.tracePathGlowV) this.tracePathGlowV.style.strokeDashoffset = dashOffsetV;
 
         if (this.traceDroneV) {
@@ -1037,90 +727,57 @@
             const p1V = this.tracePathCoreV.getPointAtLength(Math.max(0, curLenV - 6));
             const p2V = this.tracePathCoreV.getPointAtLength(Math.min(totalLenV, curLenV + 6));
             const tangentDegV = Math.atan2(p2V.y - p1V.y, p2V.x - p1V.x) * (180 / Math.PI);
-
-            // Giro sutil del cono óptico en vertical:
-            // Al bajar por el Umbral (tp: 0.22 -> 0.44), mira hacia el Patio de Luz a la derecha (-20°)
-            // Al transitar la Nave (tp: 0.46 -> 0.76), barre hacia el Estar a la izquierda (+16°)
             const patioLookV = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -20;
             const naveLookV = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
             const coneDegV = (tangentDegV - 90) + patioLookV + naveLookV;
-
             if (window.matchMedia && window.matchMedia("(max-aspect-ratio: 9/10)").matches) {
               yawReading = Math.round((tangentDegV + patioLookV + naveLookV + 360) % 360);
             }
-
             this.traceDroneV.setAttribute("transform", `translate(${ptV.x.toFixed(1)}, ${ptV.y.toFixed(1)})`);
-            if (this.traceDroneRotV) {
-              this.traceDroneRotV.setAttribute("transform", `rotate(${coneDegV.toFixed(1)})`);
-            }
+            if (this.traceDroneRotV) this.traceDroneRotV.setAttribute("transform", `rotate(${coneDegV.toFixed(1)})`);
           } catch (_) {}
         }
       }
 
-      // 2. Emergencia progresiva de la planta arquitectónica (despierta cuando el punto llega al pórtico)
-      const darkT = smooth(range(tp, 0.12, 0.28));
-      st.setProperty("--trace-darken-op", darkT.toFixed(3));
+      st.setProperty("--trace-darken-op", smooth(range(tp, 0.12, 0.28)).toFixed(3));
+      st.setProperty("--trace-grid-op", smooth(range(tp, 0.14, 0.26)).toFixed(3));
+      st.setProperty("--trace-plan-op", smooth(range(tp, 0.15, 0.23)).toFixed(3));
+      st.setProperty("--trace-draw-1", smooth(range(tp, 0.15, 0.28)).toFixed(3));
+      st.setProperty("--trace-draw-2", smooth(range(tp, 0.21, 0.35)).toFixed(3));
+      st.setProperty("--trace-draw-3", smooth(range(tp, 0.27, 0.41)).toFixed(3));
+      st.setProperty("--trace-sec1-op", smooth(range(tp, 0.15, 0.24)).toFixed(3));
+      st.setProperty("--trace-sec2-op", smooth(range(tp, 0.20, 0.30)).toFixed(3));
+      st.setProperty("--trace-sec3-op", smooth(range(tp, 0.26, 0.37)).toFixed(3));
+      st.setProperty("--trace-ghost-op", ((0.14 + 0.32 * smooth(range(tp, 0.18, 0.32))) * (1 - smooth(range(tp, 0.92, 0.99)))).toFixed(3));
 
-      const gridOp = smooth(range(tp, 0.14, 0.26));
-      const planOp = smooth(range(tp, 0.15, 0.23));
-      const draw1 = smooth(range(tp, 0.15, 0.28));
-      const draw2 = smooth(range(tp, 0.21, 0.35));
-      const draw3 = smooth(range(tp, 0.27, 0.41));
-      const sec1Op = smooth(range(tp, 0.15, 0.24));
-      const sec2Op = smooth(range(tp, 0.20, 0.30));
-      const sec3Op = smooth(range(tp, 0.26, 0.37));
-      const ghostOp = (0.14 + 0.32 * smooth(range(tp, 0.18, 0.32))) * (1 - smooth(range(tp, 0.92, 0.99)));
-
-      st.setProperty("--trace-grid-op", gridOp.toFixed(3));
-      st.setProperty("--trace-plan-op", planOp.toFixed(3));
-      st.setProperty("--trace-draw-1", draw1.toFixed(3));
-      st.setProperty("--trace-draw-2", draw2.toFixed(3));
-      st.setProperty("--trace-draw-3", draw3.toFixed(3));
-      st.setProperty("--trace-sec1-op", sec1Op.toFixed(3));
-      st.setProperty("--trace-sec2-op", sec2Op.toFixed(3));
-      st.setProperty("--trace-sec3-op", sec3Op.toFixed(3));
-      st.setProperty("--trace-ghost-op", ghostOp.toFixed(3));
-
-      // Onda sutil de activación en el umbral cuando aparece el plano
       const wakeWave = range(tp, 0.15, 0.30);
       if (this.traceWakeRing) {
         if (wakeWave > 0 && wakeWave < 1) {
-          const r = 10 + smooth(wakeWave) * 195;
-          const op = Math.sin(wakeWave * Math.PI) * 0.52;
-          this.traceWakeRing.setAttribute("r", r.toFixed(1));
-          this.traceWakeRing.setAttribute("stroke-opacity", op.toFixed(3));
+          this.traceWakeRing.setAttribute("r", (10 + smooth(wakeWave) * 195).toFixed(1));
+          this.traceWakeRing.setAttribute("stroke-opacity", (Math.sin(wakeWave * Math.PI) * 0.52).toFixed(3));
         } else {
           this.traceWakeRing.setAttribute("stroke-opacity", "0");
         }
       }
       if (this.traceWakeRingV) {
         if (wakeWave > 0 && wakeWave < 1) {
-          const r = 10 + smooth(wakeWave) * 150;
-          const op = Math.sin(wakeWave * Math.PI) * 0.52;
-          this.traceWakeRingV.setAttribute("r", r.toFixed(1));
-          this.traceWakeRingV.setAttribute("stroke-opacity", op.toFixed(3));
+          this.traceWakeRingV.setAttribute("r", (10 + smooth(wakeWave) * 150).toFixed(1));
+          this.traceWakeRingV.setAttribute("stroke-opacity", (Math.sin(wakeWave * Math.PI) * 0.52).toFixed(3));
         } else {
           this.traceWakeRingV.setAttribute("stroke-opacity", "0");
         }
       }
 
-      // 3. Cámara espacial sobre la planta (seguimiento sutil + parallax de puntero)
-      const isPortrait = vw / vh < 0.95 || vw <= 768;
       let camX = 0, camY = 0, camScale = 1, camRx = 0, camRy = 0;
-      if (isPortrait) {
-        camScale = 1;
-        camX = 0;
-        camY = (0.35 - tp * 0.70) * 18;
-      } else if (vw <= 860) {
-        camScale = 1.06;
-        camX = (0.42 - tp * 0.84) * (vw * 0.18);
+      if (vw / vh < 0.95 || vw <= 768) {
+        camY = (0.35 - tp * 0.70) * 16;
       } else {
         const introFocus = 1 - smooth(range(tp, 0.12, 0.36));
-        camScale = 1 + introFocus * 0.055;
-        camX = introFocus * 46 + (finePointer && !reduce ? normMx * -7 : 0);
+        camScale = 1 + introFocus * 0.05;
+        camX = introFocus * 42 + (finePointer && !reduce ? normMx * -7 : 0);
         camY = finePointer && !reduce ? normMy * -5 : 0;
-        camRx = finePointer && !reduce ? -normMy * 1.3 : 0;
-        camRy = finePointer && !reduce ? normMx * 1.8 : 0;
+        camRx = finePointer && !reduce ? -normMy * 1.2 : 0;
+        camRy = finePointer && !reduce ? normMx * 1.6 : 0;
       }
       st.setProperty("--trace-cam-x", `${camX.toFixed(1)}px`);
       st.setProperty("--trace-cam-y", `${camY.toFixed(1)}px`);
@@ -1128,219 +785,103 @@
       st.setProperty("--trace-cam-rx", `${camRx.toFixed(2)}deg`);
       st.setProperty("--trace-cam-ry", `${camRy.toFixed(2)}deg`);
 
-      // 4. Activación de sectores de la casa, waypoints y ondas en espejo de agua
-      const zoneIdx = tp < 0.22 ? 0 : (tp < 0.44 ? 1 : (tp < 0.78 ? 2 : 3));
+      const zoneIdx = tp < 0.24 ? 0 : (tp < 0.50 ? 1 : (tp < 0.78 ? 2 : 3));
       const activeRoomNum = zoneIdx === 1 ? "2" : (zoneIdx === 2 ? "3" : (zoneIdx === 3 ? "4" : "1"));
-      if (this.traceRooms && this.traceRooms.length) {
-        this.traceRooms.forEach((r) => {
-          r.classList.toggle("is-active", r.dataset.traceRoom === activeRoomNum);
-        });
-      }
-      if (this.traceRoomsV && this.traceRoomsV.length) {
-        this.traceRoomsV.forEach((r) => {
-          r.classList.toggle("is-active", r.dataset.traceRoomV === activeRoomNum);
-        });
-      }
-      if (this.traceSecBtns && this.traceSecBtns.length) {
-        this.traceSecBtns.forEach((btn, idx) => {
-          btn.classList.toggle("is-active", idx === zoneIdx);
-        });
-      }
-      // Actualizar los 4 segmentos de progreso por capítulo en tiempo real
-      const segRanges = [
-        [0.0, 0.22],
-        [0.22, 0.48],
-        [0.48, 0.76],
-        [0.76, 1.0],
-      ];
-      if (this.traceSegFills && this.traceSegFills.length) {
-        this.traceSegFills.forEach((fill, idx) => {
-          const [s0, s1] = segRanges[idx] || [0, 1];
-          const segP = clamp((tp - s0) / (s1 - s0), 0, 1);
-          fill.style.width = `${(segP * 100).toFixed(1)}%`;
-        });
-      }
-      if (this.traceSegBtns && this.traceSegBtns.length) {
-        this.traceSegBtns.forEach((btn, idx) => {
-          const [, s1] = segRanges[idx] || [0, 1];
-          btn.classList.toggle("is-active", idx === zoneIdx);
-          btn.classList.toggle("is-done", tp >= s1 - 0.005);
-        });
-      }
-      const ringOffset = (1 - tp).toFixed(3);
-      if (this.traceRadialProg) {
-        this.traceRadialProg.setAttribute("stroke-dashoffset", ringOffset);
-      }
-      if (this.traceTakeoverRing) {
-        this.traceTakeoverRing.setAttribute("stroke-dashoffset", ringOffset);
-      }
-      if (this.traceTcEl) {
-        const curSec = Math.min(14, Math.floor(tp * 14));
-        const tcStr = `00:${pad(curSec)}`;
-        if (this.traceTcEl.textContent !== tcStr) this.traceTcEl.textContent = tcStr;
-      }
+      this.traceRooms.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoom === activeRoomNum));
+      this.traceRoomsV.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoomV === activeRoomNum));
+
       if (zoneIdx !== this.lastTraceZone) {
-        if (this.lastTraceZone !== -1 && viewportEntry > 0.2) {
-          playTactileTick(620 + zoneIdx * 55, 0.025, 0.018);
-        }
+        if (this.lastTraceZone !== -1 && viewportEntry > 0.2) playTactileTick(620 + zoneIdx * 55, 0.025, 0.018);
         this.lastTraceZone = zoneIdx;
       }
 
-      if (this.traceWps && this.traceWps.length) {
-        const wpThresholds = [0.0, 0.25, 0.41, 0.59, 0.79, 0.96];
-        this.traceWps.forEach((wp, idx) => {
-          wp.classList.toggle("is-reached", tp >= (wpThresholds[idx] || 0));
-        });
-      }
-      if (this.traceWpsV && this.traceWpsV.length) {
-        const wpThresholdsV = [0.0, 0.25, 0.41, 0.59, 0.79, 0.96];
-        this.traceWpsV.forEach((wp, idx) => {
-          wp.classList.toggle("is-reached", tp >= (wpThresholdsV[idx] || 0));
-        });
-      }
+      const wpThresholds = [0.0, 0.25, 0.41, 0.59, 0.79, 0.96];
+      this.traceWps.forEach((wp, idx) => wp.classList.toggle("is-reached", tp >= (wpThresholds[idx] || 0)));
+      this.traceWpsV.forEach((wp, idx) => wp.classList.toggle("is-reached", tp >= (wpThresholds[idx] || 0)));
 
       const rippleT = smooth(range(tp, 0.76, 0.96));
       st.setProperty("--trace-ripple-op", rippleT.toFixed(3));
       st.setProperty("--trace-ripple-s", (0.82 + rippleT * 0.36).toFixed(3));
 
-      // 5. Telemetría en tiempo real acoplada al punto y al cabezal
       const meters = (tp * 64.8).toFixed(1);
-      const altM = tp < 0.22
-        ? (1.85 - (tp / 0.22) * 0.15)
-        : (tp < 0.78 ? 1.70 : (1.70 - ((tp - 0.78) / 0.22) * 0.25));
-
+      const altM = tp < 0.22 ? (1.85 - (tp / 0.22) * 0.15) : (tp < 0.78 ? 1.70 : (1.70 - ((tp - 0.78) / 0.22) * 0.25));
       if (this.traceDroneTxt) this.traceDroneTxt.textContent = `${meters}m · +${altM.toFixed(2)}m`;
       if (this.traceDroneTxtV) this.traceDroneTxtV.textContent = `${meters}m · +${altM.toFixed(2)}m`;
       if (this.traceDistEl) this.traceDistEl.textContent = `${meters} m`;
       if (this.traceAltEl) this.traceAltEl.textContent = `+${altM.toFixed(2)} m`;
       if (this.traceYawEl) this.traceYawEl.textContent = `${pad(yawReading, 3)}° E`;
+      if (this.traceTcEl) this.traceTcEl.textContent = `00:${pad(Math.min(14, Math.floor(tp * 14)))}`;
 
-      const phaseLabels = [
-        "01 · Aproximación exterior",
-        "02 · Acceso y umbral",
-        "03 · Recorrido interior",
-        "04 · Salida al parque",
-      ];
-      const roomLabels = [
-        "Aproximación Exterior",
-        "Ingreso & Acceso Principal",
-        "Espacio Central & Galería",
-        "Salida Exterior & Parque",
-      ];
-      const planStates = [
-        "Exterior",
-        "Ingreso",
-        "Interior",
-        "Completado",
-      ];
-      if (this.tracePhasePill && this.tracePhasePill.textContent !== phaseLabels[zoneIdx]) {
-        this.tracePhasePill.textContent = phaseLabels[zoneIdx];
-      }
-      if (this.traceRoomNameEl && this.traceRoomNameEl.textContent !== roomLabels[zoneIdx]) {
-        this.traceRoomNameEl.textContent = roomLabels[zoneIdx];
-      }
-      if (this.tracePlanStateEl && this.tracePlanStateEl.textContent !== planStates[zoneIdx]) {
-        this.tracePlanStateEl.textContent = planStates[zoneIdx];
-      }
+      const phaseLabels = ["01 · Aproximación", "02 · Acceso y umbral", "03 · Recorrido interior", "04 · Salida al parque"];
+      const roomLabels = ["Aproximación Exterior", "Ingreso Principal", "Espacio Central", "Jardín & Agua"];
+      const planStates = ["Exterior", "Ingreso", "Interior", "Completado"];
+      if (this.tracePhasePill) this.tracePhasePill.textContent = phaseLabels[zoneIdx];
+      if (this.traceRoomNameEl) this.traceRoomNameEl.textContent = roomLabels[zoneIdx];
+      if (this.tracePlanStateEl) this.tracePlanStateEl.textContent = planStates[zoneIdx];
 
-      // 6. Actos editoriales sincronizados en el pie
-      if (this.traceActs && this.traceActs.length) {
-        const evalP = this.isHybrid ? tp : p;
-        this.traceActs.forEach(({ n: el, r: [a, b] }) => {
-          const t = (evalP - a) / (b - a);
-          if (t <= 0 || t >= 1) {
-            if (el.style.opacity !== "0") {
-              el.style.opacity = "0";
-              el.style.visibility = "hidden";
-              el.style.filter = "none";
-            }
-            return;
-          }
-          const fadeIn = a < 0 ? range(t, 0, 0.14) : range(t, 0, 0.22);
-          const fadeOut = b > 1 ? 1 : (1 - range(t, 0.78, 1));
-          const o = smooth(Math.min(fadeIn, fadeOut));
-          const driftY = (0.5 - t) * 14;
-          const blurPx = Math.max(0, (1 - o) * 1.8).toFixed(1);
-
-          el.style.visibility = o <= 0.005 ? "hidden" : "visible";
-          el.style.opacity = o.toFixed(3);
-          el.style.transform = `translate3d(0, ${driftY.toFixed(1)}px, 0)`;
-          el.style.filter = blurPx > 0.15 ? `blur(${blurPx}px)` : "none";
-        });
-      }
+      this.traceActs.forEach(({ n: el, r: [a, b] }) => {
+        const t = (tp - a) / (b - a);
+        if (t <= 0 || t >= 1) {
+          el.style.opacity = "0";
+          el.style.visibility = "hidden";
+          return;
+        }
+        const fadeIn = a < 0 ? range(t, 0, 0.14) : range(t, 0, 0.2);
+        const fadeOut = b > 1 ? 1 : (1 - range(t, 0.8, 1));
+        const o = smooth(Math.min(fadeIn, fadeOut));
+        el.style.visibility = o <= 0.005 ? "hidden" : "visible";
+        el.style.opacity = o.toFixed(3);
+        el.style.transform = `translate3d(0, ${((0.5 - t) * 10).toFixed(1)}px, 0)`;
+      });
     }
 
     update(dt) {
       const n = this.count;
-      const isHero = this.isHero;
-      const isFullscreen = this.isFullscreen;
       const y = scrollY();
-
-      // Rango de evaluación extendido:
-      // Permite que la secuencia empiece a reproducirse y a despertar desde el primer píxel en que asoma
-      // por debajo de la pantalla (viewportEntry > 0), evitando cualquier vacío en negro o arranque tardío.
       const rawP = (y - this.top) / this.len;
       const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
       const st = this.stage.style;
 
-      if (!this.set && viewportEntry > 0) {
-        this.load();
-      }
+      if (!this.set && viewportEntry > 0) this.load();
+      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
 
-      // Fuera de pantalla: no trabajar.
-      if (y + vh < this.top - vh || y > this.top + this.len + vh) {
-        this.inView = false;
-        return;
-      }
-      this.inView = true;
-
-      /* ---- ESTADO CERO ABSOLUTO (Solo cuando aún no asoma en el viewport: viewportEntry <= 0) ---- */
-      if (!isHero && viewportEntry <= 0) {
+      if (!this.isHero && viewportEntry <= 0) {
         this.cur = 0;
         this.progress = 0;
         if (this.isKinetic) {
-          const isMob = vw <= 900 || (vw / vh < 0.95);
-          const initEntryShiftY = isMob ? -vh * 0.28 : 0;
-          st.setProperty("--kseq-clip-x", isMob ? "30%" : "36%");
+          st.setProperty("--kseq-clip-x", "28%");
           st.setProperty("--kseq-clip-y", "6%");
-          st.setProperty("--kseq-tx", "0px");
-          st.setProperty("--kseq-ty", `${initEntryShiftY.toFixed(1)}px`);
-          st.setProperty("--kseq-curtain-y", `${initEntryShiftY.toFixed(1)}px`);
+          st.setProperty("--kseq-ty", "0px");
+          st.setProperty("--kseq-curtain-y", "0px");
           st.setProperty("--kseq-scale", "0.94");
-          st.setProperty("--kseq-ry", "0deg");
           st.setProperty("--kseq-hud-op", "0");
           st.setProperty("--kseq-inner-hud", "0");
-          st.setProperty("--kseq-axis-x", "0px");
-          st.setProperty("--cover-opacity", "0.35");
-          st.setProperty("--frame-opacity", "1");
           st.setProperty("--outro-card-op", "0");
           st.setProperty("--outro-card-pe", "none");
-          this.setVisualFilter(10, 1);
           if (this.kWingL) { this.kWingL.style.opacity = "1"; this.kWingL.style.transform = "translate3d(0,0,0)"; }
           if (this.kWingR) { this.kWingR.style.opacity = "1"; this.kWingR.style.transform = "translate3d(0,0,0)"; }
-          if (this.kPanel1) this.kPanel1.style.opacity = "0";
-          if (this.kPanel2) this.kPanel2.style.opacity = "0";
-          if (this.kLoupeBox) this.kLoupeBox.style.opacity = "0";
-          if (this.scrubFill) this.scrubFill.style.width = "0%";
-          if (this.lastCur !== 0 || this.dirty) {
-            this.draw(0);
-            this.lastCur = 0;
-            this.dirty = false;
-          }
         }
-        if (this.isFiesta) {
-          st.setProperty("--fiesta-glow-op", "0");
-          st.setProperty("--fiesta-solid-op", "0");
-          st.setProperty("--randa-op", "0");
-          st.setProperty("--randa-vis", "hidden");
-          st.setProperty("--randa-scale", "0.92");
-          st.setProperty("--randa-ty", "18px");
-          st.setProperty("--randa-flare-op", "0");
-          st.setProperty("--cover-opacity", "0.32");
-          st.setProperty("--img-scale", "1.0");
-          this.setVisualFilter(10, 1);
-          this.randaCur = 0;
-          this.drawRanda(0);
+        if (this.isCinema) {
+          const cs = this.el.style;
+          cs.setProperty("--cinema-line", "0");
+          cs.setProperty("--cinema-line-op", "0");
+          cs.setProperty("--cinema-clip-x", "10%");
+          cs.setProperty("--cinema-clip-y", "48.2%");
+          cs.setProperty("--cinema-ty", "0px");
+          cs.setProperty("--cinema-scale", "1.035");
+          cs.setProperty("--cinema-beam-op", "0.35");
+          cs.setProperty("--cinema-beam-s", "0.35");
+          cs.setProperty("--cinema-prelude-op", "1");
+          cs.setProperty("--cinema-prelude-y", "0px");
+          cs.setProperty("--cinema-hud-op", "0");
+          cs.setProperty("--cinema-marks-op", "0");
+          cs.setProperty("--cinema-ambient", "0");
+          cs.setProperty("--cinema-border", "0.08");
+          cs.setProperty("--cinema-shadow", "0.4");
+          cs.setProperty("--cinema-blackout", "0");
+          this.el.classList.remove("is-cinema-passed");
+          if (this.cinemaPrelude) this.cinemaPrelude.style.visibility = "visible";
+          this.setVisualFilter(4, 0.25);
         }
         if (this.isTrace) {
           this.traceCur = 0;
@@ -1354,17 +895,9 @@
         return;
       }
 
-      /* ---- CONTINUIDAD Y RANGO EXTENDIDO ----
-         Para que ninguna secuencia se corte o se congele al deslizar hacia la siguiente sección,
-         el tramo fijado (0 <= rawP <= 1.0) cubre el 89% del relato cinematográfico.
-         Al superar 1.0 y comenzar a desenganchar hacia la siguiente escena, la secuencia continúa
-         reproduciéndose en el tramo de salida (1.0 < rawP <= 1.0 + exitRange) con una desaceleración
-         cinematográfica suave (ease-out). Así, mientras vas deslizando hacia la siguiente obra,
-         la anterior sigue viva y en movimiento continuo, sin cortes ni pausas toscas. */
-      const exitRange = 0.22;
-      const pinMaxProg = 0.89;
+      const exitRange = 0.2;
+      const pinMaxProg = 0.9;
 
-      /* ---- FINAL ABSOLUTO (Solo cuando ya superó completamente el tramo de desenganche: rawP >= 1.0 + exitRange) ---- */
       if (rawP >= 1.0 + exitRange) {
         this.cur = n - 1;
         this.progress = 1;
@@ -1375,147 +908,84 @@
         if (this.isKinetic) {
           st.setProperty("--kseq-clip-x", "0%");
           st.setProperty("--kseq-clip-y", "0%");
-          st.setProperty("--kseq-tx", "0px");
-          st.setProperty("--kseq-ty", "0px");
-          st.setProperty("--kseq-curtain-y", "0px");
           st.setProperty("--kseq-scale", "1");
-          st.setProperty("--kseq-ry", "0deg");
-          st.setProperty("--kseq-hud-op", "0");
+          st.setProperty("--kseq-hud-op", "0.2");
           st.setProperty("--kseq-inner-hud", "0");
           if (this.kWingL) this.kWingL.style.opacity = "0";
           if (this.kWingR) this.kWingR.style.opacity = "0";
-          if (this.kPanel1) this.kPanel1.style.opacity = "0";
-          if (this.kPanel2) this.kPanel2.style.opacity = "0";
-          if (this.kLoupeBox) this.kLoupeBox.style.opacity = "0";
+        }
+        if (this.isCinema) {
+          const cs = this.el.style;
+          cs.setProperty("--cinema-line", "1");
+          cs.setProperty("--cinema-line-op", "0");
+          cs.setProperty("--cinema-clip-x", "0%");
+          cs.setProperty("--cinema-clip-y", "0%");
+          cs.setProperty("--cinema-scale", "0.982");
+          cs.setProperty("--cinema-beam-op", "0");
+          cs.setProperty("--cinema-prelude-op", "0");
+          cs.setProperty("--cinema-hud-op", "0");
+          cs.setProperty("--cinema-marks-op", "0");
+          cs.setProperty("--cinema-ambient", "0");
+          cs.setProperty("--cinema-border", "0");
+          cs.setProperty("--cinema-shadow", "0");
+          cs.setProperty("--cinema-blackout", "1");
+          this.el.classList.add("is-cinema-passed");
+          if (this.cinemaPrelude) this.cinemaPrelude.style.visibility = "hidden";
+          if (this.lastCur !== n - 1 || this.dirty) {
+            this.draw(n - 1);
+            this.lastCur = n - 1;
+            this.dirty = false;
+          }
         }
         if (this.outroCard) {
-          st.setProperty("--cover-opacity", "0.38");
+          st.setProperty("--cover-opacity", "0.36");
           st.setProperty("--frame-opacity", "1");
           st.setProperty("--chrome-opacity", "1");
           st.setProperty("--chrome-vis", "visible");
           st.setProperty("--outro-card-op", "1");
           st.setProperty("--outro-card-ty", "0px");
           st.setProperty("--outro-card-pe", "auto");
-          this.setVisualFilter(5, 0);
-          this.updateOutroGleam(rawP, dt);
-        } else {
-          st.setProperty("--cover-opacity", "0.32");
-          st.setProperty("--frame-opacity", "1");
-          st.setProperty("--chrome-opacity", "0");
-          st.setProperty("--chrome-vis", "hidden");
-          st.setProperty("--fs-header-op", "0");
-          st.setProperty("--fs-footer-op", "0");
-          st.setProperty("--outro-card-op", "0");
-          st.setProperty("--outro-card-pe", "none");
-          this.setVisualFilter(6, 0);
-        }
-        if (this.isFiesta) {
-          st.setProperty("--fiesta-glow-op", "1");
-          st.setProperty("--fiesta-glow-scale", "1.85");
-          st.setProperty("--fiesta-solid-op", "1");
-          st.setProperty("--randa-op", "0");
-          st.setProperty("--randa-vis", "hidden");
-          st.setProperty("--randa-scale", "0.96");
-          st.setProperty("--randa-ty", "-22px");
-          st.setProperty("--randa-flare-op", "0");
-          st.setProperty("--cover-opacity", "0.85");
-          st.setProperty("--img-scale", "1.10");
-          this.setVisualFilter(10, 0);
-          this.randaCur = this.randaCount - 1;
-          this.drawRanda(this.randaCur);
         }
         if (this.scrubFill) this.scrubFill.style.width = "100%";
-        if (this.fsBar) this.fsBar.style.width = "100%";
         return;
       }
 
-      /* ---- RANGO ACTIVO (viewportEntry > 0 y rawP < 1.0 + exitRange) ---- */
       const p = rawP;
       let prog = 0;
 
       if (this.isHybrid) {
-        const isAnacleto = this.el.id === "film-04";
-        const isHudson = this.el.id === "film-03";
-        const isNocturno = this.el.id === "nocturno";
-        const isTrace = this.el.id === "trazado" || this.isTrace;
-
-        const spanProg = 0.895; // (pinEndProg 0.95 - preShare 0.055)
-        const naturalSec = (this.count / (this.fps || 24));
-        let baseDuration;
-        if (isAnacleto) {
-          baseDuration = 10.2; // Anacleto (~10.2s)
-        } else if (isHudson) {
-          baseDuration = 11.2; // Casa Hudson (~11.2s): cadencia cinematográfica noble
-        } else if (isNocturno) {
-          baseDuration = 9.6;  // Perspectiva Pantalla Completa (~9.6s): ritmo envolvente continuo
-        } else if (isTrace) {
-          baseDuration = 12.5; // El Plano / Cartografía (~12.5s)
-        } else {
-          baseDuration = naturalSec * spanProg;
+        const baseDuration = this.customDuration || (this.isHero ? 7.2 : (this.isKinetic ? 12.5 : (this.isCinema ? 13.5 : (this.isTrace ? 10.8 : 9.8))));
+        const nextTraceTop = (this.isCinema && typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
+        const cinemaPeek = this.isCinema ? Math.max(2, (nextTraceTop - (this.top + this.len)) + 2) : undefined;
+        if (!(this.isCinema && y >= nextTraceTop)) {
+          runHybridScrollEngine({
+            top: this.top,
+            len: this.len,
+            dt,
+            viewportEntry,
+            rawP,
+            baseDuration,
+            peekPx: cinemaPeek,
+            minSpeed: this.isCinema ? 0.72 : 0.45,
+            state: this,
+            hasFrames: this.frames && (this.frames[0] || this.nearest(0)),
+            isHero: this.isHero,
+          });
         }
 
-        runHybridScrollEngine({
-          top: this.top,
-          len: this.len,
-          dt,
-          viewportEntry,
-          rawP,
-          baseDuration,
-          state: this,
-          hasFrames: this.frames && (this.frames[0] || this.nearest(0)),
-        });
+        if (this.isHero) {
+          if (rawP <= 0.0) prog = 0;
+          else if (rawP <= 1.0) prog = rawP * pinMaxProg;
+          else prog = pinMaxProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinMaxProg);
+        } else {
+          const pPlayStart = -Math.min(0.5, (vh * 0.8) / this.len);
+          const preShare = 0.055;
+          const pinEndProg = this.isCinema ? 1.0 : 0.95;
 
-        // Continuidad cinemática de autor:
-        // 1. Aproximación con scroll (pPlayStart -> 0.0): la escena despierta y se mueve con el deslizado antes de fijarse.
-        // 2. Tramo fijado (0.0 -> 1.0): se reproduce sola y acelera al scrollear hacia abajo con desaceleración orgánica.
-        // 3. Salida extendida (1.0 -> 1.0 + exitRange): desengancha suavemente hacia la siguiente obra mientras culmina el film.
-        const pPlayStart = -Math.min(0.55, (vh * 0.85) / this.len);
-        const preShare = 0.055;
-        const pinEndProg = 0.95;
-
-        if (rawP < pPlayStart) {
-          prog = 0;
-        } else if (rawP < 0.0) {
-          const u = clamp((rawP - pPlayStart) / (-pPlayStart));
-          prog = preShare * Math.pow(u, 1.35);
-        } else if (rawP <= 1.0) {
-          prog = preShare + rawP * (pinEndProg - preShare);
-        } else {
-          const exitT = clamp((rawP - 1.0) / exitRange);
-          prog = pinEndProg + Math.sin(exitT * Math.PI * 0.5) * (1.0 - pinEndProg);
-        }
-      } else if (isHero) {
-        if (p <= 0.0) {
-          prog = 0;
-        } else if (p <= 1.0) {
-          prog = p * pinMaxProg;
-        } else {
-          const exitT = clamp((p - 1.0) / exitRange);
-          prog = pinMaxProg + Math.sin(exitT * Math.PI * 0.5) * (1.0 - pinMaxProg);
-        }
-      } else if (this.isFiesta) {
-        if (p >= 0.15 && !this.randaLoaded) this.loadRanda();
-        // Vonharv: se reproduce como un plano continuo de apertura que culmina en p = 0.44
-        if (p < 0.0) {
-          const u = clamp((p + 0.15) / 0.15);
-          prog = 0.05 * Math.pow(u, 1.35);
-        } else {
-          prog = clamp(p / 0.44, 0, 1);
-        }
-      } else {
-        const pPlayStart = -Math.min(0.55, (vh * (isFullscreen ? 0.85 : 0.75)) / this.len);
-        const preShare = 0.055; // 5.5% de los fotogramas en todo el tramo previo
-
-        if (p < pPlayStart) {
-          prog = 0;
-        } else if (p < 0.0) {
-          const u = clamp((p - pPlayStart) / (-pPlayStart));
-          prog = preShare * Math.pow(u, 1.35);
-        } else if (p <= 1.0) {
-          prog = preShare + p * (pinMaxProg - preShare);
-        } else {
-          const exitT = clamp((p - 1.0) / exitRange);
-          prog = pinMaxProg + Math.sin(exitT * Math.PI * 0.5) * (1.0 - pinMaxProg);
+          if (rawP < pPlayStart) prog = 0;
+          else if (rawP < 0.0) prog = preShare * Math.pow(clamp((rawP - pPlayStart) / (-pPlayStart)), 1.35);
+          else if (rawP <= 1.0) prog = preShare + rawP * (pinEndProg - preShare);
+          else prog = pinEndProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinEndProg);
         }
       }
 
@@ -1523,8 +993,7 @@
       this.progress = prog;
 
       const targetF = prog * (n - 1);
-      const k = reduce ? 1 : (this.isHybrid ? (1 - Math.exp(-28 * dt)) : (1 - Math.exp(-12 * dt)));
-
+      const k = reduce ? 1 : (this.isHybrid ? (1 - Math.exp(-26 * dt)) : (1 - Math.exp(-14 * dt)));
       if (this.lastScrollPos === undefined) this.lastScrollPos = y;
       const scrolling = Math.abs(y - this.lastScrollPos) > 0.2;
       this.lastScrollPos = y;
@@ -1545,1675 +1014,2326 @@
           const fr = f % this.fps;
           if (this.tcEl) this.tcEl.textContent = `${pad(sec)}:${pad(fr)}`;
           if (this.frEl) this.frEl.textContent = pad(f + 1, 3);
-          if (this.fsTc) this.fsTc.textContent = `00:${pad(sec)}`;
         }
         const pctVal = Math.round(prog * 1000) / 10;
         if (pctVal !== this.lastPctVal) {
           this.lastPctVal = pctVal;
-          const pct = `${pctVal}%`;
-          if (this.scrubFill) this.scrubFill.style.width = pct;
-          if (this.fsBar) this.fsBar.style.width = pct;
+          if (this.scrubFill) this.scrubFill.style.width = `${pctVal}%`;
           if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(pctVal)));
         }
       }
 
-      /* =======================================================
-         RAMA 1: SECUENCIA FULLSCREEN CONTINUA (VISIÓN NOCTURNA)
-         El video arranca visible e inmediato desde que asoma en pantalla,
-         iniciando en blanco y negro y con desenfoque, y disolviéndose suavemente
-         a color pleno y foco a medida que el usuario va deslizando.
-         ======================================================= */
-      if (isFullscreen) {
+      if (this.isFullscreen) {
         st.setProperty("--frame-w", `${vw}px`);
         st.setProperty("--frame-h", `${vh}px`);
         st.setProperty("--img-scale", "1.02");
-
-        const isTraceSec = this.isTrace;
-        const outro = isTraceSec ? 0 : smooth(range(p, 0.90, 1.02));
-        // Ni bien comienza a reproducirse la secuencia, disolver desenfoque y blanco/negro
-        const wake = isTraceSec
-          ? (this.entranceComplete ? 1 : smooth(viewportEntry))
-          : smooth(range(p, -0.12, 0.04));
-        const cover = Math.max((1 - wake) * 0.20, outro * 0.32);
-        const blur = Math.max((1 - wake) * 12, outro * 6);
-        const gray = 1 - wake;
-
-        st.setProperty("--cover-opacity", cover.toFixed(3));
         st.setProperty("--frame-opacity", "1");
-        this.setVisualFilter(blur, gray);
-
-        // Contra-desplazamiento de entrada + compactación inicial que se abre al fijarse
-        const entryShiftY = isTraceSec ? 0 : -(1 - smooth(viewportEntry)) * (vh * 0.18);
-        const compactLayout = isTraceSec ? 0 : 1 - smooth(range(p, -0.06, 0.16));
-        const headCompactY = compactLayout * (vh * 0.07);
-        const footCompactY = -compactLayout * (vh * 0.07);
-        st.setProperty("--fs-entry-y", `${entryShiftY.toFixed(1)}px`);
-        st.setProperty("--fs-head-y", `${headCompactY.toFixed(1)}px`);
-        st.setProperty("--fs-foot-y", `${footCompactY.toFixed(1)}px`);
-
-        const fsHudOp = smooth(range(viewportEntry, 0.10, 0.60)) * (1 - outro);
-        st.setProperty("--fs-header-op", fsHudOp.toFixed(3));
-        st.setProperty("--fs-footer-op", fsHudOp.toFixed(3));
-
-        // Actualizar riel vertical de actos laterales
-        if (this.fsRailFill1) {
-          this.fsRailFill1.style.transform = `scaleY(${clamp(range(p, 0.18, 0.44)).toFixed(3)})`;
-        }
-        if (this.fsRailFill2) {
-          this.fsRailFill2.style.transform = `scaleY(${clamp(range(p, 0.50, 0.76)).toFixed(3)})`;
-        }
-        if (this.fsRailDots && this.fsRailDots.length) {
-          const activeIdx = p < 0.35 ? 0 : (p < 0.68 ? 1 : 2);
-          this.fsRailDots.forEach((d, idx) => d.classList.toggle("is-active", idx === activeIdx));
-        }
-
-        this.fsActs.forEach(({ n: el, r: [a, b] }) => {
-          const t = (p - a) / (b - a);
-          if (t <= 0 || t >= 1) {
-            if (el.style.opacity !== "0") {
-              el.style.opacity = "0";
-              el.style.filter = "none";
-            }
-            return;
-          }
-          const o = smooth(Math.min(range(t, 0, 0.18), 1 - range(t, 0.82, 1)));
-          el.style.opacity = o.toFixed(3);
-
-          // Flotación cinemática continua con el scroll:
-          const driftY = (t - 0.5) * -28;
-          const introY = (1 - o) * (t < 0.5 ? 18 : -14);
-          el.style.transform = `translate3d(0, calc(-50% + ${(driftY + introY).toFixed(1)}px), 0)`;
-
-          const fsBlur = Math.max(0, (1 - o) * 2.2).toFixed(1);
-          el.style.filter = fsBlur > 0.15 ? `blur(${fsBlur}px)` : "none";
-        });
-
-        if (this.isTrace) {
-          const traceTarget = prog;
-          this.updateTrace(traceTarget, p, viewportEntry, dt);
-        }
-
+        this.setVisualFilter(0, 0);
+        if (this.isTrace) this.updateTrace(prog, p, viewportEntry, dt);
         return;
       }
 
-      /* =======================================================
-         RAMA 1.5: SECUENCIA CINÉTICA · OBRA III (CASA HUDSON)
-         Apertura por hendidura vertical, telón tipográfico monumental partido,
-         desplazamiento escenográfico lateral (Izquierda -> Derecha)
-         y lupa óptica 2.1x en contrapunto.
-         ======================================================= */
       if (this.isKinetic) {
         const isMob = vw <= 900 || (vw / vh < 0.95);
+        const openT = smooth(range(p, 0.02, 0.42));
+        st.setProperty("--kseq-clip-x", `${((1 - openT) * (isMob ? 24 : 30)).toFixed(2)}%`);
+        st.setProperty("--kseq-clip-y", `${((1 - openT) * 6).toFixed(2)}%`);
 
-        // 0. Progreso de aproximación / entrada al viewport
-        const entryProgress = clamp((y + vh - this.top) / vh, 0, 1);
-
-        // 1. Apertura de la hendidura central (-0.06 -> 0.24)
-        // La hendidura comienza en 30% / 36% y se estira horizontalmente con el scroll
-        const openT = smooth(range(p, -0.06, 0.24));
-        const clipX = ((1 - openT) * (isMob ? 30 : 36)).toFixed(2);
-        const clipY = ((1 - openT) * 6).toFixed(2);
-        st.setProperty("--kseq-clip-x", `${clipX}%`);
-        st.setProperty("--kseq-clip-y", `${clipY}%`);
-
-        // Revelado cromático y óptico original:
-        const wakeT = smooth(range(p, -0.14, 0.04));
+        const wakeT = smooth(range(p, -0.10, 0.08));
         const outro = smooth(range(prog, 0.88, 1.0));
-        const cover = Math.max((1 - wakeT) * 0.32, outro * 0.38);
-        const blur = Math.max((1 - wakeT) * 10, outro * 8);
-        const gray = 1 - wakeT;
-        st.setProperty("--cover-opacity", cover.toFixed(3));
+        st.setProperty("--cover-opacity", Math.max((1 - wakeT) * 0.24, outro * 0.36).toFixed(3));
         st.setProperty("--frame-opacity", "1");
-        this.setVisualFilter(blur, gray);
+        this.setVisualFilter(Math.max((1 - wakeT) * 8, outro * 5), 1 - wakeT);
 
-        // 2. Telón tipográfico monumental partido (se abre hacia los bordes)
-        // Posición y separación original exacta de las alas "Casa" y "Hudson":
-        const wingMove = smooth(range(p, -0.02, 0.25));
-        const wingOp = 1 - smooth(range(p, 0.08, 0.23));
-        const wingShiftX = wingMove * (isMob ? vw * 0.24 : vw * 0.22);
-        const wingBlur = (wingMove * 6).toFixed(1);
+        const wingMove = smooth(range(p, 0.02, 0.42));
+        const wingOp = 1 - smooth(range(p, 0.22, 0.40));
+        const wingShiftX = wingMove * (isMob ? vw * 0.22 : vw * 0.20);
         if (this.kWingL) {
           this.kWingL.style.opacity = wingOp.toFixed(3);
           this.kWingL.style.transform = `translate3d(${(-wingShiftX).toFixed(1)}px, 0, 0)`;
-          this.kWingL.style.filter = wingMove > 0.05 ? `blur(${wingBlur}px)` : "none";
           this.kWingL.style.visibility = wingOp <= 0.005 ? "hidden" : "visible";
         }
         if (this.kWingR) {
           this.kWingR.style.opacity = wingOp.toFixed(3);
           this.kWingR.style.transform = `translate3d(${wingShiftX.toFixed(1)}px, 0, 0)`;
-          this.kWingR.style.filter = wingMove > 0.05 ? `blur(${wingBlur}px)` : "none";
           this.kWingR.style.visibility = wingOp <= 0.005 ? "hidden" : "visible";
         }
 
-        // 3. Coreografía espacial del escenario principal y desplazamiento adaptativo de entrada
-        const toLeft = smooth(range(p, 0.18, 0.34)) * (1 - smooth(range(p, 0.48, 0.62)));
-        const toRight = smooth(range(p, 0.50, 0.65)) * (1 - smooth(range(p, 0.80, 0.91)));
+        const mobEntryShiftY = isMob ? (-(1 - smooth(viewportEntry)) * (vh * 0.16)) : 0;
+        st.setProperty("--kseq-ty", `${mobEntryShiftY.toFixed(1)}px`);
+        st.setProperty("--kseq-curtain-y", `${mobEntryShiftY.toFixed(1)}px`);
+        st.setProperty("--kseq-scale", (0.94 + openT * 0.06).toFixed(4));
 
-        const maxShiftX = isMob ? 0 : vw * 0.145;
-        const ptrX = (!isMob && finePointer && !reduce) ? normMx * 8 * (1 - outro) : 0;
-        const ptrY = (!isMob && finePointer && !reduce) ? normMy * 6 * (1 - outro) : 0;
-
-        // Desplazamiento adaptativo en vertical / móvil:
-        // En la aproximación (entryProgress < 1), eleva suavemente el telón y escenario para anticipar la llegada sin hueco negro.
-        // Una vez fijada la sección (p >= 0), el recuadro y el título permanecen estrictamente fijos en el centro de la pantalla.
-        const mobEntryShiftY = isMob ? (-(1 - smooth(entryProgress)) * (vh * 0.28)) : 0;
-
-        const stageTx = isMob ? 0 : ((-toLeft * maxShiftX) + (toRight * maxShiftX) + ptrX);
-        const stageTy = (isMob ? mobEntryShiftY : ((toLeft * -10) + (toRight * 8))) + ptrY;
-        const stageScale = isMob ? (0.94 + openT * 0.06) : (0.94 + openT * 0.06 - toLeft * 0.05 + toRight * 0.04);
-        const stageRy = isMob ? 0 : (toLeft * 4.2 - toRight * 4.2 + (finePointer && !reduce ? normMx * 1.6 : 0));
-
-        st.setProperty("--kseq-tx", `${stageTx.toFixed(1)}px`);
-        st.setProperty("--kseq-ty", `${stageTy.toFixed(1)}px`);
-        st.setProperty("--kseq-curtain-y", `${stageTy.toFixed(1)}px`);
-        st.setProperty("--kseq-scale", stageScale.toFixed(4));
-        st.setProperty("--kseq-ry", `${stageRy.toFixed(2)}deg`);
-        st.setProperty("--kseq-axis-x", `${(stageTx * 0.65).toFixed(1)}px`);
-        st.setProperty("--img-scale", "1");
-
-        // 4. HUD perimetral e interno
-        const hudOp = isMob
-          ? (smooth(range(entryProgress, 0.35, 0.92)) * (1 - smooth(range(p, 0.88, 0.96))))
-          : (smooth(range(p, 0.12, 0.24)) * (1 - smooth(range(p, 0.88, 0.96))));
+        const hudOp = smooth(range(p, 0.28, 0.44)) * (1 - smooth(range(p, 0.88, 0.96)));
         st.setProperty("--kseq-hud-op", hudOp.toFixed(3));
         st.setProperty("--kseq-hud-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         st.setProperty("--kseq-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
-        st.setProperty("--kseq-inner-hud", (smooth(range(p, 0.18, 0.28)) * (1 - outro)).toFixed(3));
+        st.setProperty("--kseq-inner-hud", (openT * (1 - outro)).toFixed(3));
 
-        // 5. Paneles editoriales en contrapunto (Acto I a la derecha, Acto II a la izquierda)
-        // En vertical aparecen directamente debajo del recuadro de forma estable y bien emplazada, sin derivas verticales
-        if (this.kPanel1) {
-          const t1 = (p - 0.21) / (0.54 - 0.21);
-          if (t1 <= 0 || t1 >= 1) {
-            this.kPanel1.style.opacity = "0";
-            this.kPanel1.style.visibility = "hidden";
-          } else {
-            const o1 = smooth(Math.min(range(t1, 0, 0.22), 1 - range(t1, 0.78, 1)));
-            this.kPanel1.style.visibility = "visible";
-            this.kPanel1.style.opacity = o1.toFixed(3);
-            this.kPanel1.style.transform = isMob
-              ? "translate3d(0, 0, 0)"
-              : `translate3d(0, calc(-50% + ${((0.5 - t1) * 36).toFixed(1)}px), 0)`;
-            if (this.kCota1) this.kCota1.style.transform = `scaleX(${clamp(t1 * 1.25).toFixed(3)})`;
-          }
-        }
-
-        if (this.kPanel2) {
-          const t2 = (p - 0.53) / (0.85 - 0.53);
-          if (t2 <= 0 || t2 >= 1) {
-            this.kPanel2.style.opacity = "0";
-            this.kPanel2.style.visibility = "hidden";
-          } else {
-            const o2 = smooth(Math.min(range(t2, 0, 0.22), 1 - range(t2, 0.78, 1)));
-            this.kPanel2.style.visibility = "visible";
-            this.kPanel2.style.opacity = o2.toFixed(3);
-            this.kPanel2.style.transform = isMob
-              ? "translate3d(0, 0, 0)"
-              : `translate3d(0, calc(-50% + ${((0.5 - t2) * 36).toFixed(1)}px), 0)`;
-            if (this.kCota2) this.kCota2.style.transform = `scaleX(${clamp(t2 * 1.25).toFixed(3)})`;
-          }
-        }
-
-// Lupa óptica removida
-
-        // 7. Lecturas dinámicas de telemetría arquitectónica
-        if (this.kDist) {
-          const distM = (18.4 - prog * 17.2).toFixed(1);
-          this.kDist.textContent = `${distM} m`;
-        }
         if (this.kPhase) {
-          const phaseTxt = p < 0.21
-            ? "Apertura de Umbral"
-            : (p < 0.53 ? "Acto I · Volumetría y Fachada" : (p < 0.84 ? "Acto II · Eje de Ingreso" : "Film Máster 4K"));
-          if (this.kPhase.textContent !== phaseTxt) this.kPhase.textContent = phaseTxt;
-        }
-        if (this.kFocal) {
-          const focalTxt = p < 0.52 ? "Óptica 18mm T2.0 · Panorámico" : "Óptica 28mm T1.5 · Aproximación";
-          if (this.kFocal.textContent !== focalTxt) this.kFocal.textContent = focalTxt;
-        }
-        if (this.kCropLabel) {
-          const cropTxt = p < 0.52 ? "Hormigón & Piedra" : "Doble Altura · Acceso";
-          if (this.kCropLabel.textContent !== cropTxt) this.kCropLabel.textContent = cropTxt;
+          this.kPhase.textContent = p < 0.22
+            ? "Apertura"
+            : (p < 0.56 ? "Aproximación" : (p < 0.84 ? "Interior" : "Film Máster 4K"));
         }
 
-        // 8. Tarjeta de cierre cinematográfica (YouTube Outro)
         if (this.outroCard) {
           const outroCardT = smooth(range(p, 0.84, 0.94));
           st.setProperty("--outro-card-op", outroCardT.toFixed(3));
-          st.setProperty("--outro-card-ty", `${((1 - outroCardT) * 16).toFixed(1)}px`);
+          st.setProperty("--outro-card-ty", `${((1 - outroCardT) * 14).toFixed(1)}px`);
           st.setProperty("--outro-card-pe", outroCardT > 0.2 ? "auto" : "none");
-          this.updateOutroGleam(p, dt);
         }
         return;
       }
 
-      /* =======================================================
-         RAMA 2: SECUENCIAS CON REENCUADRE (01, 02, 04)
-         ======================================================= */
-      // El reencuadre inicia suavemente conforme se avanza
+      if (this.isCinema) {
+        const cs = this.el.style;
+        const isMob = vw <= 900 || (vw / vh < 0.95);
+        const nextTraceTop = (typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
+        this.el.classList.toggle("is-cinema-passed", y >= nextTraceTop);
+        const lineT = reduce ? 1 : smooth(range(viewportEntry, 0.18, 0.88));
+        const lineFade = reduce ? 0 : smooth(range(p, 0.10, 0.30));
+        cs.setProperty("--cinema-line", lineT.toFixed(3));
+        cs.setProperty("--cinema-line-op", (lineT * (1 - lineFade)).toFixed(3));
+
+        const entryTy = isMob && !reduce ? -(1 - smooth(viewportEntry)) * (vh * 0.12) : 0;
+        cs.setProperty("--cinema-ty", `${entryTy.toFixed(1)}px`);
+
+        const openT = reduce ? 1 : smooth(range(p, -0.02, 0.22));
+        cs.setProperty("--cinema-clip-x", `${((1 - openT) * (isMob ? 8 : 10)).toFixed(2)}%`);
+        cs.setProperty("--cinema-clip-y", `${((1 - openT) * 48.2).toFixed(2)}%`);
+
+        const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.9 * (1 - openT * 0.85);
+        cs.setProperty("--cinema-beam-op", beamOp.toFixed(3));
+        cs.setProperty("--cinema-beam-s", (0.35 + openT * 0.65).toFixed(3));
+
+        const preludeIn = reduce ? 0 : smooth(range(viewportEntry, 0.25, 0.82));
+        const preludeOut = reduce ? 1 : smooth(range(p, 0.03, 0.18));
+        const preludeOp = preludeIn * (1 - preludeOut);
+        cs.setProperty("--cinema-prelude-op", preludeOp.toFixed(3));
+        cs.setProperty("--cinema-prelude-y", `${(-preludeOut * 16).toFixed(1)}px`);
+        if (this.cinemaPrelude) this.cinemaPrelude.style.visibility = preludeOp <= 0.005 ? "hidden" : "visible";
+
+        const wakeT = reduce ? 1 : smooth(range(p, -0.04, 0.14));
+        const cinemaDarken = smooth(range(p, 0.902, 0.970));
+        const blackoutT = reduce ? (p >= 0.97 ? 1 : 0) : smooth(range(p, 0.918, 0.980));
+
+        this.setVisualFilter((1 - wakeT) * 4.5, (1 - wakeT) * 0.28);
+        const openScale = reduce ? 1 : (1 + (1 - openT) * 0.035);
+        const endScale = reduce ? 1 : (1 - blackoutT * 0.018);
+        cs.setProperty("--cinema-scale", (openScale * endScale).toFixed(4));
+
+        const hudIn = reduce ? 1 : smooth(range(p, 0.18, 0.30));
+        const hudOp = hudIn * (1 - cinemaDarken);
+        cs.setProperty("--cinema-hud-op", hudOp.toFixed(3));
+        cs.setProperty("--cinema-hud-top-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
+        cs.setProperty("--cinema-hud-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
+
+        const marksOp = openT * (1 - cinemaDarken) * 0.85;
+        const ambientOp = openT * (1 - cinemaDarken) * 0.55;
+        cs.setProperty("--cinema-marks-op", marksOp.toFixed(3));
+        cs.setProperty("--cinema-ambient", ambientOp.toFixed(3));
+        cs.setProperty("--cinema-amb-s", (0.96 + openT * 0.04).toFixed(3));
+        cs.setProperty("--cinema-border", (openT * (1 - cinemaDarken) * 0.14).toFixed(3));
+        cs.setProperty("--cinema-shadow", (openT * (1 - cinemaDarken)).toFixed(3));
+        cs.setProperty("--cinema-veil", (0.22 + cinemaDarken * 0.25).toFixed(3));
+        cs.setProperty("--cinema-blackout", blackoutT.toFixed(3));
+        return;
+      }
+
+      /* Secuencias con reencuadre (#film-01 Hero & #film-04 Comercial) */
       const morph = smooth(range(p, 0.0, 0.26));
       const inv = 1 - morph;
-      const curW = this.tw + (vw - this.tw) * inv;
-      const curH = this.th + (vh - this.th) * inv;
-      st.setProperty("--frame-w", `${curW.toFixed(1)}px`);
-      st.setProperty("--frame-h", `${curH.toFixed(1)}px`);
-      st.setProperty("--img-scale", (1 + inv * (isHero ? 0.04 : 0.05)).toFixed(4));
+      st.setProperty("--frame-w", `${(this.tw + (vw - this.tw) * inv).toFixed(1)}px`);
+      st.setProperty("--frame-h", `${(this.th + (vh - this.th) * inv).toFixed(1)}px`);
+      st.setProperty("--img-scale", (1 + inv * (this.isHero ? 0.04 : 0.05)).toFixed(4));
 
-      // Salida al final:
-      // Si la secuencia tiene tarjeta de cierre (outroCard), el fondo se atenúa a un velo traslúcido
-      // (cover 0.38) en lugar de negro absoluto, manteniendo la arquitectura viva detrás del cristal.
-      const outro = this.outroCard ? smooth(range(prog, 0.88, 1.0)) : smooth(range(p, 0.86, 0.98));
-
-      // Inclinación 3D sutil cuando el lienzo está reencuadrado en la sala de proyección
+      const outro = smooth(range(prog, 0.86, 1.0));
       const tiltEnvelope = morph * (1 - outro);
-      const targetRx = (!reduce && finePointer) ? (-normMy * 1.8 * tiltEnvelope) : 0;
-      const targetRy = (!reduce && finePointer) ? (normMx * 2.4 * tiltEnvelope) : 0;
+      const targetRx = (!reduce && finePointer) ? (-normMy * 1.6 * tiltEnvelope) : 0;
+      const targetRy = (!reduce && finePointer) ? (normMx * 2.2 * tiltEnvelope) : 0;
       this.tiltRx += (targetRx - this.tiltRx) * 0.1;
       this.tiltRy += (targetRy - this.tiltRy) * 0.1;
       st.setProperty("--seq-rx", `${this.tiltRx.toFixed(2)}deg`);
       st.setProperty("--seq-ry", `${this.tiltRy.toFixed(2)}deg`);
 
-      let cover, blur, gray;
-      if (isHero) {
+      if (this.isHero) {
         const veilFade = 1 - smooth(range(p, 0.0, 0.24));
         st.setProperty("--frame-veil", veilFade.toFixed(3));
-        cover = outro * 0.38;
-        blur = outro * 5;
-        gray = 0;
+        st.setProperty("--cover-opacity", (outro * 0.38).toFixed(3));
+        this.setVisualFilter(outro * 4.5, 0);
       } else {
         st.setProperty("--frame-veil", "0");
-        // Ni bien comienza a reproducirse la secuencia (p > -0.14), empieza de inmediato a desaparecer
-        // el desenfoque óptico y el blanco y negro, disolviéndose rápido hacia el color pleno
         const wake = smooth(range(p, -0.14, 0.04));
-        cover = Math.max((1 - wake) * 0.26, outro * 0.38);
-        blur = Math.max((1 - wake) * 12, outro * 8);
-        gray = 1 - wake;
+        st.setProperty("--cover-opacity", Math.max((1 - wake) * 0.28, outro * 0.38).toFixed(3));
+        this.setVisualFilter(Math.max((1 - wake) * 10, outro * 6), 1 - wake);
       }
-      st.setProperty("--cover-opacity", cover.toFixed(3));
-      st.setProperty("--frame-opacity", this.outroCard ? "1" : (1 - outro * 0.65).toFixed(3));
-      this.setVisualFilter(blur, gray);
+      st.setProperty("--frame-opacity", "1");
 
-      /* Textos frontales */
       if (this.hero) {
-        const t = range(p, 0.0, 0.22);
-        const stHero = smooth(t);
-        this.setText(this.hero, 1 - stHero, -stHero * 3, stHero * 3.5);
-
-        const hMeta = $(".hero__meta", this.hero);
-        if (hMeta) {
-          const metaOp = Math.max(0, 1 - smooth(range(p, 0.0, 0.11)));
-          hMeta.style.opacity = metaOp.toFixed(3);
-          hMeta.style.transform = `translate3d(0, ${(-stHero * 18).toFixed(1)}px, 0)`;
-        }
-
-        // Apertura espacial cinemática de las líneas del título
+        const stHero = smooth(range(p, 0.0, 0.22));
+        this.setText(this.hero, 1 - stHero, -stHero * 3);
         const hTitle = $(".hero__title", this.hero);
         if (hTitle) {
           const l1 = $(".hero__line:nth-child(1)", hTitle);
           const l2 = $(".hero__line--2", hTitle);
           if (l1) {
-            l1.style.setProperty("--hero-l1-x", `${(-stHero * 24).toFixed(1)}px`);
-            l1.style.setProperty("--hero-l1-y", `${(-stHero * 16).toFixed(1)}px`);
+            l1.style.setProperty("--hero-l1-x", `${(-stHero * 22).toFixed(1)}px`);
+            l1.style.setProperty("--hero-l1-y", `${(-stHero * 14).toFixed(1)}px`);
           }
           if (l2) {
-            l2.style.setProperty("--hero-l2-x", `${(stHero * 32).toFixed(1)}px`);
-            l2.style.setProperty("--hero-l2-y", `${(stHero * 12).toFixed(1)}px`);
+            l2.style.setProperty("--hero-l2-x", `${(stHero * 28).toFixed(1)}px`);
+            l2.style.setProperty("--hero-l2-y", `${(stHero * 10).toFixed(1)}px`);
           }
         }
         const hFoot = $(".hero__foot", this.hero);
         if (hFoot) {
-          hFoot.style.setProperty("--hero-foot-y", `${(stHero * 26).toFixed(1)}px`);
+          hFoot.style.setProperty("--hero-foot-y", `${(stHero * 24).toFixed(1)}px`);
           hFoot.style.opacity = Math.max(0, 1 - smooth(range(p, 0.0, 0.12))).toFixed(3);
         }
       }
-      if (this.lead) {
-        // Contra-desplazamiento en la aproximación (viewportEntry: 0 -> 1) para que el título
-        // de Obra II y Obra IV aparezca inmediatamente en la parte alta al deslizar
-        const entryShiftVh = -(1 - smooth(viewportEntry)) * 18;
-        const t = range(p, 0.0, 0.20);
-        const stLead = smooth(t);
-        this.setText(this.lead, 1 - stLead, entryShiftVh - stLead * 3.5, stLead * 4.5);
 
-        const leadTitle = $(".lead__title", this.lead);
-        if (leadTitle) {
-          leadTitle.style.setProperty("--lead-ty", `${(-stLead * 28).toFixed(1)}px`);
-          leadTitle.style.setProperty("--lead-scale", (1 - stLead * 0.03).toFixed(3));
-        }
-        const leadLines = $$(".lead__no i", this.lead);
-        if (leadLines.length) {
-          const lineW = Math.max(14, Math.round(36 * (1 - stLead * 0.6)));
-          leadLines.forEach((l) => l.style.setProperty("--lead-line-w", `${lineW}px`));
-        }
+      if (this.lead) {
+        const entryShiftVh = -(1 - smooth(viewportEntry)) * 18;
+        const stLead = smooth(range(p, 0.0, 0.20));
+        this.setText(this.lead, 1 - stLead, entryShiftVh - stLead * 3.5);
       }
 
-      /* Rótulo, marcas y HUD compactos alrededor del cuadro y separándose suavemente */
       const chrome = smooth(range(p, 0.14, 0.26));
-      const chromeGap = vw <= 640 ? 12 : 16;
-      st.setProperty("--chrome-gap", `${chromeGap}px`);
+      st.setProperty("--chrome-gap", `${vw <= 680 ? 12 : 16}px`);
       st.setProperty("--chrome-top-y", `${((1 - chrome) * 10).toFixed(1)}px`);
       st.setProperty("--chrome-bot-y", `${(-(1 - chrome) * 10).toFixed(1)}px`);
+      st.setProperty("--chrome-opacity", chrome.toFixed(3));
+      st.setProperty("--chrome-vis", chrome > 0.01 ? "visible" : "hidden");
 
-      if (this.isFiesta) {
-        // En Obra II (Fiestas & Eventos):
-        // 1. Proyección nítida de Vonharv y desvanecimiento previo del rótulo/marcas:
-        //    El plano aéreo se reproduce nítido y claro sin desenfoque prematuro.
-        //    Hacia p = 0.19..0.25, el rótulo y marcas se desvanecen suavemente para dejar limpia la toma antes del destello.
-        const vonharvFade = 1 - smooth(range(p, 0.18, 0.24));
-        const chromeOp = chrome * vonharvFade;
-        st.setProperty("--chrome-opacity", chromeOp.toFixed(3));
-        st.setProperty("--chrome-vis", chromeOp > 0.01 ? "visible" : "hidden");
-
-        // 2. Reflejo blanco expansivo desde el centro hacia afuera (degradado ultra difuso, sin líneas ni límites):
-        //    Inicia un poquitito antes (en p = 0.258, en el punto exacto del fogonazo blanco de Vonharv),
-        //    con una transición suave, amplia y saboreable (hasta p = 0.298).
-        //    Nace como un resplandor en degradé suave desde el centro (scale 0.12) y se abre en abanico
-        //    360° hacia los extremos (scale 1.85) con un halo óptico completamente difuminado, consolidando
-        //    la base blanca sólida (solidOp = 1.0 en p = 0.298) para tapar por completo y limpiamente a Vonharv.
-        const glowT = range(p, 0.252, 0.292);
-        const glowProg = smooth(glowT);
-        const glowOp = smooth(range(p, 0.252, 0.268));
-        const glowScale = 0.12 + Math.pow(glowProg, 0.70) * 1.73;
-        const solidOp = smooth(range(p, 0.274, 0.292));
-
-        st.setProperty("--fiesta-glow-op", glowOp.toFixed(3));
-        st.setProperty("--fiesta-glow-scale", glowScale.toFixed(4));
-        st.setProperty("--fiesta-solid-op", solidOp.toFixed(3));
-
-        // 3. Aparición del díptico Randa (Randa I & II) sobre el fondo blanco:
-        //    Una vez que el reflejo en degradé barrió la pantalla y consolidó el blanco puro (a partir de p = 0.300),
-        //    emergen las dos secuencias horizontales apiladas una arriba de la otra sobre el lienzo blanco.
-        const randaIntro = smooth(range(p, 0.294, 0.384));
-        const randaOutro = smooth(range(p, 0.88, 1.20));
-
-        const randaOp = randaIntro * (1 - smooth(range(p, 1.06, 1.22)));
-        const randaScale = (0.96 + randaIntro * 0.04) - randaOutro * 0.035;
-        const randaTy = (1 - randaIntro) * 20 - randaOutro * 22;
-        const randaBlur = (randaOutro * 3.5).toFixed(1);
-
-        st.setProperty("--randa-op", randaOp.toFixed(3));
-        st.setProperty("--randa-scale", randaScale.toFixed(4));
-        st.setProperty("--randa-ty", `${randaTy.toFixed(1)}px`);
-        st.setProperty("--randa-blur", `${randaBlur}px`);
-        st.setProperty("--randa-vis", randaOp > 0.005 ? "visible" : "hidden");
-
-        // Desplazamiento simétrico de las tarjetas (separación sutil en profundidad durante el cierre hacia #obra)
-        if (this.randaCards && this.randaCards.length >= 2) {
-          const splitShift = (1 - randaIntro) * 16;
-          const exitParting = randaOutro * 14;
-          this.randaCards[0].style.transform = `translate3d(0, ${(-splitShift - exitParting).toFixed(1)}px, 0)`;
-          this.randaCards[1].style.transform = `translate3d(0, ${(splitShift + exitParting).toFixed(1)}px, 0)`;
-        }
-
-        const cardBorderOp = (0.14 + (1 - randaOutro) * 0.14).toFixed(2);
-        st.setProperty("--randa-card-border", `rgba(13, 13, 12, ${cardBorderOp})`);
-        const cardGlowOp = (0.12 * Math.sin(randaOutro * Math.PI)).toFixed(3);
-        st.setProperty("--randa-card-glow", `rgba(162, 113, 78, ${cardGlowOp})`);
-
-        if (this.randaBadge) {
-          if (p >= 0.94) {
-            if (!this._randaCompleteSet) {
-              this.randaBadge.innerHTML = '<span class="seq__randa-dot" aria-hidden="true"></span><span>Registro completado · Fiestas & Eventos</span>';
-              this._randaCompleteSet = true;
-            }
-          } else {
-            if (this._randaCompleteSet) {
-              this.randaBadge.innerHTML = '<span class="seq__randa-dot" aria-hidden="true"></span><span>Extensión de rodaje · Fiestas & Eventos</span>';
-              this._randaCompleteSet = false;
-            }
-          }
-        }
-
-        // 4. Reproducción sincronizada de Randa 1 y Randa 2:
-        //    Comienza una vez que Randa aparece sobre el fondo blanco (a partir de p = 0.300),
-        //    avanza fluidamente y continúa reproduciéndose en desaceleración suave
-        //    mientras el usuario comienza a deslizar hacia #obra, manteniendo el movimiento vivo en la salida
-        let pRanda = 0;
-        if (p < 0.294) {
-          pRanda = 0;
-        } else if (p <= 1.0) {
-          const randaPinT = clamp((p - 0.294) / (1.0 - 0.294));
-          pRanda = randaPinT * 0.88;
-        } else {
-          const exitT = clamp((p - 1.0) / exitRange);
-          pRanda = 0.88 + Math.sin(exitT * Math.PI * 0.5) * 0.12;
-        }
-        pRanda = clamp(pRanda, 0, 1);
-        const targetRandaF = pRanda * (this.randaCount - 1);
-        const kRanda = reduce ? 1 : 1 - Math.exp(-12 * dt);
-        this.randaCur += (targetRandaF - this.randaCur) * kRanda;
-        this.drawRanda(this.randaCur);
-
-        const fR = Math.round(this.randaCur);
-        if (fR !== this.lastRandaFr) {
-          this.lastRandaFr = fR;
-          const frTxt = pad(fR + 1, 3);
-          if (this.randaFr1) this.randaFr1.textContent = frTxt;
-          if (this.randaFr2) this.randaFr2.textContent = frTxt;
-          const secR = Math.floor(fR / 24);
-          const frR = fR % 24;
-          if (this.randaTc) this.randaTc.textContent = `${pad(secR)}:${pad(frR)}`;
-        }
-
-        // El scrubber global muestra el avance completo de la sección
-        if (this.scrubFill) this.scrubFill.style.width = `${(clamp(pRanda, 0, 1) * 100).toFixed(2)}%`;
-      } else {
-        st.setProperty("--chrome-opacity", chrome.toFixed(3));
-        st.setProperty("--chrome-vis", chrome > 0.01 ? "visible" : "hidden");
-
-        if (this.outroCard) {
-          const outroCardT = smooth(range(p, 0.84, 0.94));
-          st.setProperty("--outro-card-op", outroCardT.toFixed(3));
-          st.setProperty("--outro-card-ty", `${((1 - outroCardT) * 16).toFixed(1)}px`);
-          st.setProperty("--outro-card-pe", outroCardT > 0.2 ? "auto" : "none");
-          this.updateOutroGleam(p, dt);
-        }
+      if (this.outroCard) {
+        const outroCardT = smooth(range(p, 0.83, 0.93));
+        st.setProperty("--outro-card-op", outroCardT.toFixed(3));
+        st.setProperty("--outro-card-ty", `${((1 - outroCardT) * 14).toFixed(1)}px`);
+        st.setProperty("--outro-card-pe", outroCardT > 0.2 ? "auto" : "none");
       }
 
-      /* Capítulos */
       let shade = 0;
       this.chapters.forEach(({ n: el, r: [a, b], tick }) => {
         const t = (p - a) / (b - a);
         if (t <= 0 || t >= 1) {
-          if (el.style.opacity !== "0") {
-            el.style.opacity = "0";
-            el.style.filter = "none";
-          }
-          el.style.setProperty("--ch-prog", "0");
+          el.style.opacity = "0";
+          el.style.visibility = "hidden";
           if (tick) tick.classList.remove("is-active");
           return;
         }
-        const o = smooth(Math.min(range(t, 0, 0.16), 1 - range(t, 0.84, 1)));
+        const o = smooth(Math.min(range(t, 0, 0.18), 1 - range(t, 0.82, 1)));
         shade = Math.max(shade, o);
+        el.style.visibility = o > 0.01 ? "visible" : "hidden";
         el.style.opacity = o.toFixed(3);
         if (tick) tick.classList.toggle("is-active", o > 0.15);
-
-        // Micro-desplazamiento vertical continuo y línea de cota arquitectónica
-        const floatY = ((1 - o) * (t < 0.5 ? 12 : -8) + (t - 0.5) * -10).toFixed(1);
-        el.style.transform = `translate3d(0, ${floatY}px, 0)`;
-        el.style.setProperty("--ch-prog", o.toFixed(3));
-
-        const chBlur = Math.max(0, (1 - o) * 2.2).toFixed(1);
-        el.style.filter = chBlur > 0.2 ? `blur(${chBlur}px)` : "none";
+        el.style.transform = `translate3d(0, ${((1 - o) * 10).toFixed(1)}px, 0)`;
       });
-      st.setProperty("--shade", shade.toFixed(3));
       this.el.classList.toggle("has-chapter-glow", shade > 0.08);
     }
   }
 
+  const sequences = $$(".seq").map((el) => new Sequence(el));
+
   /* ---------------------------------------------------------
-     FORMATO DUAL CENTRADO (16:9 ↔ 9:16)
-     Metamorfosis 3D de Hardware: Monitor de Cine 16:9 ↔ Smartphone 9:16
+     MOTOR DE ARCHIVO EN MOVIMIENTO (#archivo — Galería cinética 3D)
      --------------------------------------------------------- */
-  class FormatShowcaseSequence {
+  const reelFrameCache = new Map();
+  const reelInFlight = new Set();
+
+  class ReelArchive {
     constructor(el) {
       this.el = el;
+      this.stage = $(".reel__stage", el);
+      this.deckWrap = $(".reel__deck-wrap", el);
+      this.deck = $("[data-reel-deck]", el);
+      this.strip = $("[data-reel-strip]", el);
+      this.scrub = $(".reel__scrub", el);
+      this.scrubFill = $("[data-reel-scrub-fill]", el);
+      this.tcEl = $("[data-reel-tc]", el);
+
+      this.modeLblEl = $("[data-reel-mode-lbl]", el);
+      this.idxEl = $("[data-reel-idx]", el);
+      this.totalEl = $("[data-reel-total]", el);
+      this.topCatEl = $("[data-reel-top-cat]", el);
+      this.topFpsEl = $("[data-reel-top-fps]", el);
+
+      this.captionEl = $("[data-reel-caption]", el);
+      this.capSlots = $$("[data-reel-cap-slot]", el).map((slot) => ({
+        el: slot,
+        num: $(".reel__cap-num", slot),
+        cat: $(".reel__cap-cat", slot),
+        loc: $(".reel__cap-loc", slot),
+        title: $(".reel__cap-title", slot),
+        desc: $(".reel__cap-desc", slot),
+      }));
+      this.capSlotIdx = 0;
+
+      this.isHybrid = el.dataset.mode !== "manual";
+      this.baseDuration = parseFloat(el.dataset.duration) || 12.8;
+      this.autoPlayPaused = false;
+      this.autoPlaySuspended = false;
+      this.lastTrackedY = undefined;
+
+      this.cards = [];
+      this.thumbs = [];
+      this.carouselCur = 0;
+      this.progCur = 0;
+      this.activeIdx = -1;
+      this.tiltRx = 0;
+      this.tiltRy = 0;
+      this.prog = 0;
+      this.set = null;
+      this.openedPreload = false;
+      this.isScrubbing = false;
+
+      this.initCards();
+      this.bindControls();
+      this.measure();
+    }
+
+    pickSet() {
+      return "md";
+    }
+
+    initCards() {
+      const cardEls = $$(".reel-card", this.deck);
+      const total = cardEls.length;
+      if (this.totalEl) this.totalEl.textContent = pad(total);
+
+      cardEls.forEach((cardEl, idx) => {
+        const src = cardEl.dataset.src;
+        const count = Math.max(1, +(cardEl.dataset.count || 1));
+        const from = clamp(+(cardEl.dataset.from || 1), 1, count);
+        const to = clamp(+(cardEl.dataset.to || count), from, count);
+        const version = cardEl.dataset.version || "";
+        const fps = Math.max(12, +(cardEl.dataset.fps || 24));
+        const span = Math.max(1, to - from + 1);
+        const durSec = span / fps;
+        const vParam = version ? `?v=${version}` : "";
+
+        cardEl.innerHTML = `
+          <div class="reel-card__frame">
+            <div class="reel-card__media">
+              <canvas class="reel-card__canvas" aria-hidden="true"></canvas>
+              <picture class="reel-card__poster">
+                <img src="${src}/poster.jpg${vParam}" alt="" loading="${idx === 0 ? "eager" : "lazy"}" decoding="${idx === 0 ? "sync" : "async"}">
+              </picture>
+            </div>
+            <div class="reel-card__vignette" aria-hidden="true"></div>
+            <div class="reel-card__shade" aria-hidden="true"></div>
+            <div class="reel-card__lead-veil" aria-hidden="true"></div>
+            <div class="reel-card__marks" aria-hidden="true">
+              <span class="seq__mark seq__mark--tl"></span>
+              <span class="seq__mark seq__mark--tr"></span>
+              <span class="seq__mark seq__mark--bl"></span>
+              <span class="seq__mark seq__mark--br"></span>
+            </div>
+            <div class="reel-card__hud" aria-hidden="true">
+              <span class="reel-card__chip reel-card__chip--idx">${pad(idx + 1)}</span>
+              <span class="reel-card__chip">${durSec.toFixed(1)}s · FPV</span>
+            </div>
+            <div class="reel-card__state-pill" aria-hidden="true">
+              <svg class="reel__ico-pause" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="2.5" height="10" rx="0.6"/><rect x="9.5" y="3" width="2.5" height="10" rx="0.6"/></svg>
+              <svg class="reel__ico-play" viewBox="0 0 16 16" fill="currentColor"><polygon points="4.5,3 13,8 4.5,13"/></svg>
+            </div>
+            <span class="reel-card__prog" aria-hidden="true"><i></i></span>
+          </div>
+        `;
+
+        const canvas = $(".reel-card__canvas", cardEl);
+        const ctx = canvas.getContext("2d", { alpha: false });
+        const progBar = $(".reel-card__prog i", cardEl);
+
+        const item = {
+          idx,
+          el: cardEl,
+          canvas,
+          ctx,
+          progBar,
+          src,
+          count,
+          from,
+          to,
+          span,
+          version,
+          fps,
+          cat: cardEl.dataset.cat || "Archivo FPV",
+          loc: cardEl.dataset.loc || "Buenos Aires",
+          title: cardEl.dataset.title || `Secuencia <em>${pad(idx + 1)}</em>`,
+          desc: cardEl.dataset.desc || "",
+          loadedSet: null,
+          loading: false,
+          lastDrawnImg: null,
+          dirty: true,
+          hasCanvas: false,
+          lastProg: -1,
+          curFrame: from,
+        };
+
+        cardEl.addEventListener("click", () => {
+          if (Math.abs(idx - this.carouselCur) < 0.42) {
+            this.togglePlayPause();
+          } else {
+            this.seekToClip(idx);
+          }
+        });
+        bindCursorTarget(cardEl);
+        this.cards.push(item);
+
+        if (this.strip) {
+          const thumbBtn = document.createElement("button");
+          thumbBtn.type = "button";
+          thumbBtn.className = "reel__thumb";
+          thumbBtn.setAttribute("role", "tab");
+          thumbBtn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
+          thumbBtn.setAttribute("aria-label", `Ver secuencia ${pad(idx + 1)}`);
+          const thumbSrc = from > 1
+            ? `${src}/md/${pad(from, 4)}.webp${vParam}`
+            : `${src}/poster.jpg${vParam}`;
+          thumbBtn.innerHTML = `
+            <img src="${thumbSrc}" alt="" loading="lazy" decoding="async">
+            <span class="reel__thumb-no">${pad(idx + 1)}</span>
+            <span class="reel__thumb-bar" aria-hidden="true"></span>
+          `;
+          thumbBtn.addEventListener("click", () => this.seekToClip(idx));
+          bindCursorTarget(thumbBtn);
+          this.strip.appendChild(thumbBtn);
+          this.thumbs.push(thumbBtn);
+        }
+      });
+    }
+
+    bindControls() {
+      $$("[data-reel-toggle]", this.el).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.togglePlayPause();
+        });
+        bindCursorTarget(btn);
+      });
+
+      const prevBtn = $("[data-reel-prev]", this.el);
+      const nextBtn = $("[data-reel-next]", this.el);
+      if (prevBtn) {
+        prevBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const target = Math.max(0, (this.activeIdx >= 0 ? this.activeIdx : 0) - 1);
+          this.seekToClip(target);
+        });
+        bindCursorTarget(prevBtn);
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const target = Math.min(this.cards.length - 1, (this.activeIdx >= 0 ? this.activeIdx : 0) + 1);
+          this.seekToClip(target);
+        });
+        bindCursorTarget(nextBtn);
+      }
+
+      if (this.scrub) {
+        bindTimelineScrub(
+          this.scrub,
+          (r, opts) => this.seekToProgress(r, opts),
+          (active) => { this.isScrubbing = active; }
+        );
+        this.scrub.addEventListener("keydown", (e) => {
+          const step = e.shiftKey ? 0.12 : 0.04;
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToProgress(clamp(this.prog + step)); }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToProgress(clamp(this.prog - step)); }
+        });
+      }
+
+      if (this.deckWrap) {
+        let touchX = 0, touchY = 0, tracking = false;
+        this.deckWrap.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1) return;
+          touchX = e.touches[0].clientX;
+          touchY = e.touches[0].clientY;
+          tracking = true;
+        }, { passive: true });
+        this.deckWrap.addEventListener("touchend", (e) => {
+          if (!tracking || !e.changedTouches.length) return;
+          tracking = false;
+          const dx = e.changedTouches[0].clientX - touchX;
+          const dy = e.changedTouches[0].clientY - touchY;
+          if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+            const cur = this.activeIdx >= 0 ? this.activeIdx : 0;
+            const next = dx < 0 ? Math.min(this.cards.length - 1, cur + 1) : Math.max(0, cur - 1);
+            if (next !== cur) this.seekToClip(next);
+          }
+        }, { passive: true });
+      }
+    }
+
+    togglePlayPause() {
+      if (this.prog >= 0.99) {
+        this.autoPlayPaused = false;
+        this.autoPlaySuspended = false;
+        this.syncPauseUI();
+        this.seekToProgress(0.01);
+        playTactileTick(720, 0.025, 0.018);
+        return;
+      }
+      this.autoPlayPaused = !this.autoPlayPaused;
+      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
+      this.syncPauseUI();
+      playTactileTick(this.autoPlayPaused ? 480 : 660, 0.02, 0.015);
+    }
+
+    syncPauseUI() {
+      this.el.classList.toggle("is-paused", this.autoPlayPaused);
+      if (this.modeLblEl) {
+        this.modeLblEl.textContent = this.autoPlayPaused ? "Pausado" : "Auto · Activo";
+      }
+      $$("[data-reel-toggle]", this.el).forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(!this.autoPlayPaused));
+      });
+    }
+
+    seekToProgress(p, opts = {}) {
+      const targetP = clamp(p, 0, 1);
+      const targetY = this.top + targetP * this.len;
+      this.seekingUntil = performance.now() + (opts.immediate ? 120 : 780);
+      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
+      scrollToTarget(targetY, { duration: 0.72, immediate: !!opts.immediate });
+    }
+
+    seekToClip(idx) {
+      const n = Math.max(1, this.cards.length);
+      const safeIdx = clamp(idx, 0, n - 1);
+      const introShare = 0.11;
+      const clipStart = n === 1 ? 0 : (safeIdx + (safeIdx === 0 ? 0.02 : 0.06)) / n;
+      const targetP = clamp(introShare + clipStart * (1 - introShare), introShare, 0.985);
+      this.seekToProgress(targetP);
+      playTactileTick(620 + safeIdx * 24, 0.02, 0.014);
+    }
+
+    measure() {
+      const portrait = vw / vh < 0.92 || vw <= 680;
+      let w, h, step;
+      if (portrait) {
+        w = clamp(Math.round(vw * 0.86), 280, 560);
+        h = Math.round(w * (9 / 16));
+        const maxH = Math.max(160, Math.min(vh * 0.40, vh - 290));
+        if (h > maxH) {
+          h = Math.round(maxH);
+          w = Math.round(h * (16 / 9));
+        }
+        step = Math.round(w * 0.92);
+      } else {
+        w = clamp(Math.round(vw * 0.49), 380, 840);
+        h = Math.round(w * (9 / 16));
+        const maxH = Math.max(220, Math.min(vh * 0.46, vh - 310));
+        if (h > maxH) {
+          h = Math.round(maxH);
+          w = Math.round(h * (16 / 9));
+        }
+        step = Math.round(w * 0.84);
+      }
+
+      this.cardW = w;
+      this.cardH = h;
+      this.cardStep = step;
+      this.stage.style.setProperty("--reel-w", `${w}px`);
+      this.stage.style.setProperty("--reel-h", `${h}px`);
+
+      this.top = this.el.offsetTop;
+      this.len = Math.max(1, this.el.offsetHeight - vh);
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const cw = Math.round(w * dpr);
+      const ch = Math.round(h * dpr);
+      this.cards.forEach((c) => {
+        if (c.canvas.width !== cw || c.canvas.height !== ch) {
+          c.canvas.width = cw;
+          c.canvas.height = ch;
+          c.dirty = true;
+        }
+      });
+
+      const nextSet = this.pickSet();
+      if (this.set && nextSet !== this.set) {
+        this.set = nextSet;
+        this.cards.forEach((c) => { c.loadedSet = null; c.dirty = true; });
+        if (this.activeIdx >= 0) this.loadNeighborhood(this.activeIdx);
+      } else {
+        this.set = nextSet;
+      }
+    }
+
+    orderRange(from, to) {
+      const span = to - from + 1;
+      const seen = new Uint8Array(span);
+      const out = [];
+      const push = (f) => {
+        const idx = f - from;
+        if (idx >= 0 && idx < span && !seen[idx]) {
+          seen[idx] = 1;
+          out.push(f);
+        }
+      };
+      push(from);
+      for (let f = from + 3; f <= to; f += 3) push(f);
+      push(to);
+      for (let f = from + 1; f <= to; f += 2) push(f);
+      for (let f = from; f <= to; f++) push(f);
+      return out;
+    }
+
+    loadCard(card) {
+      if (!card) return;
+      const set = this.set || this.pickSet();
+      if (card.loadedSet === set) return;
+      card.loadedSet = set;
+
+      const queue = this.orderRange(card.from, card.to);
+      let qi = 0;
+      const parallel = 3;
+      const vParam = card.version ? `?v=${card.version}` : "";
+
+      const step = () => {
+        while (qi < queue.length) {
+          const frameNum = queue[qi++];
+          const key = `${card.src}|${set}|${frameNum}`;
+          if (reelFrameCache.has(key)) {
+            if (frameNum === card.from) card.dirty = true;
+            continue;
+          }
+          if (reelInFlight.has(key)) continue;
+          reelInFlight.add(key);
+
+          const img = new Image();
+          img.decoding = "async";
+          const finish = (ok) => {
+            reelInFlight.delete(key);
+            if (ok) {
+              reelFrameCache.set(key, img);
+              this.cards.forEach((other) => {
+                if (other.src === card.src && Math.abs(frameNum - Math.round(other.curFrame)) <= 2) {
+                  other.dirty = true;
+                }
+              });
+            }
+            step();
+          };
+          img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
+          img.onerror = () => finish(false);
+          img.src = `${card.src}/${set}/${pad(frameNum, 4)}.webp${vParam}`;
+          return;
+        }
+      };
+      for (let k = 0; k < parallel; k++) step();
+    }
+
+    preloadOpeningFrames() {
+      if (this.openedPreload) return;
+      this.openedPreload = true;
+      const set = this.set || this.pickSet();
+      this.cards.forEach((card) => {
+        const key = `${card.src}|${set}|${card.from}`;
+        if (reelFrameCache.has(key) || reelInFlight.has(key)) return;
+        reelInFlight.add(key);
+        const vParam = card.version ? `?v=${card.version}` : "";
+        const img = new Image();
+        img.decoding = "async";
+        const done = (ok) => {
+          reelInFlight.delete(key);
+          if (ok) {
+            reelFrameCache.set(key, img);
+            card.dirty = true;
+          }
+        };
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => done(true));
+        img.onerror = () => done(false);
+        img.src = `${card.src}/${set}/${pad(card.from, 4)}.webp${vParam}`;
+      });
+    }
+
+    loadNeighborhood(centerIdx) {
+      if (!this.cards.length) return;
+      this.preloadOpeningFrames();
+      const order = [centerIdx, centerIdx + 1, centerIdx - 1, centerIdx + 2];
+      order.forEach((idx) => {
+        if (idx >= 0 && idx < this.cards.length) this.loadCard(this.cards[idx]);
+      });
+    }
+
+    nearestCached(card, frameNum) {
+      const set = this.set || this.pickSet();
+      const direct = reelFrameCache.get(`${card.src}|${set}|${frameNum}`);
+      if (direct) return direct;
+      for (let d = 1; d < card.span; d++) {
+        if (frameNum - d >= card.from) {
+          const prev = reelFrameCache.get(`${card.src}|${set}|${frameNum - d}`);
+          if (prev) return prev;
+        }
+        if (frameNum + d <= card.to) {
+          const next = reelFrameCache.get(`${card.src}|${set}|${frameNum + d}`);
+          if (next) return next;
+        }
+      }
+      return null;
+    }
+
+    drawCard(card, frameFloat) {
+      card.curFrame = frameFloat;
+      const target = Math.round(clamp(frameFloat, card.from, card.to));
+      const img = this.nearestCached(card, target);
+      if (!img || !img.naturalWidth) return;
+      if (card.lastDrawnImg === img && !card.dirty) return;
+
+      const c = card.canvas;
+      const ctx = card.ctx;
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      if (!iw || !ih) return;
+
+      if (card.idx === 0) {
+        if (c.width !== iw || c.height !== ih) {
+          c.width = iw;
+          c.height = ih;
+        }
+        ctx.drawImage(img, 0, 0, iw, ih);
+      } else {
+        const cw = c.width, ch = c.height;
+        if (!cw || !ch) return;
+        const s = Math.max(cw / iw, ch / ih);
+        const dw = iw * s, dh = ih * s;
+        const x = (cw - dw) / 2, y = (ch - dh) / 2;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "low";
+        ctx.drawImage(img, x, y, dw, dh);
+      }
+      card.lastDrawnImg = img;
+      card.dirty = false;
+      if (!card.hasCanvas) {
+        card.hasCanvas = true;
+        card.el.classList.add("has-canvas");
+      }
+    }
+
+    setActiveClip(idx) {
+      if (idx === this.activeIdx || !this.cards[idx]) return;
+      const prevIdx = this.activeIdx;
+      this.activeIdx = idx;
+      const card = this.cards[idx];
+
+      if (prevIdx >= 0) {
+        playTactileTick(640, 0.016, 0.012);
+      }
+
+      this.cards.forEach((c, i) => c.el.classList.toggle("is-center", i === idx));
+      this.thumbs.forEach((th, i) => {
+        const active = i === idx;
+        th.classList.toggle("is-active", active);
+        th.setAttribute("aria-selected", String(active));
+      });
+
+      if (this.strip && this.thumbs[idx] && this.strip.scrollWidth > this.strip.clientWidth + 4) {
+        const th = this.thumbs[idx];
+        const targetLeft = th.offsetLeft - (this.strip.clientWidth - th.offsetWidth) * 0.5;
+        this.strip.scrollLeft = Math.max(0, targetLeft);
+      }
+
+      if (this.idxEl) this.idxEl.textContent = pad(idx + 1);
+      if (this.topCatEl) this.topCatEl.textContent = card.cat.split("·")[0].trim();
+      if (this.topFpsEl) this.topFpsEl.textContent = `${card.fps} FPS`;
+
+      if (this.capSlots.length >= 2) {
+        const fillSlot = (slot) => {
+          if (slot.num) slot.num.textContent = pad(idx + 1);
+          if (slot.cat) slot.cat.textContent = card.cat;
+          if (slot.loc) slot.loc.textContent = card.loc;
+          if (slot.title) slot.title.innerHTML = card.title;
+          if (slot.desc) slot.desc.textContent = card.desc;
+        };
+
+        if (prevIdx < 0 || reduce) {
+          const curSlot = this.capSlots[this.capSlotIdx];
+          fillSlot(curSlot);
+          curSlot.el.classList.remove("is-leaving");
+          curSlot.el.classList.add("is-active");
+          curSlot.el.setAttribute("aria-hidden", "false");
+        } else {
+          const outSlot = this.capSlots[this.capSlotIdx];
+          const inIdx = 1 - this.capSlotIdx;
+          const inSlot = this.capSlots[inIdx];
+          this.capSlotIdx = inIdx;
+
+          // Prepara el slot entrante en estado inicial (sin transición) antes de activarlo
+          inSlot.el.style.transition = "none";
+          inSlot.el.classList.remove("is-active", "is-leaving");
+          fillSlot(inSlot);
+          void inSlot.el.offsetWidth;
+          inSlot.el.style.transition = "";
+
+          outSlot.el.classList.remove("is-active");
+          outSlot.el.classList.add("is-leaving");
+          outSlot.el.setAttribute("aria-hidden", "true");
+
+          inSlot.el.classList.add("is-active");
+          inSlot.el.setAttribute("aria-hidden", "false");
+        }
+      }
+
+      this.stage.style.setProperty("--reel-aura-s", idx % 2 === 0 ? "1.04" : "0.96");
+      if (prevIdx < 0 && this.deckWrap && this.stage) {
+        const sr = this.stage.getBoundingClientRect();
+        const dr = this.deckWrap.getBoundingClientRect();
+        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
+      }
+      this.loadNeighborhood(idx);
+    }
+
+    update(dt) {
+      const n = this.cards.length;
+      if (!n) return;
+
+      const y = scrollY();
+      const rawP = (y - this.top) / this.len;
+      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+
+      if (viewportEntry > 0 && this.activeIdx < 0) {
+        this.setActiveClip(0);
+      }
+      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
+
+      if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < 1.05 && performance.now() > (this.seekingUntil || 0)) {
+        const firstCard = this.cards[0];
+        const hasFirst = !!this.nearestCached(firstCard, firstCard.from);
+        runHybridScrollEngine({
+          top: this.top,
+          len: this.len,
+          dt,
+          viewportEntry,
+          rawP,
+          baseDuration: this.baseDuration,
+          state: this,
+          hasFrames: hasFirst || this.activeIdx >= 0,
+          isHero: false,
+        });
+      }
+
+      const targetProg = clamp(rawP, 0, 1);
+      this.prog = targetProg;
+
+      const dtSec = Math.min(dt || 0.016, 0.05);
+      const isDirectSeek = this.isScrubbing || performance.now() <= (this.seekingUntil || 0);
+      if (reduce) {
+        this.progCur = targetProg;
+      } else {
+        const damp = 1 - Math.exp((isDirectSeek ? -16 : -22) * dtSec);
+        this.progCur += (targetProg - this.progCur) * damp;
+      }
+      if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
+
+      const introShare = 0.11;
+      const entryPart = smooth(range(viewportEntry, 0.12, 1)) * 0.42;
+      const settlePart = this.progCur > 0 ? clamp(this.progCur / introShare, 0, 1) * 0.58 : 0;
+      const introT = reduce ? (viewportEntry > 0.05 ? 1 : 0) : clamp(entryPart + settlePart, 0, 1);
+      const settleEase = reduce ? 1 : (1 - Math.pow(1 - clamp((introT - 0.08) / 0.92, 0, 1), 2.5));
+      const hudReveal = reduce ? 1 : smooth(range(introT, 0.54, 1.0));
+      const sideReveal = reduce ? 1 : smooth(range(introT, 0.50, 1.0));
+      const heroMaxFit = Math.min((vw * 0.88) / Math.max(1, this.cardW || 600), (vh * 0.78) / Math.max(1, this.cardH || 338));
+      const heroScale = clamp(heroMaxFit, 1.24, 1.78);
+
+      const carouselProg = clamp((this.progCur - introShare) / (1 - introShare), 0, 1);
+      const seg = carouselProg * n;
+      const segIdx = clamp(Math.floor(seg), 0, n - 1);
+      const u = clamp(seg - segIdx, 0, 1);
+
+      const dwellEnd = 0.55;
+      const microDrift = 0.14;
+      let carouselTarget = segIdx;
+      if (segIdx < n - 1) {
+        carouselTarget = u <= dwellEnd
+          ? segIdx + (u / dwellEnd) * microDrift
+          : segIdx + microDrift + smooth((u - dwellEnd) / (1 - dwellEnd)) * (1 - microDrift);
+      }
+      this.carouselCur = carouselTarget;
+
+      const nearestIdx = clamp(Math.round(this.carouselCur), 0, n - 1);
+      if (nearestIdx !== this.activeIdx) this.setActiveClip(nearestIdx);
+
+      this.stage.style.setProperty("--reel-entry", hudReveal.toFixed(3));
+      this.stage.style.setProperty("--reel-entry-y", "0px");
+      this.stage.style.setProperty("--reel-hud", hudReveal.toFixed(3));
+      this.stage.style.setProperty("--reel-hud-top-y", `${(-(1 - hudReveal) * 14).toFixed(1)}px`);
+      this.stage.style.setProperty("--reel-hud-bot-y", `${((1 - hudReveal) * 18).toFixed(1)}px`);
+      this.stage.style.setProperty("--reel-aura-op", (0.22 + 0.46 * smooth(range(introT, 0.08, 0.85))).toFixed(3));
+
+      const targetRx = (!reduce && finePointer) ? (-normMy * 1.4) : 0;
+      const targetRy = (!reduce && finePointer) ? (normMx * 1.9) : 0;
+      this.tiltRx += (targetRx - this.tiltRx) * 0.1;
+      this.tiltRy += (targetRy - this.tiltRy) * 0.1;
+
+      const totalSeconds = Math.round(carouselProg * this.baseDuration);
+      if (this.tcEl) this.tcEl.textContent = `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
+      if (this.scrubFill) this.scrubFill.style.width = `${(this.progCur * 100).toFixed(1)}%`;
+      if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(this.progCur * 100)));
+
+      this.cards.forEach((card, i) => {
+        const d = i - this.carouselCur;
+        const absD = Math.abs(d);
+        const st = card.el.style;
+
+        if (absD > 2.25) {
+          st.setProperty("--rc-op", "0");
+          st.setProperty("--rc-pe", "none");
+          st.setProperty("--rc-filter", "none");
+          return;
+        }
+
+        const bell = Math.exp(-d * d * 2.1);
+        let tx = d * this.cardStep * (1 - 0.04 * Math.min(absD, 2));
+        let ty = (1 - bell) * 5;
+        let scale = 0.80 + 0.20 * bell;
+        const baseRy = clamp(-d * 9.5, -16, 16);
+        let activeWeight = smooth(clamp(1 - absD * 1.25, 0, 1));
+        let op = clamp(1 - Math.max(0, absD - 0.15) * 0.45, 0, 1);
+        let shade = clamp((1 - bell) * 0.72, 0, 0.72);
+        let blurPx = 0;
+
+        if (introT < 1) {
+          if (i === 0) {
+            const introScale = 1 + (heroScale - 1) * (1 - settleEase);
+            scale *= introScale;
+            ty += (1 - settleEase) * 26;
+            blurPx = (1 - settleEase) * 22;
+            op *= smooth(range(introT, 0.0, 0.52));
+            activeWeight *= smooth(range(introT, 0.56, 0.98));
+            shade = Math.max(shade, (1 - smooth(range(introT, 0.15, 0.72))) * 0.25);
+          } else {
+            op *= sideReveal;
+            tx += (1 - sideReveal) * (this.cardW || 560) * 0.22;
+          }
+        }
+
+        const rx = this.tiltRx * activeWeight;
+        const ry = baseRy + this.tiltRy * activeWeight;
+        const maxParallax = Math.max(4, (this.cardW || 300) * 0.032);
+        const parallaxX = clamp(-d * maxParallax, -16, 16);
+
+        st.setProperty("--rc-x", `${tx.toFixed(1)}px`);
+        st.setProperty("--rc-y", `${ty.toFixed(1)}px`);
+        st.setProperty("--rc-s", scale.toFixed(4));
+        st.setProperty("--rc-rx", `${rx.toFixed(2)}deg`);
+        st.setProperty("--rc-ry", `${ry.toFixed(2)}deg`);
+        st.setProperty("--rc-op", op.toFixed(3));
+        st.setProperty("--rc-filter", blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : "none");
+        st.setProperty("--rc-shade", shade.toFixed(3));
+        st.setProperty("--rc-act", activeWeight.toFixed(3));
+        st.setProperty("--rc-px", `${parallaxX.toFixed(1)}px`);
+        st.setProperty("--rc-ims", (1.10 - activeWeight * 0.08).toFixed(4));
+        st.setProperty("--rc-pe", (absD < 1.35 && op > 0.25) ? "auto" : "none");
+        st.setProperty("--rc-z", String(Math.round(50 - absD * 10)));
+
+        const entryShare = 0.18;
+        const exitShare = 0.82;
+        const introDrift = 0.10;
+        let clipP = 0;
+        if (i < segIdx) {
+          clipP = 1;
+        } else if (i === segIdx) {
+          if (i === 0 && i === n - 1) {
+            clipP = this.progCur;
+          } else if (i === 0) {
+            if (this.progCur < introShare) {
+              clipP = clamp(this.progCur / introShare, 0, 1) * introDrift;
+            } else {
+              const mainP = u <= dwellEnd
+                ? (u / dwellEnd) * exitShare
+                : exitShare + ((u - dwellEnd) / (1 - dwellEnd)) * (1 - exitShare);
+              clipP = introDrift + mainP * (1 - introDrift);
+            }
+          } else if (i === n - 1) {
+            clipP = entryShare + u * (1 - entryShare);
+          } else {
+            clipP = u <= dwellEnd
+              ? entryShare + (u / dwellEnd) * (exitShare - entryShare)
+              : exitShare + ((u - dwellEnd) / (1 - dwellEnd)) * (1 - exitShare);
+          }
+        } else if (i === segIdx + 1 && u > dwellEnd) {
+          clipP = ((u - dwellEnd) / (1 - dwellEnd)) * entryShare;
+        }
+
+        const frameFloat = card.from + clipP * (card.span - 1);
+        if (absD < 1.85) {
+          this.drawCard(card, frameFloat);
+        }
+
+        if (Math.abs(clipP - card.lastProg) > 0.002) {
+          card.lastProg = clipP;
+          st.setProperty("--rc-prog", clipP.toFixed(3));
+          if (this.thumbs[i]) {
+            this.thumbs[i].style.setProperty("--th-p", (i === segIdx ? clipP : (i < segIdx ? 1 : 0)).toFixed(3));
+          }
+        }
+      });
+    }
+  }
+
+  const reels = $$(".reel:not(.tr-reel-layer)").map((el) => new ReelArchive(el));
+
+  /* ---------------------------------------------------------
+     MOTOR UNIFICADO: PLANIFICACIÓN EN PLANTA -> ARCHIVO EN MOVIMIENTO
+     Escenario sticky único con disolución cartográfica, fusión de video
+     y retroceso fluido al carrusel 3D.
+     --------------------------------------------------------- */
+  const TRACE_PLAN_END_P = 0.315;
+  const BRIDGE_START_P = 0.29;
+  const TRACE_MEDIA_END_P = 0.365;
+  const BRIDGE_END_P = 0.415;
+  const REEL_WAKE_P = BRIDGE_START_P + 0.28 * (BRIDGE_END_P - BRIDGE_START_P);
+
+  class UnifiedTraceReel {
+    constructor(el) {
+      this.el = el;
+      this.stage = $(".trace-reel__stage", el);
+      this.traceMediaWrap = $("[data-tr-trace-media]", el);
+      this.traceCanvas = $(".seq__canvas", this.traceMediaWrap);
+      this.tracePosterImg = $(".seq__poster img", this.traceMediaWrap);
+      this.traceCtx = this.traceCanvas.getContext("2d", { alpha: false });
+      this.entryAtmo = $("[data-tr-entry-atmo]", el);
+      this.reelBgWrap = $("[data-tr-reel-bg]", el);
+      this.traceOverlay = $("[data-tr-trace-overlay]", el);
+      this.traceConsole = $(".trace__console", this.traceOverlay);
+      this.reelLayer = $("[data-tr-reel-layer]", el);
+
+      // Config secuencia planta (casa-greenville)
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
       this.version = el.dataset.version || "";
-      this.fps = +el.dataset.fps || 25;
-
-      this.stage = $(".format-showcase__stage", el);
-      this.box = $(".format-showcase__box", el);
-      this.device = $("[data-format-device]", el);
-      this.player = $(".format-showcase__player", el);
-      this.canvas = $(".format-showcase__canvas", el);
-      this.ctx = this.canvas.getContext("2d", { alpha: false });
-
-      this.specEl = $("[data-format-spec]", el);
-      this.resEl = $("[data-format-res]", el);
-      this.fill = $("[data-format-fill]", el);
-      this.frEl = $("[data-format-fr]", el);
-      this.lblL = $("[data-format-lbl-l]", el);
-      this.lblR = $("[data-format-lbl-r]", el);
-
-      this.frames = [];
-      this.cur = 0;
-      this.lastCur = -1;
-      this.dirty = true;
-      this.token = 0;
-
-      this.autoPlayPaused = false;
-      this.autoPlaySuspended = false;
-      this.lastTrackedY = undefined;
-      this.subpixelAcc = 0;
-
-      // Parallax táctil / puntero 3D suave sobre el dispositivo
-      this.ptrTargetX = 0;
-      this.ptrTargetY = 0;
-      this.ptrX = 0;
-      this.ptrY = 0;
-
-      if (this.stage && !reduce) {
-        this.stage.addEventListener("pointermove", (e) => {
-          const r = this.stage.getBoundingClientRect();
-          if (!r.width || !r.height) return;
-          this.ptrTargetX = clamp(((e.clientX - r.left) / r.width - 0.5) * 2, -1, 1);
-          this.ptrTargetY = clamp(((e.clientY - r.top) / r.height - 0.5) * 2, -1, 1);
-        }, { passive: true });
-        this.stage.addEventListener("pointerleave", () => {
-          this.ptrTargetX = 0;
-          this.ptrTargetY = 0;
-        }, { passive: true });
-      }
-
-      this.measure();
-    }
-
-    measure() {
-      this.top = this.el.offsetTop;
-      this.len = Math.max(1, this.el.offsetHeight - vh);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const cw = Math.round(Math.min(vw * 0.88, 1060) * dpr);
-      const ch = Math.round(cw * (1680 / 1920));
-      if (this.canvas && (this.canvas.width !== cw || this.canvas.height !== ch)) {
-        this.canvas.width = cw;
-        this.canvas.height = ch;
-      }
-      this.dirty = true;
-      this.syncGeometry(clamp((scrollY() - this.top) / this.len, 0, 1));
-    }
-
-    syncGeometry(p) {
-      // Acto 1 (0.00 - 0.10): Monitor 16:9 fijo y calmo para contemplar el máster de cine
-      // Acto 2 (0.10 - 0.84): Metamorfosis 3D viva y claramente perceptible con giro en perspectiva
-      // Acto 3 (0.84 - 1.00): Smartphone 9:16 vertical nativo aplomado y calmo
-      const morphT = smooth(range(p, 0.10, 0.84));
-      const ratioH = 16 / 9;
-      const ratioV = 9 / 16;
-      const curRatio = ratioH + (ratioV - ratioH) * morphT;
-
-      const isMobile = vw < 640;
-      const isTablet = vw < 1024;
-      const maxBoxW = Math.min(vw * (isMobile ? 0.88 : (isTablet ? 0.82 : 0.72)), 1020);
-      const maxBoxH = Math.min(vh * (isMobile ? 0.46 : (isTablet ? 0.48 : 0.50)), 540);
-
-      const standFold = smooth(range(morphT, 0.05, 0.48));
-      const standSpace = (1 - standFold) * (isMobile ? 24 : 34);
-      const availH = maxBoxH - standSpace * 0.55;
-
-      const wForMaxH = availH * curRatio;
-      let fw, fh;
-      if (wForMaxH <= maxBoxW) {
-        fh = availH;
-        fw = wForMaxH;
-      } else {
-        fw = maxBoxW;
-        fh = fw / curRatio;
-      }
-
-      fw = Math.round(fw);
-      fh = Math.round(fh);
-
-      if (this.box) {
-        this.box.style.setProperty("--player-w", `${fw}px`);
-        this.box.style.setProperty("--player-h", `${fh}px`);
-        this.box.style.setProperty("--stand-space", `${standSpace.toFixed(1)}px`);
-        if (!isMobile) {
-          const ghH = Math.min(availH, maxBoxW / ratioH);
-          const ghW = ghH * ratioH;
-          const gvH = maxBoxH;
-          const gvW = gvH * ratioV;
-          const guideOp = Math.sin(morphT * Math.PI) * 0.85;
-          this.box.style.setProperty("--guide-h-w", `${Math.round(ghW)}px`);
-          this.box.style.setProperty("--guide-h-h", `${Math.round(ghH)}px`);
-          this.box.style.setProperty("--guide-v-w", `${Math.round(gvW)}px`);
-          this.box.style.setProperty("--guide-v-h", `${Math.round(gvH)}px`);
-          this.box.style.setProperty("--guide-op", guideOp.toFixed(3));
-        }
-      }
-
-      this.player.style.setProperty("--player-w", `${fw}px`);
-      this.player.style.setProperty("--player-h", `${fh}px`);
-
-      if (this.device) {
-        const monitorOp = 1 - smooth(range(morphT, 0.08, 0.42));
-        const phoneOp = smooth(range(morphT, 0.48, 0.88));
-        const islandScale = 0.5 + 0.5 * smooth(range(morphT, 0.45, 0.85));
-        const btnExtrude = smooth(range(morphT, 0.58, 0.92));
-        const cornerOp = 1 - phoneOp * 0.82;
-
-        const devRadius = (isMobile ? 6 : 8) + ((isMobile ? 30 : 40) - (isMobile ? 6 : 8)) * smooth(range(morphT, 0.12, 0.90));
-        const screenRadius = (isMobile ? 2.5 : 3) + ((isMobile ? 23 : 31) - (isMobile ? 2.5 : 3)) * smooth(range(morphT, 0.12, 0.90));
-
-        const bezelTop = (isMobile ? 5 : 6) + ((isMobile ? 7 : 9) - (isMobile ? 5 : 6)) * morphT;
-        const bezelSide = (isMobile ? 5 : 6) + ((isMobile ? 7 : 9) - (isMobile ? 5 : 6)) * morphT;
-        const bezelBot = (isMobile ? 18 : 22) + ((isMobile ? 7 : 9) - (isMobile ? 18 : 22)) * smooth(range(morphT, 0.08, 0.58));
-
-        // Coreografía 3D visible, limpia y aplomada sobre eje vertical
-        // Empieza 100% frontal en monitor, gira claramente en perspectiva 3D (-14.5°) durante la metamorfosis,
-        // y se asienta 100% frontal en smartphone vertical. Sin balanceos raros en Z.
-        const arc = Math.sin(morphT * Math.PI);
-        const rx = reduce ? 0 : (arc * 3.6 - this.ptrY * 2.8);
-        const ry = reduce ? 0 : (arc * -14.5 + this.ptrX * 3.8);
-        const tz = reduce ? 0 : (arc * 32);
-
-        const rimX = clamp(-ry * 0.65, -11, 11);
-        const rimY = clamp(2.0 + rx * 0.45, -3, 6);
-        const shX = clamp(ry * 1.6, -28, 28);
-        const glareX = -25 + morphT * 50 - ry * 1.3;
-        const hudBotY = phoneOp * (isMobile ? -6 : -8);
-
-        const dStyle = this.device.style;
-        dStyle.setProperty("--player-w", `${fw}px`);
-        dStyle.setProperty("--player-h", `${fh}px`);
-        dStyle.setProperty("--monitor-op", monitorOp.toFixed(3));
-        dStyle.setProperty("--phone-op", phoneOp.toFixed(3));
-        dStyle.setProperty("--island-scale", islandScale.toFixed(3));
-        dStyle.setProperty("--stand-fold", standFold.toFixed(3));
-        dStyle.setProperty("--btn-extrude", btnExtrude.toFixed(3));
-        dStyle.setProperty("--corner-op", cornerOp.toFixed(3));
-        dStyle.setProperty("--dev-radius", `${devRadius.toFixed(1)}px`);
-        dStyle.setProperty("--screen-radius", `${screenRadius.toFixed(1)}px`);
-        dStyle.setProperty("--bezel-top", `${bezelTop.toFixed(1)}px`);
-        dStyle.setProperty("--bezel-side", `${bezelSide.toFixed(1)}px`);
-        dStyle.setProperty("--bezel-bot", `${bezelBot.toFixed(1)}px`);
-        dStyle.setProperty("--dev-rx", `${rx.toFixed(2)}deg`);
-        dStyle.setProperty("--dev-ry", `${ry.toFixed(2)}deg`);
-        dStyle.setProperty("--dev-rz", `0deg`);
-        dStyle.setProperty("--dev-z", `${tz.toFixed(1)}px`);
-        dStyle.setProperty("--rim-x", `${rimX.toFixed(2)}px`);
-        dStyle.setProperty("--rim-y", `${rimY.toFixed(2)}px`);
-        dStyle.setProperty("--sh-x", `${shX.toFixed(1)}px`);
-        dStyle.setProperty("--glare-x", `${glareX.toFixed(1)}%`);
-        dStyle.setProperty("--hud-bot-y", `${hudBotY.toFixed(1)}px`);
-      }
-
-      return morphT;
-    }
-
-    load() {
-      if (this.frames.length) return;
-      const heroSeq = sequences[0];
-      if (heroSeq && heroSeq.src === this.src && heroSeq.frames && heroSeq.frames.length && heroSeq.set === "lg") {
-        this.frames = heroSeq.frames;
-        this.draw(0);
-        return;
-      }
-      this.frames = new Array(this.count);
-      const token = ++this.token;
-      const queue = [0];
-      for (let i = 3; i < this.count; i += 3) queue.push(i);
-      if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
-      for (let i = 1; i < this.count; i++) {
-        if (!queue.includes(i)) queue.push(i);
-      }
-
-      let qi = 0;
-      const parallel = 4;
-      const next = () => {
-        if (token !== this.token || qi >= queue.length) return;
-        const i = queue[qi++];
-        const img = new Image();
-        img.decoding = "async";
-        const finish = (ok) => {
-          if (token !== this.token) return;
-          if (ok) {
-            this.frames[i] = img;
-            if (i === 0) this.draw(0);
-            this.dirty = true;
-          }
-          next();
-        };
-        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
-        img.onerror = () => finish(false);
-        const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
-        img.src = `${this.src}/lg/${pad(i + 1, 4)}.webp${vParam}`;
-      };
-      for (let k = 0; k < parallel; k++) next();
-    }
-
-    nearest(i) {
-      if (this.frames[i]) return this.frames[i];
-      const heroSeq = sequences[0];
-      if (heroSeq && heroSeq.src === this.src && heroSeq.set === "lg" && heroSeq.frames && heroSeq.frames[i]) return heroSeq.frames[i];
-      for (let d = 1; d < this.count; d++) {
-        if (this.frames[i - d]) return this.frames[i - d];
-        if (this.frames[i + d]) return this.frames[i + d];
-        if (heroSeq && heroSeq.src === this.src && heroSeq.set === "lg" && heroSeq.frames) {
-          if (heroSeq.frames[i - d]) return heroSeq.frames[i - d];
-          if (heroSeq.frames[i + d]) return heroSeq.frames[i + d];
-        }
-      }
-      return null;
-    }
-
-    draw(pos) {
-      const f = Math.round(clamp(pos, 0, this.count - 1));
-      const img = this.nearest(f);
-      if (!img || !img.naturalWidth) return;
-      if (this.lastDrawnImg === img) return;
-
-      const c = this.canvas, ctx = this.ctx;
-      const cw = c.width, ch = c.height;
-      if (!cw || !ch) return;
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "low";
-      ctx.drawImage(img, 0, 0, cw, ch);
-      this.lastDrawnImg = img;
-    }
-
-    update(dt) {
-      if (!this.frames || !this.frames.length) this.load();
-      const y = scrollY();
-      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
-
-      if (!this.frames.length) this.load();
-
-      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
-      const rawP = (y - this.top) / this.len;
-      const p = clamp(rawP, 0, 1);
-
-      // Motor híbrido continuo (estilo Anacleto):
-      // Reproduce automáticamente al fijarse, acelera al deslizar hacia abajo,
-      // frena de inmediato al deslizar hacia arriba y reanuda suavemente.
-      runHybridScrollEngine({
-        top: this.top,
-        len: this.len,
-        dt,
-        viewportEntry,
-        rawP,
-        baseDuration: 10.5, // Formato Dual (~10.5s): metamorfosis cinematográfica fluida
-        state: this,
-        hasFrames: this.frames && (this.frames[0] || this.nearest(0)),
-      });
-
-      // Pre-roll cinematográfico en aproximación previa + continuidad viva en la salida:
-      const pPlayStart = -Math.min(0.50, (vh * 0.70) / this.len);
-      const preShare = 0.055;
-      const pinMaxProg = 0.88;
-      const exitRange = 0.22;
-      let prog = 0;
-      if (rawP < pPlayStart) {
-        prog = 0;
-      } else if (rawP < 0) {
-        const u = clamp((rawP - pPlayStart) / (-pPlayStart));
-        prog = preShare * Math.pow(u, 1.35);
-      } else if (rawP <= 1.0) {
-        prog = preShare + rawP * (pinMaxProg - preShare);
-      } else {
-        const exitT = clamp((rawP - 1.0) / exitRange);
-        prog = pinMaxProg + Math.sin(exitT * Math.PI * 0.5) * (1.0 - pinMaxProg);
-      }
-      prog = clamp(prog, 0, 1);
-
-      // Contra-desplazamiento al entrar desde #servicios:
-      if (this.stage) {
-        const entryShiftY = -(1 - smooth(viewportEntry)) * (vh * 0.16);
-        this.stage.style.setProperty("--format-group-y", `${entryShiftY.toFixed(1)}px`);
-      }
-
-      const targetF = prog * (this.count - 1);
-      const k = reduce ? 1 : 1 - Math.exp(-12 * dt);
-      this.cur += (targetF - this.cur) * k;
-      if (Math.abs(targetF - this.cur) < 0.002) this.cur = targetF;
-
-      const pk = reduce ? 1 : 1 - Math.exp(-8 * dt);
-      this.ptrX += (this.ptrTargetX - this.ptrX) * pk;
-      this.ptrY += (this.ptrTargetY - this.ptrY) * pk;
-
-      // Metamorfosis: inicia en 16:9 (Monitor de estudio), muta en 3D y culmina en 9:16 (Smartphone insignia)
-      const morphT = this.syncGeometry(p);
-
-      if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
-        this.draw(this.cur);
-        this.lastCur = this.cur;
-        this.dirty = false;
-
-        const f = Math.round(this.cur);
-        if (this.frEl) this.frEl.textContent = pad(f + 1, 3);
-        if (this.fill) this.fill.style.width = `${(p * 100).toFixed(1)}%`;
-      }
-
-      if (this.resEl) {
-        const resW = Math.round(3840 + (2160 - 3840) * morphT);
-        const resH = Math.round(2160 + (3840 - 2160) * morphT);
-        this.resEl.textContent = `${resW} × ${resH} PX`;
-      }
-      if (this.specEl) {
-        this.specEl.textContent = morphT > 0.65 ? "9:16 RAW · MOBILE" : "OPEN GATE · 5.1K RAW";
-      }
-
-      if (this.lblL) this.lblL.classList.toggle("is-active", morphT < 0.5);
-      if (this.lblR) this.lblR.classList.toggle("is-active", morphT >= 0.5);
-    }
-  }
-
-  /* ---------------------------------------------------------
-     COREOGRAFÍA ESPACIAL DE VUELO (3D Matrix Sequence)
-     Transición 3D de entrada rápida, nivelación en encuadre central,
-     expansión continua a pantalla completa como fondo inmersivo.
-     --------------------------------------------------------- */
-  class FlightChoreographySequence {
-    constructor(el) {
-      this.el = el;
-      this.src = el.dataset.src || "assets/seq/epecuen";
-      this.count = +el.dataset.count || 179;
       this.fps = +el.dataset.fps || 24;
-
-      this.stage = $(".choreo__stage", el);
-      this.stageBox = $(".choreo__stage-box", el);
-      this.deck = $("[data-choreo-deck]", el);
-      this.canvas = $("[data-choreo-canvas]", el);
-      this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
-
-      this.bpCanvas = $("[data-choreo-blueprint]", el);
-      this.bpCtx = this.bpCanvas ? this.bpCanvas.getContext("2d") : null;
-
-      this.livePhaseEl = $("[data-choreo-live-phase]", el);
-      this.ruler = $("[data-choreo-ruler]", el);
-      this.progressFill = $("[data-choreo-progress-fill]", el);
-      this.progressTrack = $(".choreo__progress-track", el);
-      this.frEl = $("[data-choreo-fr]", el);
-      this.tcEl = $("[data-choreo-tc]", el);
-      this.statusPill = $("[data-choreo-status-pill]", el);
-      this.phaseLabel = $("[data-choreo-phase-label]", el);
-
-      this.speedEl = $("[data-choreo-speed]", el);
-      this.altEl = $("[data-choreo-alt]", el);
-      this.dynEl = $("[data-choreo-dyn]", el);
-      this.coordsEl = $("[data-choreo-coords]", el);
-      this.pitchEl = $("[data-choreo-pitch]", el);
-      this.rollEl = $("[data-choreo-roll]", el);
-      this.horizonEl = $("[data-choreo-horizon]", el);
-
-      this.outroCard = $("[data-choreo-outro]", el);
-      this.outroGleamOp = 0;
-
-      this.insetEl = $("[data-choreo-inset]", el);
-      this.insetFrame = $("[data-choreo-inset-frame]", el);
-      this.insetCanvas = $("[data-choreo-inset-canvas]", el);
-      this.insetCtx = this.insetCanvas ? this.insetCanvas.getContext("2d", { alpha: false }) : null;
-      this.insetLabel = $("[data-choreo-inset-label]", el);
-      this.insetMeta = $("[data-choreo-inset-meta]", el);
-      this.insetSrc = el.dataset.insetSrc || null;
-      this.insetCount = +el.dataset.insetCount || this.count;
-      this.insetFrames = null;
-      this.lastDrawnInsetImg = null;
-      this.lastInsetCur = -1;
-
-      this.cur = 0;
-      this.lastCur = -1;
-      this.lastAct = -1;
-      this.lastTickFr = -1;
-      this.dirty = true;
-      this.isPortrait = false;
-      this.fullScale = 1.0;
-      this.expandShiftY = 0;
-
+      this.isHybrid = el.dataset.mode !== "manual";
+      this.baseDuration = parseFloat(el.dataset.duration) || 29.5;
       this.autoPlayPaused = false;
       this.autoPlaySuspended = false;
       this.lastTrackedY = undefined;
-      this.subpixelAcc = 0;
 
-      this.mouseTargetX = 0;
-      this.mouseTargetY = 0;
-      this.mouseCurrentX = 0;
-      this.mouseCurrentY = 0;
+      this.traceFrames = [];
+      this.traceSet = null;
+      this.traceToken = 0;
+      this.traceFrameCur = 0;
+      this.lastTraceFrameDrawn = -1;
+      this.lastTraceHudFrame = -1;
+      this.lastTracePctVal = -1;
+      this.traceDirty = true;
+      this.hasTraceCanvas = false;
+      this.lastTraceBlur = -1;
+      this.lastTraceGray = -1;
+      this.traceCur = 0;
+      this.lastTraceZone = -1;
 
-      this.frames = [];
-      this.token = 0;
+      // Referencias SVG & HUD de planta
+      this.tracePathCore = $("#tracePathCore", this.traceOverlay);
+      this.tracePathGlow = $("#tracePathGlow", this.traceOverlay);
+      this.traceDrone = $("[data-trace-drone]", this.traceOverlay);
+      this.traceDroneRot = $("[data-trace-drone-rot]", this.traceOverlay);
+      this.traceDroneTxt = $("[data-trace-drone-txt]", this.traceOverlay);
+      this.traceWakeRing = $("[data-trace-wake]", this.traceOverlay);
 
-      this.initRuler();
-      this.bindEvents();
+      this.tracePathCoreV = $("#tracePathCoreV", this.traceOverlay);
+      this.tracePathGlowV = $("#tracePathGlowV", this.traceOverlay);
+      this.traceDroneV = $("[data-trace-drone-v]", this.traceOverlay);
+      this.traceDroneRotV = $("[data-trace-drone-rot-v]", this.traceOverlay);
+      this.traceDroneTxtV = $("[data-trace-drone-txt-v]", this.traceOverlay);
+      this.traceWakeRingV = $("[data-trace-wake-v]", this.traceOverlay);
+
+      this.tracePhasePill = $("[data-trace-phase-pill]", this.traceOverlay);
+      this.traceAltEl = $("[data-trace-alt]", this.traceOverlay);
+      this.traceYawEl = $("[data-trace-yaw]", this.traceOverlay);
+      this.tracePlanStateEl = $("[data-trace-plan-state]", this.traceOverlay);
+      this.traceDistEl = $("[data-trace-dist]", this.traceOverlay);
+      this.traceRoomNameEl = $("[data-trace-room-name]", this.traceOverlay);
+      this.traceTcEl = $("[data-trace-tc]", this.traceOverlay);
+      this.traceFrEl = $("[data-hud-fr]", this.traceOverlay);
+      this.traceScrub = $(".trace__scrub", this.traceOverlay);
+      this.traceScrubFill = $("[data-scrub-fill]", this.traceOverlay);
+      this.traceRooms = $$("[data-trace-room]", this.traceOverlay);
+      this.traceRoomsV = $$("[data-trace-room-v]", this.traceOverlay);
+      this.traceWps = $$("[data-trace-wp]", this.traceOverlay);
+      this.traceWpsV = $$("[data-trace-wp-v]", this.traceOverlay);
+      this.traceActs = $$("[data-trace-act]", this.traceOverlay).map((n) => ({
+        n,
+        r: n.dataset.traceAct.split(",").map(Number),
+      }));
+
+      this.tracePathLen = 1034;
+      if (this.tracePathCore && typeof this.tracePathCore.getTotalLength === "function") {
+        try {
+          const len = this.tracePathCore.getTotalLength();
+          if (len > 20) this.tracePathLen = len;
+        } catch (_) {}
+      }
+      if (this.tracePathCore) {
+        this.tracePathCore.style.strokeDasharray = `${this.tracePathLen}`;
+        this.tracePathCore.style.strokeDashoffset = `${this.tracePathLen}`;
+      }
+      if (this.tracePathGlow) {
+        this.tracePathGlow.style.strokeDasharray = `${this.tracePathLen}`;
+        this.tracePathGlow.style.strokeDashoffset = `${this.tracePathLen}`;
+      }
+
+      this.tracePathLenV = 690;
+      if (this.tracePathCoreV && typeof this.tracePathCoreV.getTotalLength === "function") {
+        try {
+          const lenV = this.tracePathCoreV.getTotalLength();
+          if (lenV > 20) this.tracePathLenV = lenV;
+        } catch (_) {}
+      }
+      if (this.tracePathCoreV) {
+        this.tracePathCoreV.style.strokeDasharray = `${this.tracePathLenV}`;
+        this.tracePathCoreV.style.strokeDashoffset = `${this.tracePathLenV}`;
+      }
+      if (this.tracePathGlowV) {
+        this.tracePathGlowV.style.strokeDasharray = `${this.tracePathLenV}`;
+        this.tracePathGlowV.style.strokeDashoffset = `${this.tracePathLenV}`;
+      }
+
+      // Referencias Archivo en Movimiento
+      this.deckWrap = $(".reel__deck-wrap", this.reelLayer);
+      this.deck = $("[data-reel-deck]", this.reelLayer);
+      this.strip = $("[data-reel-strip]", this.reelLayer);
+      this.reelScrub = $(".reel__scrub", this.reelLayer);
+      this.reelScrubFill = $("[data-reel-scrub-fill]", this.reelLayer);
+      this.reelTcEl = $("[data-reel-tc]", this.reelLayer);
+      this.reelDuration = parseFloat(this.reelLayer.dataset.duration) || 39.0;
+
+      this.modeLblEl = $("[data-reel-mode-lbl]", this.reelLayer);
+      this.idxEl = $("[data-reel-idx]", this.reelLayer);
+      this.totalEl = $("[data-reel-total]", this.reelLayer);
+      this.topCatEl = $("[data-reel-top-cat]", this.reelLayer);
+      this.topFpsEl = $("[data-reel-top-fps]", this.reelLayer);
+
+      this.capSlots = $$("[data-reel-cap-slot]", this.reelLayer).map((slot) => ({
+        el: slot,
+        num: $(".reel__cap-num", slot),
+        cat: $(".reel__cap-cat", slot),
+        loc: $(".reel__cap-loc", slot),
+        title: $(".reel__cap-title", slot),
+        desc: $(".reel__cap-desc", slot),
+      }));
+      this.capSlotIdx = 0;
+
+      this.cards = [];
+      this.thumbs = [];
+      this.carouselCur = 0;
+      this.progCur = 0;
+      this.prog = 0;
+      this.activeIdx = -1;
+      this.tiltRx = 0;
+      this.tiltRy = 0;
+      this.reelSet = null;
+      this.openedPreload = false;
+      this.isScrubbing = false;
+
+      this.initCards();
+      this.bindControls();
       this.measure();
     }
 
-    load() {
-      if (this.frames && this.frames.length) return;
-      const heroSeq = sequences[0];
-      if (heroSeq && heroSeq.src === this.src && heroSeq.frames && heroSeq.frames.length && heroSeq.set === "lg") {
-        this.frames = heroSeq.frames;
-        this.drawVideo(0);
-        return;
-      }
-      this.frames = new Array(this.count);
-      const token = ++this.token;
-      const queue = [0];
-      for (let i = 3; i < this.count; i += 3) queue.push(i);
-      if (!queue.includes(this.count - 1)) queue.push(this.count - 1);
-      for (let i = 1; i < this.count; i++) {
-        if (!queue.includes(i)) queue.push(i);
-      }
-
-      let qi = 0;
-      const parallel = 4;
-      const next = () => {
-        if (token !== this.token || qi >= queue.length) return;
-        const i = queue[qi++];
-        const img = new Image();
-        img.decoding = "async";
-        const finish = (ok) => {
-          if (token !== this.token) return;
-          if (ok) {
-            this.frames[i] = img;
-            if (i === 0) this.dirty = true;
-          }
-          next();
-        };
-        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
-        img.onerror = () => finish(false);
-        const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
-        img.src = `${this.src}/lg/${pad(i + 1, 4)}.webp${vParam}`;
-      };
-      for (let k = 0; k < parallel; k++) next();
+    pickTraceSet() {
+      return vw / vh < 0.9 ? "pt" : "lg";
     }
 
-    initRuler() {
-      if (!this.ruler) return;
-      const distances = ["0.5m", "1.0m", "1.5m", "2.0m", "2.5m", "3.0m", "4.0m", "5.0m", "8.0m", "12m", "∞"];
-      const frag = document.createDocumentFragment();
-      for (let i = 0; i <= 60; i++) {
-        const tick = document.createElement("span");
-        if (i % 6 === 0) {
-          tick.className = "choreo__lens-tick choreo__lens-tick--major";
-          const distIdx = Math.floor(i / 6);
-          if (distances[distIdx]) {
-            const lbl = document.createElement("span");
-            lbl.textContent = distances[distIdx];
-            tick.appendChild(lbl);
+    pickReelSet() {
+      return "md";
+    }
+
+    initCards() {
+      const cardEls = $$(".reel-card", this.deck);
+      const total = cardEls.length;
+      if (this.totalEl) this.totalEl.textContent = pad(total);
+
+      cardEls.forEach((cardEl, idx) => {
+        const src = cardEl.dataset.src;
+        const count = Math.max(1, +(cardEl.dataset.count || 1));
+        const from = clamp(+(cardEl.dataset.from || 1), 1, count);
+        const to = clamp(+(cardEl.dataset.to || count), from, count);
+        const version = cardEl.dataset.version || "";
+        const fps = Math.max(12, +(cardEl.dataset.fps || 24));
+        const span = Math.max(1, to - from + 1);
+        const durSec = span / fps;
+        const vParam = version ? `?v=${version}` : "";
+
+        cardEl.innerHTML = `
+          <div class="reel-card__frame">
+            <div class="reel-card__media">
+              <canvas class="reel-card__canvas" aria-hidden="true"></canvas>
+              <picture class="reel-card__poster">
+                <img src="${src}/poster.jpg${vParam}" alt="" loading="${idx === 0 ? "eager" : "lazy"}" decoding="${idx === 0 ? "sync" : "async"}">
+              </picture>
+            </div>
+            <div class="reel-card__vignette" aria-hidden="true"></div>
+            <div class="reel-card__shade" aria-hidden="true"></div>
+            <div class="reel-card__lead-veil" aria-hidden="true"></div>
+            <div class="reel-card__marks" aria-hidden="true">
+              <span class="seq__mark seq__mark--tl"></span>
+              <span class="seq__mark seq__mark--tr"></span>
+              <span class="seq__mark seq__mark--bl"></span>
+              <span class="seq__mark seq__mark--br"></span>
+            </div>
+            <div class="reel-card__hud" aria-hidden="true">
+              <span class="reel-card__chip reel-card__chip--idx">${pad(idx + 1)}</span>
+              <span class="reel-card__chip">${durSec.toFixed(1)}s · FPV</span>
+            </div>
+            <div class="reel-card__state-pill" aria-hidden="true">
+              <svg class="reel__ico-pause" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="2.5" height="10" rx="0.6"/><rect x="9.5" y="3" width="2.5" height="10" rx="0.6"/></svg>
+              <svg class="reel__ico-play" viewBox="0 0 16 16" fill="currentColor"><polygon points="4.5,3 13,8 4.5,13"/></svg>
+            </div>
+            <span class="reel-card__prog" aria-hidden="true"><i></i></span>
+          </div>
+        `;
+
+        const canvas = $(".reel-card__canvas", cardEl);
+        const ctx = canvas.getContext("2d", { alpha: false });
+        const progBar = $(".reel-card__prog i", cardEl);
+
+        const item = {
+          idx,
+          el: cardEl,
+          canvas,
+          ctx,
+          progBar,
+          src,
+          count,
+          from,
+          to,
+          span,
+          version,
+          fps,
+          cat: cardEl.dataset.cat || "Archivo FPV",
+          loc: cardEl.dataset.loc || "Buenos Aires",
+          title: cardEl.dataset.title || `Secuencia <em>${pad(idx + 1)}</em>`,
+          desc: cardEl.dataset.desc || "",
+          loadedSet: null,
+          lastDrawnImg: null,
+          dirty: true,
+          hasCanvas: false,
+          lastProg: -1,
+          curFrame: from,
+        };
+
+        cardEl.addEventListener("click", () => {
+          if (Math.abs(idx - this.carouselCur) < 0.42) {
+            this.togglePlayPause();
+          } else {
+            this.seekToClip(idx);
           }
-        } else if (i % 3 === 0) {
-          tick.className = "choreo__lens-tick choreo__lens-tick--med";
-        } else {
-          tick.className = "choreo__lens-tick";
+        });
+        bindCursorTarget(cardEl);
+        this.cards.push(item);
+
+        if (this.strip) {
+          const thumbBtn = document.createElement("button");
+          thumbBtn.type = "button";
+          thumbBtn.className = "reel__thumb";
+          thumbBtn.setAttribute("role", "tab");
+          thumbBtn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
+          thumbBtn.setAttribute("aria-label", `Ver secuencia ${pad(idx + 1)}`);
+          const thumbSrc = from > 1
+            ? `${src}/md/${pad(from, 4)}.webp${vParam}`
+            : `${src}/poster.jpg${vParam}`;
+          thumbBtn.innerHTML = `
+            <img src="${thumbSrc}" alt="" loading="lazy" decoding="async">
+            <span class="reel__thumb-no">${pad(idx + 1)}</span>
+            <span class="reel__thumb-bar" aria-hidden="true"></span>
+          `;
+          thumbBtn.addEventListener("click", () => this.seekToClip(idx));
+          bindCursorTarget(thumbBtn);
+          this.strip.appendChild(thumbBtn);
+          this.thumbs.push(thumbBtn);
         }
-        frag.appendChild(tick);
-      }
-      this.ruler.appendChild(frag);
+      });
     }
 
-    bindEvents() {
-      if (this.progressTrack) {
-        const seek = (e) => {
-          const rect = this.progressTrack.getBoundingClientRect();
-          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-          if (clientX === undefined) return;
-          const p = clamp((clientX - rect.left) / rect.width);
-          const y = this.top + p * this.len;
-          if (scrollContainer && isVerticalScroller()) scrollToTarget(y, { immediate: true });
-          else if (lenis) lenis.scrollTo(y, { immediate: true });
-          else window.scrollTo(0, y);
-        };
-        this.progressTrack.addEventListener("click", seek);
-      }
-
-      if (finePointer && this.stage) {
-        this.stage.addEventListener("mousemove", (e) => {
-          const rect = this.stage.getBoundingClientRect();
-          this.mouseTargetX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-          this.mouseTargetY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-        }, { passive: true });
-        this.stage.addEventListener("mouseleave", () => {
-          this.mouseTargetX = 0;
-          this.mouseTargetY = 0;
+    bindControls() {
+      // Scrub de Planificación en Planta (0..TRACE_PLAN_END_P)
+      if (this.traceScrub) {
+        bindTimelineScrub(
+          this.traceScrub,
+          (r, opts) => this.seekToUnifiedProgress(r * TRACE_PLAN_END_P, opts),
+          (active) => { this.isScrubbing = active; }
+        );
+        this.traceScrub.addEventListener("keydown", (e) => {
+          const step = (e.shiftKey ? 0.1 : 0.04) * TRACE_PLAN_END_P;
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, 0, TRACE_PLAN_END_P)); }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, 0, TRACE_PLAN_END_P)); }
         });
       }
+
+      // Controles de Archivo en Movimiento
+      $$("[data-reel-toggle]", this.reelLayer).forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.togglePlayPause();
+        });
+        bindCursorTarget(btn);
+      });
+
+      const prevBtn = $("[data-reel-prev]", this.reelLayer);
+      const nextBtn = $("[data-reel-next]", this.reelLayer);
+      if (prevBtn) {
+        prevBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const target = Math.max(0, (this.activeIdx >= 0 ? this.activeIdx : 0) - 1);
+          this.seekToClip(target);
+        });
+        bindCursorTarget(prevBtn);
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const target = Math.min(this.cards.length - 1, (this.activeIdx >= 0 ? this.activeIdx : 0) + 1);
+          this.seekToClip(target);
+        });
+        bindCursorTarget(nextBtn);
+      }
+
+      if (this.reelScrub) {
+        bindTimelineScrub(
+          this.reelScrub,
+          (r, opts) => this.seekToUnifiedProgress(BRIDGE_END_P + r * (1 - BRIDGE_END_P), opts),
+          (active) => { this.isScrubbing = active; }
+        );
+        this.reelScrub.addEventListener("keydown", (e) => {
+          const step = (e.shiftKey ? 0.12 : 0.04) * (1 - BRIDGE_END_P);
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, BRIDGE_END_P, 1)); }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, BRIDGE_END_P, 1)); }
+        });
+      }
+
+      if (this.deckWrap) {
+        let touchX = 0, touchY = 0, tracking = false;
+        this.deckWrap.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1) return;
+          touchX = e.touches[0].clientX;
+          touchY = e.touches[0].clientY;
+          tracking = true;
+        }, { passive: true });
+        this.deckWrap.addEventListener("touchend", (e) => {
+          if (!tracking || !e.changedTouches.length) return;
+          tracking = false;
+          const dx = e.changedTouches[0].clientX - touchX;
+          const dy = e.changedTouches[0].clientY - touchY;
+          if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+            const cur = this.activeIdx >= 0 ? this.activeIdx : 0;
+            const next = dx < 0 ? Math.min(this.cards.length - 1, cur + 1) : Math.max(0, cur - 1);
+            if (next !== cur) this.seekToClip(next);
+          }
+        }, { passive: true });
+      }
+    }
+
+    togglePlayPause() {
+      if (this.prog >= 0.99) {
+        this.autoPlayPaused = false;
+        this.autoPlaySuspended = false;
+        this.syncPauseUI();
+        this.seekToUnifiedProgress(BRIDGE_END_P);
+        playTactileTick(720, 0.025, 0.018);
+        return;
+      }
+      this.autoPlayPaused = !this.autoPlayPaused;
+      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
+      this.syncPauseUI();
+      playTactileTick(this.autoPlayPaused ? 480 : 660, 0.02, 0.015);
+    }
+
+    syncPauseUI() {
+      this.reelLayer.classList.toggle("is-paused", this.autoPlayPaused);
+      if (this.modeLblEl) {
+        this.modeLblEl.textContent = this.autoPlayPaused ? "Pausado" : "Auto · Activo";
+      }
+      $$("[data-reel-toggle]", this.reelLayer).forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(!this.autoPlayPaused));
+      });
+    }
+
+    seekToUnifiedProgress(p, opts = {}) {
+      const targetP = clamp(p, 0, 1);
+      const targetY = this.top + targetP * this.len;
+      this.seekingUntil = performance.now() + (opts.immediate ? 120 : 780);
+      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
+      scrollToTarget(targetY, { duration: 0.72, immediate: !!opts.immediate });
+    }
+
+    seekToClip(idx) {
+      const n = Math.max(1, this.cards.length);
+      const safeIdx = clamp(idx, 0, n - 1);
+      const clipStart = safeIdx === 0 ? 0 : (safeIdx + 0.06) / n;
+      const targetP = clamp(BRIDGE_END_P + clipStart * (1 - BRIDGE_END_P), BRIDGE_END_P, 0.985);
+      this.seekToUnifiedProgress(targetP);
+      playTactileTick(620 + safeIdx * 24, 0.02, 0.014);
     }
 
     measure() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const tw = Math.min(1920, Math.round(vw * dpr));
+      const th = Math.min(1680, Math.round(vh * dpr));
+      if (this.traceCanvas.width !== tw || this.traceCanvas.height !== th) {
+        this.traceCanvas.width = tw;
+        this.traceCanvas.height = th;
+        this.traceDirty = true;
+      }
+
       this.top = this.el.offsetTop;
       this.len = Math.max(1, this.el.offsetHeight - vh);
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      this.isPortrait = (vw / vh < 0.9) || (vw <= 768);
-
-      let deckW, deckH;
-      if (this.isPortrait) {
-        // En vertical / móvil: formato 8:7 nativo Open Gate de máxima resolución
-        const availH = Math.max(200, vh - 220);
-        const maxDeckWByHeight = Math.round(availH * (8 / 7));
-        deckW = Math.round(Math.min(vw * 0.88, 340, maxDeckWByHeight));
-        deckH = Math.round(deckW * (7 / 8));
+      const portrait = vw / vh < 0.92 || vw <= 680;
+      let w, h, step;
+      if (portrait) {
+        w = clamp(Math.round(vw * 0.86), 280, 560);
+        h = Math.round(w * (9 / 16));
+        const maxH = Math.max(160, Math.min(vh * 0.40, vh - 290));
+        if (h > maxH) {
+          h = Math.round(maxH);
+          w = Math.round(h * (16 / 9));
+        }
+        step = Math.round(w * 0.92);
       } else {
-        // En horizontal / escritorio: ratio 16:9 amplio respetando despeje superior e inferior
-        const navClearance = Math.min(108, Math.max(88, vh * 0.11));
-        const botPad = Math.min(26, Math.max(16, vh * 0.025));
-        const reservedV = navClearance + botPad + 185;
-        const availH = Math.max(220, Math.floor(vh - reservedV));
-        const maxDeckWByHeight = Math.round(availH * (16 / 9));
-        deckW = Math.round(Math.min(vw * 0.82, 1020, maxDeckWByHeight));
-        deckH = Math.round(deckW * 9 / 16);
+        w = clamp(Math.round(vw * 0.49), 380, 840);
+        h = Math.round(w * (9 / 16));
+        const maxH = Math.max(220, Math.min(vh * 0.46, vh - 310));
+        if (h > maxH) {
+          h = Math.round(maxH);
+          w = Math.round(h * (16 / 9));
+        }
+        step = Math.round(w * 0.84);
       }
 
-      this.deckW = deckW;
-      this.deckH = deckH;
-      this.fullScale = Math.max(vw / deckW, vh / deckH) * 1.08;
+      this.cardW = w;
+      this.cardH = h;
+      this.cardStep = step;
+      this.stage.style.setProperty("--reel-w", `${w}px`);
+      this.stage.style.setProperty("--reel-h", `${h}px`);
 
-      if (this.isPortrait) {
-        this.approachShiftY = Math.max(0, Math.min(185, Math.round((vh - 80 - (deckH + 148)) * 0.48)));
-      } else {
-        this.approachShiftY = Math.max(0, Math.min(115, Math.round((vh - 96 - (deckH + 156)) * 0.45)));
-      }
-
-      if (this.stage) {
-        this.stage.style.setProperty("--deck-w", `${deckW}px`);
-        this.stage.style.setProperty("--deck-h", `${deckH}px`);
-      }
-      if (this.deck) {
-        this.deck.style.setProperty("--deck-w", `${deckW}px`);
-        this.deck.style.setProperty("--deck-h", `${deckH}px`);
-      }
-
-      // Dimensiones de máxima resolución para que al expandirse a pantalla completa se mantenga cristalino
-      const targetW = Math.max(deckW * this.fullScale, vw);
-      let cw, ch;
-      if (this.isPortrait) {
-        // Formato 8:7 nativo Open Gate (1920x1680)
-        cw = Math.round(Math.min(targetW, 1920) * dpr);
-        ch = Math.round(cw * (7 / 8));
-      } else {
-        cw = Math.round(Math.min(targetW, 1920) * dpr);
-        ch = Math.round(cw * (9 / 16));
-      }
-
-      [this.canvas, this.bpCanvas].forEach((c) => {
-        if (c && (c.width !== cw || c.height !== ch)) {
-          c.width = cw;
-          c.height = ch;
+      const rDpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const cw = Math.round(w * rDpr);
+      const ch = Math.round(h * rDpr);
+      this.cards.forEach((c, idx) => {
+        // La tarjeta 01 conserva su proporción nativa (p. ej. 8:7) para adaptarse fluida entre vertical completo y 16:9
+        const targetCw = idx === 0 ? (c.canvas.width > 400 ? c.canvas.width : 1372) : cw;
+        const targetCh = idx === 0 ? (c.canvas.height > 400 ? c.canvas.height : 1200) : ch;
+        if (c.canvas.width !== targetCw || c.canvas.height !== targetCh) {
+          c.canvas.width = targetCw;
+          c.canvas.height = targetCh;
+          c.dirty = true;
         }
       });
 
-      if (this.insetCanvas) {
-        const rect = this.insetFrame ? this.insetFrame.getBoundingClientRect() : null;
-        const iw = rect && rect.width ? rect.width : (this.isPortrait ? 320 : 720);
-        const ih = rect && rect.height ? rect.height : (this.isPortrait ? 280 : 405);
-        const inCw = Math.round(iw * dpr);
-        const inCh = Math.round(ih * dpr);
-        if (this.insetCanvas.width !== inCw || this.insetCanvas.height !== inCh) {
-          this.insetCanvas.width = inCw;
-          this.insetCanvas.height = inCh;
-        }
+      if (this.deckWrap && this.stage) {
+        const sr = this.stage.getBoundingClientRect();
+        const dr = this.deckWrap.getBoundingClientRect();
+        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
       }
 
-      // El stage-box está centrado en el centro geométrico de la pantalla (50% / 50%)
-      this.expandShiftY = 0;
+      const nextTraceSet = this.pickTraceSet();
+      if (this.traceSet && nextTraceSet !== this.traceSet) {
+        this.traceSet = null;
+        this.loadTrace(nextTraceSet);
+      }
 
-      this.dirty = true;
+      const nextReelSet = this.pickReelSet(0);
+      if (this.reelSet && nextReelSet !== this.reelSet) {
+        this.reelSet = nextReelSet;
+        this.cards.forEach((c) => { c.loadedSet = null; c.dirty = true; });
+        if (this.activeIdx >= 0) this.loadNeighborhood(this.activeIdx);
+      } else {
+        this.reelSet = nextReelSet;
+      }
     }
 
-    getChoreoFrame(frameIdx) {
-      const f = Math.round(clamp(frameIdx, 0, this.count - 1));
-      if (this.frames && this.frames[f] && this.frames[f].naturalWidth) {
-        return this.frames[f];
+    orderTrace() {
+      const n = this.count, seen = new Uint8Array(n), out = [];
+      out.push(0); seen[0] = 1;
+      for (let i = 3; i < n; i += 3) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
-      if (this.frames && this.frames.length) {
-        for (let d = 1; d < 25; d++) {
-          if (f - d >= 0 && this.frames[f - d]?.naturalWidth) return this.frames[f - d];
-          if (f + d < this.count && this.frames[f + d]?.naturalWidth) return this.frames[f + d];
-        }
+      if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
+      for (let i = 1; i < n; i += 2) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
-      const heroSeq = sequences[0];
-      if (heroSeq && heroSeq.src === this.src && heroSeq.frames && heroSeq.frames[f] && heroSeq.frames[f].naturalWidth) {
-        return heroSeq.frames[f];
+      for (let i = 0; i < n; i++) {
+        if (!seen[i]) { seen[i] = 1; out.push(i); }
       }
-      if (heroSeq && typeof heroSeq.nearest === "function" && heroSeq.src === this.src) {
-        return heroSeq.nearest(f);
+      return out;
+    }
+
+    loadTrace(set = this.pickTraceSet()) {
+      if (this.traceSet === set && this.traceFrames.length) return;
+      this.traceSet = set;
+      const token = ++this.traceToken;
+      this.traceFrames = new Array(this.count);
+      const queue = this.orderTrace();
+      let qi = 0;
+      let loadedCount = 0;
+      let startedCard0 = false;
+      const parallel = 5;
+
+      const kickCard0 = () => {
+        if (startedCard0 || token !== this.traceToken || !this.cards.length) return;
+        startedCard0 = true;
+        this.loadCard(this.cards[0], 2);
+      };
+
+      const next = () => {
+        if (token !== this.traceToken || qi >= queue.length) return;
+        const i = queue[qi++];
+        const img = new Image();
+        img.decoding = "async";
+        const finish = (ok) => {
+          if (token !== this.traceToken) return;
+          if (ok) {
+            this.traceFrames[i] = img;
+            loadedCount++;
+            if (loadedCount >= 55) kickCard0();
+          }
+          if (i === 0 && ok) {
+            this.traceMediaWrap.classList.add("has-canvas");
+            this.drawTrace(0);
+          }
+          if (Math.abs(i - Math.round(this.traceFrameCur)) <= 2) this.traceDirty = true;
+          next();
+        };
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
+        img.onerror = () => finish(false);
+        const vParam = this.version ? `?v=${this.version}` : "";
+        img.src = `${this.src}/${set}/${pad(i + 1, 4)}.webp${vParam}`;
+      };
+      for (let k = 0; k < parallel; k++) next();
+
+      // Solo el primer frame de tarjeta 01 de inmediato; el resto tras asegurar fluidez de planta
+      if (this.cards.length) {
+        this.preloadOpeningFrames();
+        setTimeout(kickCard0, 650);
+      }
+    }
+
+    nearestTrace(i) {
+      const f = this.traceFrames;
+      if (f[i]) return f[i];
+      for (let d = 1; d < this.count; d++) {
+        if (f[i - d]) return f[i - d];
+        if (f[i + d]) return f[i + d];
       }
       return null;
     }
 
-    drawImageCover(ctx, img, cw, ch) {
-      if (!ctx || !img || !img.naturalWidth) return;
-      const iw = img.naturalWidth, ih = img.naturalHeight;
-      const targetAspect = cw / ch;
-      const imgAspect = iw / ih;
+    drawTrace(pos) {
+      const f = Math.round(clamp(pos, 0, this.count - 1));
+      const img = this.nearestTrace(f);
+      if (!img || !img.naturalWidth) return;
+      if (this.lastTraceImg === img && !this.traceDirty) return;
 
-      let cropW, cropH;
-      if (targetAspect >= imgAspect) {
-        cropW = iw;
-        cropH = Math.round(iw / targetAspect);
-      } else {
-        cropH = ih;
-        cropW = Math.round(ih * targetAspect);
+      const c = this.traceCanvas, ctx = this.traceCtx;
+      const cw = c.width, ch = c.height;
+      if (!cw || !ch) return;
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      if (!iw || !ih) return;
+
+      if (!this.hasTraceCanvas) {
+        this.hasTraceCanvas = true;
+        this.traceMediaWrap.classList.add("has-canvas");
       }
-      const cropX = Math.max(0, Math.round((iw - cropW) / 2));
-      const cropY = Math.max(0, Math.round((ih - cropH) / 2));
+
+      const s = Math.max(cw / iw, ch / ih);
+      const dw = iw * s, dh = ih * s;
+      const x = (cw - dw) / 2, y = (ch - dh) / 2;
 
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "low";
-      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cw, ch);
+      ctx.drawImage(img, x, y, dw, dh);
+      this.lastTraceImg = img;
+      this.traceDirty = false;
     }
 
-    getInsetFrame(frameIdx) {
-      if (this.insetFrames && this.insetFrames.length) {
-        const f = Math.round(clamp(frameIdx, 0, this.insetCount - 1));
-        if (this.insetFrames[f] && this.insetFrames[f].naturalWidth) return this.insetFrames[f];
-      }
-      return this.getChoreoFrame(frameIdx);
+    setTraceFilter(blurPx, grayVal = 0) {
+      const b = Math.max(0, Math.round(blurPx * 10) / 10);
+      const g = Math.max(0, Math.min(1, Math.round(grayVal * 100) / 100));
+      if (b === this.lastTraceBlur && g === this.lastTraceGray) return;
+      this.lastTraceBlur = b;
+      this.lastTraceGray = g;
+      const parts = [];
+      if (b > 0.05) parts.push(`blur(${b}px)`);
+      if (g > 0.01) parts.push(`grayscale(${g})`);
+      const f = parts.length ? parts.join(" ") : "none";
+      this.traceCanvas.style.filter = f;
+      if (this.tracePosterImg) this.tracePosterImg.style.filter = f;
     }
 
-    drawVideo(pos) {
-      if (!this.canvas || !this.ctx) return;
-      const img = this.getChoreoFrame(pos);
-      if (!img || !img.naturalWidth) return;
-      if (this.lastDrawnImg === img) return;
-      this.drawImageCover(this.ctx, img, this.canvas.width, this.canvas.height);
-      this.lastDrawnImg = img;
-    }
-
-    drawInsetVideo(pos) {
-      if (!this.insetCanvas || !this.insetCtx) return;
-      const img = this.getInsetFrame(pos);
-      if (!img || !img.naturalWidth) return;
-      if (this.lastDrawnInsetImg === img && !this.dirty) return;
-      this.drawImageCover(this.insetCtx, img, this.insetCanvas.width, this.insetCanvas.height);
-      this.lastDrawnInsetImg = img;
-    }
-
-    drawBlueprint(p) {
-      if (!this.bpCanvas || !this.bpCtx) return;
-      const ctx = this.bpCtx;
-      const w = this.bpCanvas.width, h = this.bpCanvas.height;
-      ctx.clearRect(0, 0, w, h);
-
-      ctx.fillStyle = "#090b0d";
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.strokeStyle = "rgba(236, 232, 225, 0.06)";
-      ctx.lineWidth = 1;
-      const step = Math.round(Math.min(w, h) / 12);
-      for (let x = step; x < w; x += step) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      }
-      for (let y = step; y < h; y += step) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-
-      ctx.save();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = "rgba(236, 232, 225, 0.35)";
-
-      if (this.isPortrait) {
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(w * 0.10, h * 0.06, w * 0.80, h * 0.88);
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = "rgba(236, 232, 225, 0.05)";
-        ctx.fillRect(w * 0.16, h * 0.12, w * 0.68, h * 0.22);
-        ctx.strokeRect(w * 0.16, h * 0.12, w * 0.68, h * 0.22);
-
-        ctx.fillStyle = "rgba(162, 113, 78, 0.14)";
-        ctx.fillRect(w * 0.38, h * 0.34, w * 0.24, h * 0.06);
-        ctx.strokeRect(w * 0.38, h * 0.34, w * 0.24, h * 0.06);
-
-        ctx.fillRect(w * 0.16, h * 0.40, w * 0.68, h * 0.24);
-        ctx.strokeRect(w * 0.16, h * 0.40, w * 0.68, h * 0.24);
-
-        ctx.fillStyle = "rgba(120, 180, 220, 0.15)";
-        ctx.strokeStyle = "rgba(140, 200, 240, 0.5)";
-        ctx.fillRect(w * 0.22, h * 0.68, w * 0.56, h * 0.20);
-        ctx.strokeRect(w * 0.22, h * 0.68, w * 0.56, h * 0.20);
-      } else {
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(w * 0.05, h * 0.12, w * 0.90, h * 0.76);
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = "rgba(236, 232, 225, 0.04)";
-        ctx.fillRect(w * 0.20, h * 0.22, w * 0.22, h * 0.56);
-        ctx.strokeRect(w * 0.20, h * 0.22, w * 0.22, h * 0.56);
-
-        ctx.fillRect(w * 0.46, h * 0.26, w * 0.26, h * 0.48);
-        ctx.strokeRect(w * 0.46, h * 0.26, w * 0.26, h * 0.48);
-
-        ctx.fillStyle = "rgba(162, 113, 78, 0.12)";
-        ctx.fillRect(w * 0.42, h * 0.38, w * 0.04, h * 0.24);
-        ctx.strokeRect(w * 0.42, h * 0.38, w * 0.04, h * 0.24);
-
-        ctx.fillStyle = "rgba(120, 180, 220, 0.15)";
-        ctx.strokeStyle = "rgba(140, 200, 240, 0.5)";
-        ctx.fillRect(w * 0.75, h * 0.30, w * 0.16, h * 0.40);
-        ctx.strokeRect(w * 0.75, h * 0.30, w * 0.16, h * 0.40);
-      }
-
-      const getPos = (t) => {
-        if (this.isPortrait) {
-          const py0 = { x: w * 0.50, y: h * 0.08 };
-          const py1 = { x: w * 0.50, y: h * 0.30 };
-          const py3 = { x: w * 0.50, y: h * 0.70 };
-          const py4 = { x: w * 0.50, y: h * 0.86 };
-          const omt = 1 - t;
-          return {
-            x: w * 0.50 + Math.sin(t * Math.PI * 2) * (w * 0.06),
-            y: omt * omt * omt * py0.y + 3 * omt * omt * t * py1.y + 3 * omt * t * t * py3.y + t * t * t * py4.y,
-          };
-        } else {
-          const p0 = { x: w * 0.08, y: h * 0.50 };
-          const p1 = { x: w * 0.30, y: h * 0.50 };
-          const p2 = { x: w * 0.44, y: h * 0.48 };
-          const p3 = { x: w * 0.62, y: h * 0.45 };
-          const p4 = { x: w * 0.84, y: h * 0.50 };
-          if (t <= 0.5) {
-            const u = t * 2, omt = 1 - u;
-            return {
-              x: omt * omt * p0.x + 2 * omt * u * p1.x + u * u * p2.x,
-              y: omt * omt * p0.y + 2 * omt * u * p1.y + u * u * p2.y,
-            };
-          } else {
-            const u = (t - 0.5) * 2, omt = 1 - u;
-            return {
-              x: omt * omt * p2.x + 2 * omt * u * p3.x + u * u * p4.x,
-              y: omt * omt * p2.y + 2 * omt * u * p3.y + u * u * p4.y,
-            };
-          }
+    orderRange(from, to) {
+      const span = to - from + 1;
+      const seen = new Uint8Array(span);
+      const out = [];
+      const push = (f) => {
+        const idx = f - from;
+        if (idx >= 0 && idx < span && !seen[idx]) {
+          seen[idx] = 1;
+          out.push(f);
         }
       };
+      push(from);
+      for (let f = from + 3; f <= to; f += 3) push(f);
+      push(to);
+      for (let f = from + 1; f <= to; f += 2) push(f);
+      for (let f = from; f <= to; f++) push(f);
+      return out;
+    }
 
-      ctx.strokeStyle = "rgba(236, 232, 225, 0.2)";
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      for (let s = 0; s <= 40; s++) {
-        const pt = getPos(s / 40);
-        if (s === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
+    loadCard(card, parallelCount = 3) {
+      if (!card) return;
+      const set = this.pickReelSet(card.idx);
+      if (card.loadedSet === set) return;
+      card.loadedSet = set;
+
+      const queue = this.orderRange(card.from, card.to);
+      let qi = 0;
+      const parallel = parallelCount;
+      const vParam = card.version ? `?v=${card.version}` : "";
+
+      const step = () => {
+        while (qi < queue.length) {
+          const frameNum = queue[qi++];
+          const key = `${card.src}|${set}|${frameNum}`;
+          if (reelFrameCache.has(key)) {
+            if (frameNum === card.from) card.dirty = true;
+            continue;
+          }
+          if (reelInFlight.has(key)) continue;
+          reelInFlight.add(key);
+
+          const img = new Image();
+          img.decoding = "async";
+          const finish = (ok) => {
+            reelInFlight.delete(key);
+            if (ok) {
+              reelFrameCache.set(key, img);
+              this.cards.forEach((other) => {
+                if (other.src === card.src && Math.abs(frameNum - Math.round(other.curFrame)) <= 2) {
+                  other.dirty = true;
+                }
+              });
+            }
+            step();
+          };
+          img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
+          img.onerror = () => finish(false);
+          img.src = `${card.src}/${set}/${pad(frameNum, 4)}.webp${vParam}`;
+          return;
+        }
+      };
+      for (let k = 0; k < parallel; k++) step();
+    }
+
+    preloadOpeningFrames() {
+      if (this.openedPreload) return;
+      this.openedPreload = true;
+      this.cards.slice(0, 3).forEach((card) => {
+        const set = this.pickReelSet(card.idx);
+        const key = `${card.src}|${set}|${card.from}`;
+        if (reelFrameCache.has(key) || reelInFlight.has(key)) return;
+        reelInFlight.add(key);
+        const vParam = card.version ? `?v=${card.version}` : "";
+        const img = new Image();
+        img.decoding = "async";
+        const done = (ok) => {
+          reelInFlight.delete(key);
+          if (ok) {
+            reelFrameCache.set(key, img);
+            card.dirty = true;
+          }
+        };
+        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => done(true));
+        img.onerror = () => done(false);
+        img.src = `${card.src}/${set}/${pad(card.from, 4)}.webp${vParam}`;
+      });
+    }
+
+    loadNeighborhood(centerIdx) {
+      if (!this.cards.length) return;
+      this.preloadOpeningFrames();
+      const order = [centerIdx, centerIdx + 1, centerIdx - 1, centerIdx + 2];
+      order.forEach((idx) => {
+        if (idx >= 0 && idx < this.cards.length) this.loadCard(this.cards[idx]);
+      });
+    }
+
+    nearestCached(card, frameNum) {
+      const set = this.pickReelSet(card.idx);
+      const direct = reelFrameCache.get(`${card.src}|${set}|${frameNum}`);
+      if (direct) return direct;
+      for (let d = 1; d < card.span; d++) {
+        if (frameNum - d >= card.from) {
+          const prev = reelFrameCache.get(`${card.src}|${set}|${frameNum - d}`);
+          if (prev) return prev;
+        }
+        if (frameNum + d <= card.to) {
+          const next = reelFrameCache.get(`${card.src}|${set}|${frameNum + d}`);
+          if (next) return next;
+        }
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
+      return null;
+    }
 
-      ctx.strokeStyle = "#e2ddd4";
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = "rgba(236, 232, 225, 0.7)";
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      const steps = Math.max(1, Math.round(p * 40));
-      for (let s = 0; s <= steps; s++) {
-        const pt = getPos(s / 40);
-        if (s === 0) ctx.moveTo(pt.x, pt.y);
-        else ctx.lineTo(pt.x, pt.y);
+    drawCard(card, frameFloat) {
+      card.curFrame = frameFloat;
+      const target = Math.round(clamp(frameFloat, card.from, card.to));
+      const img = this.nearestCached(card, target);
+      if (!img || !img.naturalWidth) return;
+      if (card.lastDrawnImg === img && !card.dirty) return;
+
+      const c = card.canvas;
+      const ctx = card.ctx;
+      const iw = img.naturalWidth, ih = img.naturalHeight;
+      if (!iw || !ih) return;
+
+      if (card.idx === 0) {
+        if (c.width !== iw || c.height !== ih) {
+          c.width = iw;
+          c.height = ih;
+        }
+        ctx.drawImage(img, 0, 0, iw, ih);
+      } else {
+        const cw = c.width, ch = c.height;
+        if (!cw || !ch) return;
+        const s = Math.max(cw / iw, ch / ih);
+        const dw = iw * s, dh = ih * s;
+        const x = (cw - dw) / 2, y = (ch - dh) / 2;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "low";
+        ctx.drawImage(img, x, y, dw, dh);
       }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      card.lastDrawnImg = img;
+      card.dirty = false;
+      if (!card.hasCanvas) {
+        card.hasCanvas = true;
+        card.el.classList.add("has-canvas");
+      }
+    }
 
-      const dronePt = getPos(p);
-      const nextPt = getPos(Math.min(1, p + 0.02));
-      const angle = Math.atan2(nextPt.y - dronePt.y, nextPt.x - dronePt.x);
+    setActiveClip(idx) {
+      if (idx === this.activeIdx || !this.cards[idx]) return;
+      const prevIdx = this.activeIdx;
+      this.activeIdx = idx;
+      const card = this.cards[idx];
 
-      ctx.save();
-      ctx.translate(dronePt.x, dronePt.y);
-      ctx.rotate(angle);
+      if (prevIdx >= 0) {
+        playTactileTick(640, 0.016, 0.012);
+      }
 
-      const fovLen = Math.round(Math.min(w, h) * 0.12);
-      const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, fovLen);
-      grad.addColorStop(0, "rgba(236, 232, 225, 0.45)");
-      grad.addColorStop(1, "rgba(236, 232, 225, 0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, fovLen, -0.65, 0.65);
-      ctx.closePath();
-      ctx.fill();
+      this.cards.forEach((c, i) => c.el.classList.toggle("is-center", i === idx));
+      this.thumbs.forEach((th, i) => {
+        const active = i === idx;
+        th.classList.toggle("is-active", active);
+        th.setAttribute("aria-selected", String(active));
+      });
 
-      ctx.strokeStyle = "#ece8e1";
-      ctx.lineWidth = 1.5;
-      ctx.fillStyle = "#a2714e";
-      ctx.beginPath();
-      ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      if (this.strip && this.thumbs[idx] && this.strip.scrollWidth > this.strip.clientWidth + 4) {
+        const th = this.thumbs[idx];
+        const targetLeft = th.offsetLeft - (this.strip.clientWidth - th.offsetWidth) * 0.5;
+        this.strip.scrollLeft = Math.max(0, targetLeft);
+      }
 
-      ctx.restore();
+      if (this.idxEl) this.idxEl.textContent = pad(idx + 1);
+      if (this.topCatEl) this.topCatEl.textContent = card.cat.split("·")[0].trim();
+      if (this.topFpsEl) this.topFpsEl.textContent = `${card.fps} FPS`;
+
+      if (this.capSlots.length >= 2) {
+        const fillSlot = (slot) => {
+          if (slot.num) slot.num.textContent = pad(idx + 1);
+          if (slot.cat) slot.cat.textContent = card.cat;
+          if (slot.loc) slot.loc.textContent = card.loc;
+          if (slot.title) slot.title.innerHTML = card.title;
+          if (slot.desc) slot.desc.textContent = card.desc;
+        };
+
+        if (prevIdx < 0 || reduce) {
+          const curSlot = this.capSlots[this.capSlotIdx];
+          fillSlot(curSlot);
+          curSlot.el.classList.remove("is-leaving");
+          curSlot.el.classList.add("is-active");
+          curSlot.el.setAttribute("aria-hidden", "false");
+        } else {
+          const outSlot = this.capSlots[this.capSlotIdx];
+          const inIdx = 1 - this.capSlotIdx;
+          const inSlot = this.capSlots[inIdx];
+          this.capSlotIdx = inIdx;
+
+          inSlot.el.style.transition = "none";
+          inSlot.el.classList.remove("is-active", "is-leaving");
+          fillSlot(inSlot);
+          void inSlot.el.offsetWidth;
+          inSlot.el.style.transition = "";
+
+          outSlot.el.classList.remove("is-active");
+          outSlot.el.classList.add("is-leaving");
+          outSlot.el.setAttribute("aria-hidden", "true");
+
+          inSlot.el.classList.add("is-active");
+          inSlot.el.setAttribute("aria-hidden", "false");
+        }
+      }
+
+      this.stage.style.setProperty("--reel-aura-s", idx % 2 === 0 ? "1.04" : "0.96");
+      if (prevIdx < 0 && this.deckWrap && this.stage) {
+        const sr = this.stage.getBoundingClientRect();
+        const dr = this.deckWrap.getBoundingClientRect();
+        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
+      }
+      this.loadNeighborhood(idx);
+    }
+
+    updateTraceOverlay(traceTarget, bridgeT, rawEntryP, dt) {
+      const ov = this.traceOverlay.style;
+      const k = reduce ? 1 : (dt ? Math.min(1, 1 - Math.exp(-13 * dt)) : 0.22);
+      this.traceCur += (traceTarget - this.traceCur) * k;
+      if (Math.abs(traceTarget - this.traceCur) < 0.001) this.traceCur = traceTarget;
+      const tp = clamp(this.traceCur, 0, 1);
+
+      const exitHud = reduce ? (bridgeT > 0.1 ? 1 : 0) : smooth(range(bridgeT, 0.00, 0.26));
+      const exitSvgFade = reduce ? (bridgeT > 0.2 ? 1 : 0) : smooth(range(bridgeT, 0.08, 0.34));
+      const entryShiftY = 0;
+      const svgWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.044, 0.080));
+      const hudWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.056, 0.098));
+      const hudOp = hudWake * (1 - exitHud);
+      const hudEnterY = !reduce ? (1 - hudWake) * 10 : 0;
+
+      ov.setProperty("--trace-entry-y", `${entryShiftY.toFixed(1)}px`);
+      ov.setProperty("--trace-hud-op", hudOp.toFixed(3));
+      ov.setProperty("--trace-hud-top-y", `${((-exitHud * 14) - hudEnterY).toFixed(1)}px`);
+      ov.setProperty("--trace-hud-bot-y", `${((exitHud * 14) + hudEnterY).toFixed(1)}px`);
+      ov.setProperty("--trace-svg-op", ((1 - exitSvgFade) * svgWake).toFixed(3));
+      const entrySvgBlur = !reduce ? (1 - svgWake) * 3.2 : 0;
+      const svgBlur = entrySvgBlur + exitSvgFade * 3.5;
+      ov.setProperty("--trace-svg-filter", svgBlur > 0.1 ? `blur(${svgBlur.toFixed(1)}px)` : "none");
+
+      const traceVisible = rawEntryP >= 0 && ((1 - exitSvgFade) * svgWake > 0.005 || hudOp > 0.005);
+      this.traceOverlay.style.visibility = traceVisible ? "visible" : "hidden";
+      if (this.traceConsole) {
+        this.traceConsole.style.pointerEvents = hudOp > 0.15 ? "auto" : "none";
+      }
+
+      const totalLen = this.tracePathLen || 1034;
+      const curLen = tp * totalLen;
+      const dashOffset = (totalLen - curLen).toFixed(1);
+      const pathExitOp = (1 - smooth(range(bridgeT, 0.06, 0.30))).toFixed(3);
+      if (this.tracePathCore) {
+        this.tracePathCore.style.strokeDashoffset = dashOffset;
+        this.tracePathCore.style.opacity = pathExitOp;
+      }
+      if (this.tracePathGlow) {
+        this.tracePathGlow.style.strokeDashoffset = dashOffset;
+        this.tracePathGlow.style.opacity = pathExitOp;
+      }
+
+      let yawReading = 78;
+      if (this.tracePathCore && this.traceDrone) {
+        try {
+          const pt = this.tracePathCore.getPointAtLength(curLen);
+          const p1 = this.tracePathCore.getPointAtLength(Math.max(0, curLen - 6));
+          const p2 = this.tracePathCore.getPointAtLength(Math.min(totalLen, curLen + 6));
+          const tangentDeg = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
+          const patioLook = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -24;
+          const naveLook = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
+          const coneDeg = tangentDeg + patioLook + naveLook;
+          yawReading = Math.round((90 + coneDeg + 360) % 360);
+          this.traceDrone.setAttribute("transform", `translate(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+          if (this.traceDroneRot) this.traceDroneRot.setAttribute("transform", `rotate(${coneDeg.toFixed(1)})`);
+        } catch (_) {}
+      }
+
+      if (this.tracePathCoreV) {
+        const totalLenV = this.tracePathLenV || 690;
+        const curLenV = tp * totalLenV;
+        const dashOffsetV = (totalLenV - curLenV).toFixed(1);
+        this.tracePathCoreV.style.strokeDashoffset = dashOffsetV;
+        this.tracePathCoreV.style.opacity = pathExitOp;
+        if (this.tracePathGlowV) {
+          this.tracePathGlowV.style.strokeDashoffset = dashOffsetV;
+          this.tracePathGlowV.style.opacity = pathExitOp;
+        }
+
+        if (this.traceDroneV) {
+          try {
+            const ptV = this.tracePathCoreV.getPointAtLength(curLenV);
+            const p1V = this.tracePathCoreV.getPointAtLength(Math.max(0, curLenV - 6));
+            const p2V = this.tracePathCoreV.getPointAtLength(Math.min(totalLenV, curLenV + 6));
+            const tangentDegV = Math.atan2(p2V.y - p1V.y, p2V.x - p1V.x) * (180 / Math.PI);
+            const patioLookV = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -20;
+            const naveLookV = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
+            const coneDegV = (tangentDegV - 90) + patioLookV + naveLookV;
+            if (window.matchMedia && window.matchMedia("(max-aspect-ratio: 9/10)").matches) {
+              yawReading = Math.round((tangentDegV + patioLookV + naveLookV + 360) % 360);
+            }
+            this.traceDroneV.setAttribute("transform", `translate(${ptV.x.toFixed(1)}, ${ptV.y.toFixed(1)})`);
+            if (this.traceDroneRotV) this.traceDroneRotV.setAttribute("transform", `rotate(${coneDegV.toFixed(1)})`);
+          } catch (_) {}
+        }
+      }
+
+      // Desdibujado arquitectónico inverso en la transición de salida (Beat 1: se limpia antes de abrir Nordelta)
+      const retract3 = 1 - smooth(range(bridgeT, 0.00, 0.20));
+      const retract2 = 1 - smooth(range(bridgeT, 0.04, 0.25));
+      const retract1 = 1 - smooth(range(bridgeT, 0.08, 0.30));
+      const retractGrid = 1 - smooth(range(bridgeT, 0.02, 0.28));
+      const retractPlan = 1 - smooth(range(bridgeT, 0.10, 0.34));
+
+      const darkenBase = reduce ? 1 : smooth(range(tp, 0.11, 0.26));
+      const darkenBridge = smooth(range(bridgeT, 0.02, 0.36)) * 0.34;
+      this.traceMediaWrap.style.setProperty("--trace-darken-op", clamp(darkenBase + darkenBridge, 0, 1).toFixed(3));
+      this.traceMediaWrap.style.setProperty("--trace-base-veil-op", (0.38 + 0.62 * darkenBase).toFixed(3));
+
+      const extOp = (reduce ? 1 : smooth(range(tp, 0.15, 0.25))) * retractGrid;
+      const flightOp = (reduce ? 1 : smooth(range(tp, 0.14, 0.23))) * (1 - exitSvgFade);
+      ov.setProperty("--trace-ext-op", extOp.toFixed(3));
+      ov.setProperty("--trace-flight-op", flightOp.toFixed(3));
+      ov.setProperty("--trace-grid-op", ((reduce ? 1 : smooth(range(tp, 0.145, 0.26))) * retractGrid).toFixed(3));
+      ov.setProperty("--trace-plan-op", ((reduce ? 1 : smooth(range(tp, 0.155, 0.245))) * retractPlan).toFixed(3));
+      ov.setProperty("--trace-draw-1", ((reduce ? 1 : smooth(range(tp, 0.155, 0.29))) * retract1).toFixed(3));
+      ov.setProperty("--trace-draw-2", ((reduce ? 1 : smooth(range(tp, 0.205, 0.35))) * retract2).toFixed(3));
+      ov.setProperty("--trace-draw-3", ((reduce ? 1 : smooth(range(tp, 0.255, 0.40))) * retract3).toFixed(3));
+      ov.setProperty("--trace-sec1-op", ((reduce ? 1 : smooth(range(tp, 0.155, 0.25))) * retractPlan).toFixed(3));
+      ov.setProperty("--trace-sec2-op", ((reduce ? 1 : smooth(range(tp, 0.205, 0.31))) * retractPlan).toFixed(3));
+      ov.setProperty("--trace-sec3-op", ((reduce ? 1 : smooth(range(tp, 0.255, 0.36))) * retractPlan).toFixed(3));
+      ov.setProperty("--trace-ghost-op", (((reduce ? 0.42 : 0.12 + 0.32 * smooth(range(tp, 0.16, 0.30)))) * (1 - smooth(range(tp, 0.92, 0.99))) * retractGrid).toFixed(3));
+
+      const wakeWave = range(tp, 0.16, 0.32);
+      if (this.traceWakeRing) {
+        if (wakeWave > 0 && wakeWave < 1) {
+          this.traceWakeRing.setAttribute("r", (10 + smooth(wakeWave) * 195).toFixed(1));
+          this.traceWakeRing.setAttribute("stroke-opacity", (Math.sin(wakeWave * Math.PI) * 0.56).toFixed(3));
+        } else {
+          this.traceWakeRing.setAttribute("stroke-opacity", "0");
+        }
+      }
+      if (this.traceWakeRingV) {
+        if (wakeWave > 0 && wakeWave < 1) {
+          this.traceWakeRingV.setAttribute("r", (10 + smooth(wakeWave) * 150).toFixed(1));
+          this.traceWakeRingV.setAttribute("stroke-opacity", (Math.sin(wakeWave * Math.PI) * 0.56).toFixed(3));
+        } else {
+          this.traceWakeRingV.setAttribute("stroke-opacity", "0");
+        }
+      }
+
+      const introFocus = reduce ? 0 : (1 - smooth(range(rawEntryP, 0.042, 0.098)));
+      let camX = 0, camY = 0, camScale = 1, camRx = 0, camRy = 0;
+      if (vw / vh < 0.95 || vw <= 768) {
+        camY = (0.35 - tp * 0.70) * 16 + introFocus * 12;
+        camScale = 1 + introFocus * 0.065 + exitSvgFade * 0.10;
+      } else {
+        camScale = 1 + introFocus * 0.085 + exitSvgFade * 0.13;
+        camX = introFocus * 36 + (finePointer && !reduce ? normMx * -7 * (1 - exitSvgFade) : 0);
+        camY = introFocus * 10 + (finePointer && !reduce ? normMy * -5 * (1 - exitSvgFade) : 0);
+        camRx = finePointer && !reduce ? -normMy * 1.2 * (1 - exitSvgFade) : 0;
+        camRy = finePointer && !reduce ? normMx * 1.6 * (1 - exitSvgFade) : 0;
+      }
+      ov.setProperty("--trace-cam-x", `${camX.toFixed(1)}px`);
+      ov.setProperty("--trace-cam-y", `${camY.toFixed(1)}px`);
+      ov.setProperty("--trace-cam-scale", camScale.toFixed(4));
+      ov.setProperty("--trace-cam-rx", `${camRx.toFixed(2)}deg`);
+      ov.setProperty("--trace-cam-ry", `${camRy.toFixed(2)}deg`);
+
+      const zoneIdx = tp < 0.24 ? 0 : (tp < 0.50 ? 1 : (tp < 0.78 ? 2 : 3));
+      const activeRoomNum = zoneIdx === 1 ? "2" : (zoneIdx === 2 ? "3" : (zoneIdx === 3 ? "4" : "1"));
+      this.traceRooms.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoom === activeRoomNum));
+      this.traceRoomsV.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoomV === activeRoomNum));
+
+      if (zoneIdx !== this.lastTraceZone) {
+        if (this.lastTraceZone !== -1 && rawEntryP > 0.02 && bridgeT < 0.15) playTactileTick(620 + zoneIdx * 55, 0.025, 0.018);
+        this.lastTraceZone = zoneIdx;
+      }
+
+      const wpThresholds = [0.0, 0.25, 0.41, 0.59, 0.79, 0.96];
+      this.traceWps.forEach((wp, idx) => wp.classList.toggle("is-reached", tp >= (wpThresholds[idx] || 0)));
+      this.traceWpsV.forEach((wp, idx) => wp.classList.toggle("is-reached", tp >= (wpThresholds[idx] || 0)));
+
+      // Ondas de agua en 05 · Lámina de agua se expanden suavemente hacia la piscina de Nordelta
+      const rippleIn = smooth(range(tp, 0.76, 0.96));
+      const rippleExit = smooth(range(bridgeT, 0.00, 0.42));
+      const rippleOp = rippleIn * (1 - rippleExit);
+      ov.setProperty("--trace-ripple-op", rippleOp.toFixed(3));
+      ov.setProperty("--trace-ripple-s", (0.82 + rippleIn * 0.36 + rippleExit * 1.25).toFixed(3));
+
+      const meters = (tp * 64.8).toFixed(1);
+      const altM = tp < 0.22 ? (1.85 - (tp / 0.22) * 0.15) : (tp < 0.78 ? 1.70 : (1.70 - ((tp - 0.78) / 0.22) * 0.25));
+      if (this.traceDroneTxt) this.traceDroneTxt.textContent = `${meters}m · +${altM.toFixed(2)}m`;
+      if (this.traceDroneTxtV) this.traceDroneTxtV.textContent = `${meters}m · +${altM.toFixed(2)}m`;
+      if (this.traceDistEl) this.traceDistEl.textContent = `${meters} m`;
+      if (this.traceAltEl) this.traceAltEl.textContent = `+${altM.toFixed(2)} m`;
+      if (this.traceYawEl) this.traceYawEl.textContent = `${pad(yawReading, 3)}° E`;
+      if (this.traceTcEl) this.traceTcEl.textContent = `00:${pad(Math.min(14, Math.floor(tp * 14)))}`;
+
+      const phaseLabels = ["01 · Aproximación", "02 · Acceso y umbral", "03 · Recorrido interior", "04 · Salida al parque"];
+      const roomLabels = ["Aproximación Exterior", "Ingreso Principal", "Espacio Central", "Jardín & Agua"];
+      const planStates = ["Exterior", "Ingreso", "Interior", "Completado"];
+      if (this.tracePhasePill) this.tracePhasePill.textContent = phaseLabels[zoneIdx];
+      if (this.traceRoomNameEl) this.traceRoomNameEl.textContent = roomLabels[zoneIdx];
+      if (this.tracePlanStateEl) this.tracePlanStateEl.textContent = planStates[zoneIdx];
+
+      this.traceActs.forEach(({ n: el, r: [a, b] }) => {
+        const t = (tp - a) / (b - a);
+        if (t <= 0 || t >= 1) {
+          el.style.opacity = "0";
+          el.style.visibility = "hidden";
+          return;
+        }
+        const fadeIn = a < 0 ? range(t, 0, 0.14) : range(t, 0, 0.2);
+        const fadeOut = b > 1 ? 1 : (1 - range(t, 0.8, 1));
+        const o = smooth(Math.min(fadeIn, fadeOut)) * (1 - exitHud);
+        el.style.visibility = o <= 0.005 ? "hidden" : "visible";
+        el.style.opacity = o.toFixed(3);
+        el.style.transform = `translate3d(0, ${((0.5 - t) * 10).toFixed(1)}px, 0)`;
+      });
     }
 
     update(dt) {
-      if (!this.frames || !this.frames.length) this.load();
+      const nCards = this.cards.length;
+      if (!nCards) return;
+
       const y = scrollY();
-      // En vertical ampliamos la ventana de aproximación para anticipar la presencia del recuadro
-      const approachWindow = Math.max(300, vh * (this.isPortrait ? 0.95 : 0.78));
-      const exitWindow = Math.max(260, vh * 0.65);
-
-      if (y + vh < this.top - approachWindow || y > this.top + this.len + exitWindow + vh) return;
-
-      const isApproaching = y < this.top;
-      const isExiting = y > this.top + this.len;
-      const isPinned = !isApproaching && !isExiting;
-
       const rawP = (y - this.top) / this.len;
       const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
 
-      // Motor híbrido continuo (estilo Anacleto):
-      // Reproduce automáticamente al fijarse, acelera al deslizar hacia abajo,
-      // frena de inmediato al deslizar hacia arriba y reanuda suavemente.
-      runHybridScrollEngine({
-        top: this.top,
-        len: this.len,
-        dt,
-        viewportEntry,
-        rawP,
-        baseDuration: 8.5, // Villa Epecuén (~8.5s): plano secuencia FPV continuo
-        state: this,
-        hasFrames: this.frames && (this.frames[0] || this.getChoreoFrame(0)),
-      });
+      if (viewportEntry > 0 && !this.traceSet) this.loadTrace();
+      if (viewportEntry > 0 && this.activeIdx < 0) this.setActiveClip(0);
+      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
 
-      const entryProgress = clamp(1 - (this.top - y) / approachWindow);
-      const p = clamp(rawP, 0, 1);
-      const exitProgress = isExiting ? clamp((y - (this.top + this.len)) / exitWindow) : 0;
-
-      const pinnedEndF = 24 + Math.round(0.88 * (this.count - 1 - 24));
-      let targetF;
-      if (isApproaching) {
-        targetF = entryProgress * 24;
-      } else if (isPinned) {
-        targetF = 24 + p * (pinnedEndF - 24);
-      } else {
-        targetF = pinnedEndF + Math.sin(exitProgress * Math.PI * 0.5) * (this.count - 1 - pinnedEndF);
-      }
-
-      const k = reduce ? 1 : 1 - Math.exp(-14 * dt);
-      this.cur += (targetF - this.cur) * k;
-      if (Math.abs(targetF - this.cur) < 0.002) this.cur = targetF;
-
-      if (finePointer) {
-        this.mouseCurrentX += (this.mouseTargetX - this.mouseCurrentX) * 0.08;
-        this.mouseCurrentY += (this.mouseTargetY - this.mouseCurrentY) * 0.08;
-      } else {
-        this.mouseCurrentX = 0;
-        this.mouseCurrentY = 0;
-      }
-
-      let deckRx = 0, deckRy = 0, deckRz = 0, deckScale = 1;
-      let bpZ = -100, bpOpacity = 0;
-      let mediaZ = 0;
-      let hudZ = 0;
-      let exitGlare = 0;
-      let activeAct = 0;
-      let phaseTxt = "Acto I · Aproximación y Nivelación 3D";
-      let tExpand = 0;
-      let headOp = 1;
-      let footOp = 1;
-
-      const baseScale = this.isPortrait ? 1.02 : 1.0;
-      const fullScale = (this.fullScale || Math.max(vw / Math.max(1, this.deckW || 1), vh / Math.max(1, this.deckH || 1))) * 1.08;
-
-      if (isApproaching) {
-        // ENTRADA: El recuadro asoma tempranamente con elevación suave mientras el fondo se extiende hacia arriba
-        activeAct = 0;
-        phaseTxt = "Acto I · Aproximación 3D";
-        const entryT = smooth(entryProgress);
-        const oneMinus = 1 - entryT;
-
-        if (this.isPortrait) {
-          // Perspectiva isométrica sutil y calma (sin giros bruscos ni distorsión)
-          deckRx = oneMinus * 8;
-          deckRy = oneMinus * -8;
-          deckRz = 0;
-          bpZ = oneMinus * -60;
-          hudZ = oneMinus * 35;
-          deckScale = baseScale;
-        } else {
-          deckRx = oneMinus * 14;
-          deckRy = oneMinus * -16;
-          deckRz = 0;
-          bpZ = oneMinus * -90;
-          hudZ = oneMinus * 55;
-          deckScale = baseScale;
+      if (viewportEntry <= 0 || rawP < 0) {
+        if (rawP < -0.005 || viewportEntry < 0.95) {
+          this.autoPlaySuspended = false;
+          this.subpixelAcc = 0;
+          this.lastTrackedY = undefined;
         }
-        bpOpacity = oneMinus * 0.70;
-        mediaZ = oneMinus * 10;
-        tExpand = 0;
-
-        // Cabezal y pie ocultos durante la aproximación para no quedar tapados por la barra superior
-        headOp = 0;
-        footOp = 0;
-
-      } else if (isPinned) {
-        // TRAMO FIJADO: En el momento exacto en que la pantalla se fija, el recuadro YA ESTÁ CENTRADO (deckTy = 0)
-        // y completamente plano (0deg), sin desplazarse hacia abajo ni reacomodarse después
-        deckRx = 0;
-        deckRy = 0;
-        deckRz = 0;
-        bpOpacity = 0;
-        hudZ = 0;
-        mediaZ = 0;
-
-        // Cabezal y pie aparecen suavemente sin saltos
-        headOp = smooth(range(p, 0.00, 0.08));
-        footOp = smooth(range(p, 0.02, 0.10));
-
-        // Expansión continua a pantalla completa (p: 0.20 -> 0.40):
-        tExpand = smooth(range(p, 0.20, 0.40));
-        deckScale = baseScale + tExpand * (fullScale - baseScale);
-
-        if (p <= 0.20) {
-          activeAct = 1;
-          phaseTxt = "01 · Aproximación";
-        } else if (p < 0.44) {
-          activeAct = 2;
-          phaseTxt = "02 · Recorrido continuo";
-        } else if (p <= 0.78) {
-          activeAct = 3;
-          phaseTxt = "03 · Plano en detalle";
-        } else {
-          activeAct = 4;
-          phaseTxt = "04 · Cierre de toma";
+        this.prog = 0;
+        this.progCur = 0;
+        this.traceCur = 0;
+        this.traceFrameCur = 0;
+        this.traceMediaWrap.style.setProperty("--tr-trace-media-op", "0");
+        this.traceMediaWrap.style.setProperty("--img-scale", "1.075");
+        this.traceMediaWrap.style.setProperty("--trace-base-veil-op", "0.38");
+        this.traceMediaWrap.style.setProperty("--trace-darken-op", "0");
+        this.traceMediaWrap.style.setProperty("--trace-entry-veil-op", "1");
+        this.traceMediaWrap.style.setProperty("--trace-entry-veil-s", "0.72");
+        this.traceMediaWrap.style.visibility = "hidden";
+        if (this.entryAtmo) {
+          this.entryAtmo.style.setProperty("--trace-atmo-op", "0");
+          this.entryAtmo.style.visibility = "hidden";
         }
-
-      } else {
-        // SALIDA: El video se mantiene en pantalla completa como fondo continuo y transiciona suavemente hacia la siguiente obra
-        activeAct = 5;
-        phaseTxt = "Transición · Siguiente obra";
-        tExpand = 1;
-        deckScale = fullScale;
-        deckRx = 0;
-        deckRy = 0;
-        deckRz = 0;
-        bpOpacity = 0;
-        const tExit = smooth(exitProgress);
-        exitGlare = tExit * 0.45;
-        headOp = (1 - tExit) * 0.15;
-        footOp = (1 - tExit) * 0.15;
-      }
-
-      // Capa oscura y difuminado cinemático de fondo (Acto II / Clímax de zoom):
-      let tDim = 0;
-      let insetOp = 0;
-      let insetScale = 0.94;
-      if (isPinned) {
-        tDim = smooth(range(p, 0.38, 0.48));
-        const tInsetIn = smooth(range(p, 0.44, 0.54));
-        const tInsetOut = smooth(range(p, 0.78, 0.88));
-        insetOp = tInsetIn * (1 - tInsetOut);
-        insetScale = 0.94 + tInsetIn * 0.06 - tInsetOut * 0.04;
-
-        // Desvanecimiento sutil de cabezal y pie durante la tarjeta de cierre
-        const outroT = smooth(range(p, 0.78, 0.91));
-        if (outroT > 0.01) {
-          headOp = headOp * (1 - outroT * 0.85);
-          footOp = footOp * (1 - outroT * 0.85);
-        }
-      } else if (isExiting) {
-        tDim = 1;
-        insetOp = 0;
-        insetScale = 0.90;
-      }
-      const canvasBlur = tDim * 14;
-      const canvasBright = 100 - tDim * 45;
-      const dimOp = tDim * 0.65;
-
-      // Parallax de raton sutil atenuado al estar a pantalla completa
-      if (!reduce && activeAct !== 1) {
-        const mouseWeight = 1 - tExpand * 0.8;
-        deckRx += this.mouseCurrentY * -3.5 * mouseWeight;
-        deckRy += this.mouseCurrentX * 5.0 * mouseWeight;
-      }
-
-      // Variables reactivas en el Deck y Stage
-      const frameBorderOp = 0.18 * (1 - tExpand);
-      const frameShadowOp = 0.75 * (1 - tExpand);
-      const frameRadius = 2 * (1 - tExpand);
-      const hudOp = 1 - tExpand;
-
-      if (this.stage) {
-        this.stage.style.setProperty("--choreo-expand", tExpand.toFixed(3));
-        this.stage.style.setProperty("--choreo-group-y", "0px");
-        this.stage.style.setProperty("--choreo-head-y", "0px");
-        this.stage.style.setProperty("--choreo-head-op", headOp.toFixed(3));
-        this.stage.style.setProperty("--choreo-head-pe", headOp > 0.1 ? "auto" : "none");
-        this.stage.style.setProperty("--choreo-foot-y", "0px");
-        this.stage.style.setProperty("--choreo-foot-op", footOp.toFixed(3));
-        this.stage.style.setProperty("--choreo-foot-pe", footOp > 0.1 ? "auto" : "none");
-      }
-
-      if (this.deck) {
-        // En aproximación el recuadro asoma elevado (-vh * 0.22) para verse antes mientras el fondo sube; al fijar la pantalla (entryProgress=1) llega con precisión a 0px
-        const deckTy = isApproaching ? (-(1 - smooth(entryProgress)) * (this.isPortrait ? (vh * 0.22) : (vh * 0.10))) : 0;
-        this.deck.style.setProperty("--deck-ty", `${deckTy.toFixed(1)}px`);
-        this.deck.style.setProperty("--deck-rx", `${deckRx.toFixed(2)}deg`);
-        this.deck.style.setProperty("--deck-ry", `${deckRy.toFixed(2)}deg`);
-        this.deck.style.setProperty("--deck-rz", `${deckRz.toFixed(2)}deg`);
-        this.deck.style.setProperty("--deck-scale", `${deckScale.toFixed(3)}`);
-        this.deck.style.setProperty("--bp-z", `${bpZ.toFixed(1)}px`);
-        this.deck.style.setProperty("--bp-opacity", `${bpOpacity.toFixed(2)}`);
-        this.deck.style.setProperty("--media-z", `${mediaZ.toFixed(1)}px`);
-        this.deck.style.setProperty("--hud-z", `${hudZ.toFixed(1)}px`);
-        this.deck.style.setProperty("--sat-opacity", "0");
-        this.deck.style.setProperty("--exit-glare", `${exitGlare.toFixed(2)}`);
-        this.deck.style.setProperty("--choreo-border-op", frameBorderOp.toFixed(3));
-        this.deck.style.setProperty("--choreo-shadow-op", frameShadowOp.toFixed(3));
-        this.deck.style.setProperty("--choreo-radius", `${frameRadius.toFixed(1)}px`);
-        this.deck.style.setProperty("--choreo-hud-op", hudOp.toFixed(3));
-        this.deck.style.setProperty("--choreo-canvas-blur", `${canvasBlur.toFixed(1)}px`);
-        this.deck.style.setProperty("--choreo-canvas-bright", `${canvasBright.toFixed(0)}%`);
-        this.deck.style.setProperty("--choreo-dim-op", dimOp.toFixed(3));
-      }
-
-      if (this.insetEl) {
-        this.insetEl.style.setProperty("--choreo-inset-op", insetOp.toFixed(3));
-        this.insetEl.style.setProperty("--choreo-inset-scale", insetScale.toFixed(3));
-        this.insetEl.style.setProperty("--choreo-inset-pe", insetOp > 0.05 ? "auto" : "none");
-      }
-
-      if (activeAct !== this.lastAct) {
-        this.lastAct = activeAct;
-        playTactileTick(600 + activeAct * 60, 0.03, 0.04);
-      }
-
-      const curIntFr = Math.round(this.cur);
-      if (Math.abs(curIntFr - this.lastTickFr) >= 14) {
-        this.lastTickFr = curIntFr;
-        playTactileTick(880, 0.015, 0.012);
-      }
-
-      const tExitVal = isExiting ? smooth(exitProgress) : 0;
-      const speed = isApproaching
-        ? (12.0 + entryProgress * 4.4)
-        : (isPinned
-          ? (16.4 + 5.2 * Math.sin(p * Math.PI) + 1.1 * Math.cos(p * Math.PI * 4))
-          : ((16.4 + 5.2 * Math.sin(Math.PI) + 1.1) * (1 - tExitVal) + 4.2 * tExitVal));
-      const alt = isApproaching
-        ? (2.40 - entryProgress * 0.52)
-        : (isPinned
-          ? Math.max(0.9, 1.88 - 0.76 * smooth(p) + 0.12 * Math.sin(p * Math.PI * 5))
-          : (1.12 * (1 - tExitVal) + 0.85 * tExitVal));
-      const pitch = isApproaching
-        ? (-8.0 + entryProgress * 4.2)
-        : (isPinned ? (-3.8 + 4.9 * p) : (1.1 * (1 - tExitVal) - 0.4 * tExitVal));
-      const roll = isApproaching
-        ? (-4.0 * (1 - entryProgress))
-        : (isPinned ? (-3.2 * Math.sin(p * Math.PI * 3)) : (-1.2 * (1 - tExitVal)));
-      const dyn = isApproaching
-        ? 0.06
-        : (isPinned ? (0.08 + 0.14 * Math.abs(Math.cos(p * Math.PI * 3))) : (0.08 * (1 - tExitVal) + 0.02 * tExitVal));
-      const coordX = isApproaching
-        ? (12.4 + entryProgress * 2.0).toFixed(1)
-        : (isPinned ? (12.4 + p * 16.8).toFixed(1) : (29.2 + tExitVal * 2.6).toFixed(1));
-      const coordY = isApproaching
-        ? (-14.2 + entryProgress * 1.5).toFixed(1)
-        : (isPinned ? (-14.2 + p * 8.5).toFixed(1) : (-5.7 + tExitVal * 1.2).toFixed(1));
-
-      if (this.speedEl) this.speedEl.textContent = speed.toFixed(1);
-      if (this.altEl) this.altEl.textContent = alt.toFixed(2);
-      if (this.dynEl) this.dynEl.textContent = dyn.toFixed(2);
-      if (this.pitchEl) this.pitchEl.textContent = `${pitch >= 0 ? "+" : ""}${pitch.toFixed(1)}°`;
-      if (this.rollEl) this.rollEl.textContent = `ROLL ${roll >= 0 ? "+" : ""}${roll.toFixed(1)}°`;
-      if (this.coordsEl) this.coordsEl.textContent = `X: +${coordX}m · Y: ${coordY}m · Z: +${alt.toFixed(2)}m`;
-      if (this.horizonEl) this.horizonEl.style.setProperty("--horizon-roll", `${roll.toFixed(2)}deg`);
-      if (this.phaseLabel) this.phaseLabel.textContent = "FPV · ÓPTICA 16MM";
-      if (this.livePhaseEl) this.livePhaseEl.textContent = "Registro aéreo · FPV";
-
-      const effectiveP = isApproaching
-        ? (entryProgress * 0.10)
-        : (isPinned ? p : (0.88 + Math.sin(exitProgress * Math.PI * 0.5) * 0.12));
-      if (this.ruler) {
-        const rulerTx = (-effectiveP * 320).toFixed(1);
-        this.ruler.style.setProperty("--ruler-tx", `${rulerTx}px`);
-      }
-
-      if (this.progressFill) {
-        this.progressFill.style.width = isApproaching ? "0%" : `${(effectiveP * 100).toFixed(1)}%`;
-      }
-
-      const curFr = Math.round(this.cur);
-      if (this.frEl) this.frEl.textContent = pad(curFr + 1, 3);
-      if (this.tcEl) {
-        const elapsedSec = (curFr / this.fps);
-        const mm = Math.floor(elapsedSec / 60);
-        const ss = Math.floor(elapsedSec % 60);
-        const ms = Math.floor((elapsedSec % 1) * 100);
-        this.tcEl.textContent = `${pad(mm, 2)}:${pad(ss, 2)}.${pad(ms, 2)}`;
-      }
-      if (this.statusPill) {
-        this.statusPill.textContent = phaseTxt;
-      }
-
-      if (this.outroCard) {
-        let outroT = 0;
-        if (isPinned) {
-          outroT = smooth(range(p, 0.78, 0.91));
-        } else if (isExiting) {
-          outroT = smooth(range(1 - exitProgress, 0.05, 0.40));
-        }
-        this.outroCard.style.setProperty("--outro-card-op", outroT.toFixed(3));
-        this.outroCard.style.setProperty("--outro-card-ty", `${((1 - outroT) * 16).toFixed(1)}px`);
-        this.outroCard.style.setProperty("--outro-card-pe", outroT > 0.2 ? "auto" : "none");
-        // El cabezal y pie se atenúan suavemente con el cálculo unificado headOp / footOp
-        if (outroT > 0.02) {
-          this.updateOutroGleam(p, dt);
-        }
-      }
-
-      if (Math.abs(this.cur - this.lastCur) > 0.002 || this.dirty) {
-        this.drawVideo(this.cur);
-        this.drawBlueprint(effectiveP);
-        if (insetOp > 0.01) {
-          this.drawInsetVideo(this.cur);
-        }
-        this.lastCur = this.cur;
-        this.dirty = false;
-      }
-    }
-
-    updateOutroGleam(p, dt) {
-      if (!this.outroCard) return;
-      const targetOp = smooth(range(p, 0.78, 0.88));
-      if (targetOp <= 0.001) {
-        if (this.outroGleamOp !== 0) {
-          this.outroCard.style.setProperty("--outro-gleam-op", "0");
-          this.outroGleamOp = 0;
+        this.setTraceFilter(7.5, 0.55);
+        this.reelBgWrap.style.setProperty("--tr-reel-bg-op", "0");
+        this.reelLayer.style.visibility = "hidden";
+        this.reelLayer.classList.remove("is-interactive");
+        this.updateTraceOverlay(0, 0, -0.05, 0.016);
+        if (viewportEntry > 0 && (this.lastTraceFrameDrawn !== 0 || this.traceDirty)) {
+          this.drawTrace(0);
+          this.lastTraceFrameDrawn = 0;
         }
         return;
       }
-      const targetAngle = 45 + (p - 0.78) * 540;
-      if (this.gleamAngle === undefined) this.gleamAngle = targetAngle;
-      const kAngle = dt ? Math.min(1, 1 - Math.exp(-14 * dt)) : 0.20;
-      let diff = (targetAngle - this.gleamAngle) % 360;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-      this.gleamAngle += diff * kAngle;
-      this.outroGleamOp = targetOp;
-      this.outroCard.style.setProperty("--outro-gleam-op", targetOp.toFixed(3));
-      this.outroCard.style.setProperty("--gradient-angle", `${this.gleamAngle.toFixed(1)}deg`);
+
+      if (rawP >= 1.08) {
+        this.progCur = 1;
+      }
+
+      // Si el usuario vuelve a Planificación en Planta, reestablecemos pausa de Archivo si estaba activa
+      if (rawP < TRACE_PLAN_END_P - 0.04 && this.autoPlayPaused) {
+        this.autoPlayPaused = false;
+        this.syncPauseUI();
+      }
+
+      if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < 1.05 && performance.now() > (this.seekingUntil || 0)) {
+        const hasTrace = this.traceFrames && (this.traceFrames[0] || this.nearestTrace(0));
+        const firstCard = this.cards[0];
+        const hasFirstCard = !!this.nearestCached(firstCard, firstCard.from);
+
+        const card0EndP = BRIDGE_END_P + (1 / nCards) * (1 - BRIDGE_END_P);
+        const reelSpeed = rawP < REEL_WAKE_P ? 0.85 : (rawP < card0EndP ? 0.92 : 0.48);
+        runHybridScrollEngine({
+          top: this.top,
+          len: this.len,
+          dt,
+          viewportEntry,
+          rawP,
+          baseDuration: this.baseDuration,
+          speedScale: reelSpeed,
+          state: this,
+          hasFrames: rawP < BRIDGE_START_P ? !!hasTrace : !!(hasTrace || hasFirstCard),
+          isHero: false,
+        });
+      }
+
+      const targetProg = clamp(rawP, 0, 1);
+      this.prog = targetProg;
+
+      const dtSec = Math.min(dt || 0.016, 0.05);
+      const isDirectSeek = this.isScrubbing || performance.now() <= (this.seekingUntil || 0);
+      if (reduce) {
+        this.progCur = targetProg;
+      } else {
+        const damp = 1 - Math.exp((isDirectSeek ? -16 : -22) * dtSec);
+        this.progCur += (targetProg - this.progCur) * damp;
+      }
+      if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
+
+      // 1) Progreso del plano SVG (0 -> 1 hasta TRACE_PLAN_END_P) y del video de planta (0 -> 1 hasta TRACE_MEDIA_END_P)
+      const tracePlanProg = clamp(this.progCur / TRACE_PLAN_END_P, 0, 1);
+      const traceVideoProg = clamp(this.progCur / TRACE_MEDIA_END_P, 0, 1);
+
+      // 2) Puente de fusión unificada (0 -> 1 entre BRIDGE_START_P y BRIDGE_END_P)
+      const bridgeT = reduce
+        ? (this.progCur >= BRIDGE_START_P ? 1 : 0)
+        : clamp((this.progCur - BRIDGE_START_P) / (BRIDGE_END_P - BRIDGE_START_P), 0, 1);
+
+      // Dibujar secuencia de planta (casa-greenville) a ritmo lineal constante mientras sea visible
+      const targetTraceF = traceVideoProg * (this.count - 1);
+      const tk = reduce ? 1 : (1 - Math.exp(-26 * dtSec));
+      if (this.lastScrollPos === undefined) this.lastScrollPos = y;
+      const scrolling = Math.abs(y - this.lastScrollPos) > 0.2;
+      this.lastScrollPos = y;
+
+      let effTrace = targetTraceF;
+      if (!scrolling && Math.abs(targetTraceF - this.traceFrameCur) < 0.25) effTrace = Math.round(targetTraceF);
+      this.traceFrameCur += (effTrace - this.traceFrameCur) * tk;
+      if (Math.abs(effTrace - this.traceFrameCur) < 0.002) this.traceFrameCur = effTrace;
+
+      // Atmósfera & horizonte óptico: acompaña el descenso del velo oscuro justo antes de dibujar el plano
+      if (this.entryAtmo) {
+        const horizonDraw = reduce ? 0 : smooth(range(rawP, 0.032, 0.062));
+        const horizonOp = reduce ? 0 : Math.sin(clamp(range(rawP, 0.032, 0.080), 0, 1) * Math.PI) * 0.85;
+        const auraIn = reduce ? 0 : smooth(range(rawP, 0.004, 0.034));
+        const auraOut = reduce ? 0 : smooth(range(rawP, 0.065, 0.125));
+        const auraOp = auraIn * (1 - auraOut * 0.85);
+        const atmoOp = Math.max(horizonOp, auraOp);
+        const as = this.entryAtmo.style;
+        as.setProperty("--trace-atmo-op", atmoOp.toFixed(3));
+        as.setProperty("--trace-aura-op", auraOp.toFixed(3));
+        as.setProperty("--trace-aura-s", (0.86 + auraIn * 0.18).toFixed(3));
+        as.setProperty("--trace-horizon-op", horizonOp.toFixed(3));
+        as.setProperty("--trace-horizon-s", horizonDraw.toFixed(3));
+        this.entryAtmo.style.visibility = atmoOp <= 0.005 ? "hidden" : "visible";
+      }
+
+      // Media de planta: emerge sola desde el negro al principio, antes de que aparezcan el velo oscuro y el plano
+      const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.003, 0.042));
+      const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.003, 0.046));
+      const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeT, 0.22, 0.56)));
+      const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeT, 0.0, 0.56) * 0.045;
+      const traceMediaBlur = (reduce ? 0 : (1 - traceEntryWake) * 7.5) + smooth(range(bridgeT, 0.14, 0.56)) * 6.5;
+      const traceMediaGray = (reduce ? 0 : (1 - traceEntryWake) * 0.55) + smooth(range(bridgeT, 0.10, 0.48)) * 0.5;
+
+      this.traceMediaWrap.style.setProperty("--tr-trace-media-op", traceMediaFade.toFixed(3));
+      this.traceMediaWrap.style.setProperty("--img-scale", traceMediaScale.toFixed(4));
+      this.traceMediaWrap.style.setProperty("--trace-entry-veil-op", (1 - veilOpen).toFixed(3));
+      this.traceMediaWrap.style.setProperty("--trace-entry-veil-s", (0.72 + veilOpen * 0.78).toFixed(3));
+      this.traceMediaWrap.style.visibility = traceMediaFade <= 0.005 ? "hidden" : "visible";
+      this.setTraceFilter(traceMediaBlur, traceMediaGray);
+
+      if (traceMediaFade > 0.005 && (Math.abs(this.traceFrameCur - this.lastTraceFrameDrawn) > 0.002 || this.traceDirty)) {
+        this.drawTrace(this.traceFrameCur);
+        this.lastTraceFrameDrawn = this.traceFrameCur;
+
+        const f = Math.round(this.traceFrameCur);
+        if (f !== this.lastTraceHudFrame) {
+          this.lastTraceHudFrame = f;
+          if (this.traceFrEl) this.traceFrEl.textContent = pad(f + 1, 3);
+        }
+        const pctVal = Math.round(tracePlanProg * 1000) / 10;
+        if (pctVal !== this.lastTracePctVal) {
+          this.lastTracePctVal = pctVal;
+          if (this.traceScrubFill) this.traceScrubFill.style.width = `${pctVal}%`;
+          if (this.traceScrub) this.traceScrub.setAttribute("aria-valuenow", String(Math.round(pctVal)));
+        }
+      }
+
+      this.updateTraceOverlay(tracePlanProg, bridgeT, rawP, dtSec);
+
+      // 3) Archivo en Movimiento (Beat 2: despertar con velo oscuro -> Beat 3: repliegue adaptativo 8:7 -> 16:9)
+      const backdropReveal = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.50, 0.92));
+      const videoDissolve = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.28, 0.56));
+      const leadVeilOp = reduce ? 0 : (1 - smooth(range(bridgeT, 0.46, 0.92))) * 0.92;
+      const mediaWake = reduce ? 1 : smooth(range(bridgeT, 0.30, 0.74));
+      const pbRaw = range(bridgeT, 0.48, 1.00);
+      const pullbackEase = reduce ? 1 : (pbRaw < 0.5 ? 4 * pbRaw * pbRaw * pbRaw : 1 - Math.pow(-2 * pbRaw + 2, 3) / 2);
+      const chromeReveal = reduce ? 1 : smooth(range(bridgeT, 0.68, 0.98));
+      const sideReveal = reduce ? 1 : smooth(range(bridgeT, 0.68, 1.00));
+      const hudReveal = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.74, 1.00));
+
+      this.reelBgWrap.style.setProperty("--tr-reel-bg-op", backdropReveal.toFixed(3));
+      this.reelLayer.style.visibility = bridgeT <= 0.22 ? "hidden" : "visible";
+      const isInteractive = bridgeT >= 0.78;
+      this.reelLayer.classList.toggle("is-interactive", isInteractive);
+      this.reelLayer.style.setProperty("--tr-reel-pe", isInteractive ? "auto" : "none");
+
+      const carouselProg = clamp((this.progCur - BRIDGE_END_P) / (1 - BRIDGE_END_P), 0, 1);
+      const seg = carouselProg * nCards;
+      const segIdx = clamp(Math.floor(seg), 0, nCards - 1);
+      const u = clamp(seg - segIdx, 0, 1);
+
+      const dwellEnd = 0.80;
+      const microDrift = 0;
+      let carouselTarget = segIdx;
+      if (segIdx < nCards - 1) {
+        carouselTarget = u <= dwellEnd
+          ? segIdx
+          : segIdx + smooth((u - dwellEnd) / (1 - dwellEnd));
+      }
+      this.carouselCur = carouselTarget;
+
+      const nearestIdx = clamp(Math.round(this.carouselCur), 0, nCards - 1);
+      if (nearestIdx !== this.activeIdx) this.setActiveClip(nearestIdx);
+
+      const rl = this.reelLayer.style;
+      rl.setProperty("--reel-hud", hudReveal.toFixed(3));
+      rl.setProperty("--reel-hud-top-y", `${(-(1 - hudReveal) * 14).toFixed(1)}px`);
+      rl.setProperty("--reel-hud-bot-y", `${((1 - hudReveal) * 18).toFixed(1)}px`);
+      this.reelBgWrap.style.setProperty("--reel-aura-op", (0.65 * backdropReveal).toFixed(3));
+
+      const targetRx = (!reduce && finePointer) ? (-normMy * 1.4) : 0;
+      const targetRy = (!reduce && finePointer) ? (normMx * 1.9) : 0;
+      this.tiltRx += (targetRx - this.tiltRx) * 0.1;
+      this.tiltRy += (targetRy - this.tiltRy) * 0.1;
+
+      const totalSeconds = Math.round(carouselProg * this.reelDuration);
+      if (this.reelTcEl) this.reelTcEl.textContent = `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
+      if (this.reelScrubFill) this.reelScrubFill.style.width = `${(carouselProg * 100).toFixed(1)}%`;
+      if (this.reelScrub) this.reelScrub.setAttribute("aria-valuenow", String(Math.round(carouselProg * 100)));
+
+      this.cards.forEach((card, i) => {
+        const d = i - this.carouselCur;
+        const absD = Math.abs(d);
+        const st = card.el.style;
+
+        if (absD > 2.25) {
+          st.setProperty("--rc-op", "0");
+          st.setProperty("--rc-pe", "none");
+          st.setProperty("--rc-filter", "none");
+          return;
+        }
+
+        const bell = Math.exp(-d * d * 2.1);
+        let tx = d * this.cardStep * (1 - 0.04 * Math.min(absD, 2));
+        let ty = (1 - bell) * 5;
+        let scale = 0.80 + 0.20 * bell;
+        const baseRy = clamp(-d * 9.5, -16, 16);
+        let activeWeight = smooth(clamp(1 - absD * 1.25, 0, 1));
+        let op = clamp(1 - Math.max(0, absD - 0.15) * 0.45, 0, 1);
+        let shade = clamp((1 - bell) * 0.72, 0, 0.72);
+        let blurPx = 0;
+
+        let rcChrome = 1;
+        let rcRadius = 5;
+        let rcBorderOp = i === nearestIdx ? 0.28 : 0.16;
+        let rcShadowOp = 0.56;
+        let rcBgOp = 1;
+        let rcLeadVeil = 0;
+        let mediaFilter = "none";
+        let innerScale = 1.10 - activeWeight * 0.08;
+        let tiltFactor = activeWeight;
+
+        if (bridgeT < 1) {
+          if (i === 0) {
+            const curW = this.cardW + (vw - this.cardW) * (1 - pullbackEase);
+            const curH = this.cardH + (vh - this.cardH) * (1 - pullbackEase);
+            st.setProperty("--rc-w", `${curW.toFixed(1)}px`);
+            st.setProperty("--rc-h", `${curH.toFixed(1)}px`);
+            ty += (this.deckCenterOffsetY || 0) * (1 - pullbackEase);
+            scale = 1;
+            op *= videoDissolve;
+            activeWeight *= chromeReveal;
+            tiltFactor = chromeReveal;
+            shade = 0;
+            rcChrome = chromeReveal;
+            rcRadius = chromeReveal * 5;
+            rcBorderOp = chromeReveal * 0.28;
+            rcShadowOp = chromeReveal * 0.56;
+            rcBgOp = chromeReveal;
+            rcLeadVeil = leadVeilOp;
+            const mBlur = (1 - mediaWake) * 5.5;
+            const mGray = (1 - mediaWake) * 0.45;
+            if (mBlur > 0.1 || mGray > 0.01) {
+              const parts = [];
+              if (mBlur > 0.1) parts.push(`blur(${mBlur.toFixed(1)}px)`);
+              if (mGray > 0.01) parts.push(`grayscale(${mGray.toFixed(2)})`);
+              mediaFilter = parts.join(" ");
+            }
+            innerScale = 1.02 + (1 - mediaWake) * 0.03;
+          } else {
+            op *= sideReveal;
+            tx += (1 - sideReveal) * (this.cardW || 560) * 0.24;
+          }
+        } else if (i === 0) {
+          st.removeProperty("--rc-w");
+          st.removeProperty("--rc-h");
+        }
+
+        const rx = this.tiltRx * tiltFactor;
+        const ry = baseRy + this.tiltRy * tiltFactor;
+        const maxParallax = Math.max(4, (this.cardW || 300) * 0.032);
+        const parallaxX = clamp(-d * maxParallax, -16, 16);
+
+        st.setProperty("--rc-x", `${tx.toFixed(1)}px`);
+        st.setProperty("--rc-y", `${ty.toFixed(1)}px`);
+        st.setProperty("--rc-s", scale.toFixed(4));
+        st.setProperty("--rc-rx", `${rx.toFixed(2)}deg`);
+        st.setProperty("--rc-ry", `${ry.toFixed(2)}deg`);
+        st.setProperty("--rc-op", op.toFixed(3));
+        st.setProperty("--rc-filter", blurPx > 0.15 ? `blur(${blurPx.toFixed(1)}px)` : "none");
+        st.setProperty("--rc-media-filter", mediaFilter);
+        st.setProperty("--rc-shade", shade.toFixed(3));
+        st.setProperty("--rc-lead-veil", rcLeadVeil.toFixed(3));
+        st.setProperty("--rc-act", activeWeight.toFixed(3));
+        st.setProperty("--rc-chrome", rcChrome.toFixed(3));
+        st.setProperty("--rc-radius", `${rcRadius.toFixed(2)}px`);
+        st.setProperty("--rc-border-op", rcBorderOp.toFixed(3));
+        st.setProperty("--rc-shadow-op", rcShadowOp.toFixed(3));
+        st.setProperty("--rc-bg-op", rcBgOp.toFixed(3));
+        st.setProperty("--rc-px", `${parallaxX.toFixed(1)}px`);
+        st.setProperty("--rc-ims", innerScale.toFixed(4));
+        st.setProperty("--rc-pe", (isInteractive && absD < 1.35 && op > 0.25) ? "auto" : "none");
+        st.setProperty("--rc-z", String(Math.round(50 - absD * 10)));
+
+        // Card 0 inicia en REEL_WAKE_P; los siguientes pre-arrancan al entrar (t/(1+t)) manteniendo velocidad constante sin saltos
+        const entryShare = (1 - dwellEnd) / (2 - dwellEnd);
+        const card0EndP = BRIDGE_END_P + (1 / nCards) * (1 - BRIDGE_END_P);
+        let clipP = 0;
+        if (i < segIdx) {
+          clipP = 1;
+        } else if (i === segIdx) {
+          if (i === 0 && i === nCards - 1) {
+            clipP = clamp((this.progCur - REEL_WAKE_P) / Math.max(0.01, 1 - REEL_WAKE_P), 0, 1);
+          } else if (i === 0) {
+            clipP = clamp((this.progCur - REEL_WAKE_P) / Math.max(0.01, card0EndP - REEL_WAKE_P), 0, 1);
+          } else {
+            clipP = entryShare + u * (1 - entryShare);
+          }
+        } else if (i === segIdx + 1 && u > dwellEnd) {
+          clipP = ((u - dwellEnd) / (1 - dwellEnd)) * entryShare;
+        }
+
+        const frameFloat = card.from + clipP * (card.span - 1);
+        if (absD < 1.85 && (i > 0 || viewportEntry > 0)) {
+          this.drawCard(card, frameFloat);
+        }
+
+        if (Math.abs(clipP - card.lastProg) > 0.002) {
+          card.lastProg = clipP;
+          st.setProperty("--rc-prog", clipP.toFixed(3));
+          if (this.thumbs[i]) {
+            this.thumbs[i].style.setProperty("--th-p", (i === segIdx ? clipP : (i < segIdx ? 1 : 0)).toFixed(3));
+          }
+        }
+      });
     }
   }
 
-  const sequences = $$(".seq").map((el) => new Sequence(el));
-  const formatEl = $(".format-showcase");
-  const formatSeq = formatEl ? new FormatShowcaseSequence(formatEl) : null;
-  const choreoEl = $(".choreo");
-  const choreoSeq = choreoEl ? new FlightChoreographySequence(choreoEl) : null;
+  const traceReels = $$(".trace-reel").map((el) => new UnifiedTraceReel(el));
 
   /* ---------------------------------------------------------
-     PRELOADER — contador suave con duración mínima
+     PRELOADER ÁGIL
      --------------------------------------------------------- */
   const loaderCount = $("[data-loader-count]");
   const loaderBar = $("[data-loader-bar]");
@@ -3222,14 +3342,14 @@
 
   function tickLoader(now) {
     if (ready) return;
-    const minT = reduce ? 0 : 3400;
+    const minT = reduce ? 0 : 950;
     const timeCap = clamp((now - tStart) / minT);
     const goal = Math.min(loadTarget, reduce ? 1 : timeCap);
-    loadShown += (goal - loadShown) * 0.08;
-    if (goal - loadShown < 0.002) loadShown = goal;
+    loadShown += (goal - loadShown) * 0.16;
+    if (goal - loadShown < 0.004) loadShown = goal;
     if (loaderCount) loaderCount.textContent = pad(Math.round(loadShown * 100), 3);
     if (loaderBar) loaderBar.style.transform = `scaleX(${loadShown.toFixed(4)})`;
-    if (loadShown >= 0.999) return setReady();
+    if (loadShown >= 0.996) return setReady();
     requestAnimationFrame(tickLoader);
   }
   requestAnimationFrame(tickLoader);
@@ -3239,49 +3359,25 @@
     ready = true;
     if (loaderCount) loaderCount.textContent = "100";
     if (loaderBar) loaderBar.style.transform = "scaleX(1)";
-    body.classList.add("is-ready");
-    body.classList.remove("is-loading");
-    if (lenis) lenis.start();
-    measureAll();
-    // Archivo: precarga diferida para que la galería horizontal no tenga saltos.
-    setTimeout(() => $$(".arc img").forEach((img) => { img.loading = "eager"; }), 2500);
+    body.classList.add("is-loaded");
+    const openCurtains = () => {
+      body.classList.add("is-ready");
+      body.classList.remove("is-loading");
+      if (lenis) lenis.start();
+      measureAll();
+    };
+    if (reduce) {
+      openCurtains();
+    } else {
+      setTimeout(openCurtains, 260);
+    }
   }
 
+  const getObsRoot = () => (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
+
   if (sequences.length) {
-    let p0 = 0, p1 = 0;
-    const updateBoth = () => { loadTarget = Math.max(loadTarget, (p0 + p1) * 0.5); };
-    sequences[0].load(undefined, (p) => { p0 = p; updateBoth(); });
+    sequences[0].load(undefined, (p) => { loadTarget = Math.max(loadTarget, p); });
 
-    // Cartografía de Vuelo (#trazado) se precarga durante la pantalla de carga inicial
-    if (sequences[1]) {
-      sequences[1].load(undefined, (p) => { p1 = p; updateBoth(); });
-    }
-
-    // Precarga anticipada en segundo plano de las secuencias con autorreproducción para que estén listas al llegar
-    setTimeout(() => {
-      const hudson = sequences.find((s) => s.el && (s.el.id === "film-03" || (s.src && s.src.includes("casa-hudson"))));
-      if (hudson && !hudson.set) hudson.load();
-    }, 1200);
-
-    setTimeout(() => {
-      const anacleto = sequences.find((s) => s.el && (s.el.id === "film-04" || (s.src && s.src.includes("anacleto"))));
-      if (anacleto && !anacleto.set) anacleto.load();
-    }, 2400);
-
-    setTimeout(() => {
-      const nocturno = sequences.find((s) => s.el && (s.el.id === "nocturno" || (s.src && s.src.includes("fincas"))));
-      if (nocturno && !nocturno.set) nocturno.load();
-    }, 3600);
-
-    setTimeout(() => {
-      if (choreoSeq && (!choreoSeq.frames || !choreoSeq.frames.length)) choreoSeq.load();
-    }, 1800);
-
-    setTimeout(() => {
-      if (formatSeq && (!formatSeq.frames || !formatSeq.frames.length)) formatSeq.load();
-    }, 2800);
-
-    const obsRoot = (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
     const seqLoader = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
         if (!en.isIntersecting) return;
@@ -3289,49 +3385,41 @@
         if (s && !s.set) s.load();
         seqLoader.unobserve(en.target);
       });
-    }, { root: obsRoot, rootMargin: "1600px 0px" });
+    }, { root: getObsRoot(), rootMargin: "1100px 0px" });
     sequences.slice(1).forEach((s) => seqLoader.observe(s.el));
-
-    if (choreoEl) {
-      const choreoObs = new IntersectionObserver((entries) => {
-        entries.forEach((en) => {
-          if (en.isIntersecting && choreoSeq) {
-            choreoSeq.load();
-            choreoObs.unobserve(en.target);
-          }
-        });
-      }, { rootMargin: "1600px 0px" });
-      choreoObs.observe(choreoEl);
-    }
-    if (formatEl) {
-      const formatObs = new IntersectionObserver((entries) => {
-        entries.forEach((en) => {
-          if (en.isIntersecting && formatSeq) {
-            formatSeq.load();
-            formatObs.unobserve(en.target);
-          }
-        });
-      }, { rootMargin: "900px 0px" });
-      formatObs.observe(formatEl);
-    }
   } else {
     loadTarget = 1;
   }
-  setTimeout(() => { loadTarget = 1; }, 6000);
+
+  if (reels.length) {
+    const reelLoader = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const r = reels.find((x) => x.el === en.target);
+        if (r) r.loadNeighborhood(0);
+        reelLoader.unobserve(en.target);
+      });
+    }, { root: getObsRoot(), rootMargin: "1100px 0px" });
+    reels.forEach((r) => reelLoader.observe(r.el));
+  }
+  if (traceReels.length) {
+    const trLoader = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const tr = traceReels.find((x) => x.el === en.target);
+        if (tr) {
+          tr.loadTrace();
+          tr.loadNeighborhood(0);
+        }
+        trLoader.unobserve(en.target);
+      });
+    }, { root: getObsRoot(), rootMargin: "1200px 0px" });
+    traceReels.forEach((tr) => trLoader.observe(tr.el));
+  }
+  setTimeout(() => { loadTarget = 1; }, 2200);
 
   /* ---------------------------------------------------------
-     Portadas de obra: aparecen apenas el escenario se acerca
-     --------------------------------------------------------- */
-  const nearIO = new IntersectionObserver((entries) => {
-    entries.forEach((en) => {
-      if (en.isIntersecting) en.target.classList.add("is-near");
-      else if (en.boundingClientRect.top > 0) en.target.classList.remove("is-near");
-    });
-  }, { rootMargin: "120px 0px 40px 0px" });
-  sequences.filter((s) => !s.isHero).forEach((s) => nearIO.observe(s.el));
-
-  /* ---------------------------------------------------------
-     Revelados inmediatos al entrar en pantalla
+     Revelados inmediatos
      --------------------------------------------------------- */
   const revealIO = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
@@ -3339,26 +3427,31 @@
       en.target.classList.add("is-in");
       revealIO.unobserve(en.target);
     });
-  }, { rootMargin: "0px 0px -2% 0px", threshold: 0.02 });
+  }, { root: getObsRoot(), rootMargin: "0px 0px 10% 0px", threshold: 0.01 });
 
-  $$("[data-reveal], [data-lines], .rimg").forEach((el) => {
+  const cardRevealIO = new IntersectionObserver((entries) => {
+    entries.forEach((en) => {
+      if (!en.isIntersecting) return;
+      en.target.classList.add("is-in");
+      cardRevealIO.unobserve(en.target);
+    });
+  }, { root: getObsRoot(), rootMargin: "0px 0px -6% 0px", threshold: 0.08 });
+
+  $$("[data-reveal], [data-lines]").forEach((el) => {
     const sib = el.parentElement ? $$(":scope > [data-reveal]", el.parentElement) : [];
     const idx = sib.indexOf(el);
-    if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 6) * 0.09}s`);
+    if (el.classList.contains("rep-card")) {
+      const colStep = vw > 1120 ? (idx % 3) : (vw > 680 ? (idx % 2) : 0);
+      el.style.setProperty("--d", `${colStep * 0.09}s`);
+      cardRevealIO.observe(el);
+      return;
+    }
+    if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 5) * 0.07}s`);
     revealIO.observe(el);
   });
 
-  /* Destello satinado en títulos al centrarse con el scroll */
-  const shimmerTitles = $$(".hero__title, .display, .contact__title");
-  const shimmerIO = new IntersectionObserver((entries) => {
-    entries.forEach((en) => {
-      en.target.classList.toggle("is-shimmer", en.isIntersecting);
-    });
-  }, { rootMargin: "-18% 0px -18% 0px", threshold: 0.1 });
-  shimmerTitles.forEach((t) => shimmerIO.observe(t));
-
   /* ---------------------------------------------------------
-     Índice (overlay)
+     Índice y Anclas
      --------------------------------------------------------- */
   const indexBtn = $(".nav__index");
   const indexEl = $("#index");
@@ -3379,20 +3472,19 @@
     });
   });
 
-  /* ---------------------------------------------------------
-     Anclas
-     --------------------------------------------------------- */
   function goTo(href) {
     if (!href || href === "#") return;
     let target = href === "#top" ? 0 : $(href);
     if (target === null) return;
-    if (href === "#repertorio" && typeof repTransition !== "undefined" && repTransition && repTransition.morphEndY > 0) {
-      target = repTransition.morphEndY;
+    if (href === "#trazado" && traceReels.length) {
+      const tr = traceReels[0];
+      tr.autoPlaySuspended = false;
+      target = tr.top + Math.round(tr.len * 0.088);
     }
     const wasOpen = body.classList.contains("index-open");
     if (wasOpen) {
       setIndex(false);
-      setTimeout(() => scrollToTarget(target, { immediate: true }), 650);
+      setTimeout(() => scrollToTarget(target, { immediate: true }), 550);
     } else {
       scrollToTarget(target);
     }
@@ -3407,1368 +3499,17 @@
       }
     });
   });
-  $$("[data-goto]").forEach((el) => el.addEventListener("click", () => goTo(el.dataset.goto)));
 
   const heroScrollBtn = $(".hero__scroll");
   if (heroScrollBtn) {
     heroScrollBtn.addEventListener("click", () => {
-      const step = Math.max(window.innerHeight * 0.75, 450);
-      scrollToTarget(scrollY() + step, { duration: 1.4 });
+      const step = Math.max(window.innerHeight * 0.32, 240);
+      scrollToTarget(scrollY() + step, { duration: 1.0 });
     });
   }
 
   /* ---------------------------------------------------------
-     Servicios: imagen asociada a la fila activa + obturador y telemetría
-     --------------------------------------------------------- */
-  const servicesSec = $("#servicios");
-  const svcList = $(".svc", servicesSec);
-  const svcRows = $$(".svc__row");
-  const svcImgs = $$(".services__fig img");
-  const svcFig = $(".services__fig");
-  const svcN = $("[data-svc-n]");
-  const svcSpec = $("[data-svc-spec]");
-  const svcLens = $("[data-svc-lens]");
-  const svcLabel = $("[data-svc-label]");
-  const svcBar = $("[data-svc-bar]");
-  let svcActive = 0, svcHover = -1;
-  let svcSecDocTop = 0, svcSecHeight = 0, svcListDocTop = 0, svcListHeight = 0;
-
-  function measureSvc() {
-    if (!servicesSec) return;
-    const scroll = scrollY();
-    svcSecDocTop = servicesSec.getBoundingClientRect().top + scroll;
-    svcSecHeight = servicesSec.offsetHeight;
-    if (svcList) {
-      svcListDocTop = svcList.getBoundingClientRect().top + scroll;
-      svcListHeight = svcList.offsetHeight;
-    }
-    svcRows.forEach((r) => {
-      r._docTop = r.getBoundingClientRect().top + scroll;
-      r._height = r.offsetHeight;
-    });
-  }
-
-  function setSvc(i) {
-    if (i === svcActive) return;
-    svcActive = i;
-    svcRows.forEach((r, j) => r.classList.toggle("is-active", j === i));
-    svcImgs.forEach((img, j) => img.classList.toggle("is-active", j === i));
-    if (svcN) svcN.textContent = pad(i + 1);
-    const activeRow = svcRows[i];
-    if (activeRow) {
-      if (svcSpec && activeRow.dataset.svcSpec) svcSpec.textContent = activeRow.dataset.svcSpec;
-      if (svcLens && activeRow.dataset.svcLens) svcLens.textContent = activeRow.dataset.svcLens;
-      if (svcLabel && activeRow.dataset.svcLabel) svcLabel.textContent = activeRow.dataset.svcLabel;
-    }
-    playTactileTick(610 + i * 55, 0.025, 0.02);
-  }
-  if (finePointer) {
-    svcRows.forEach((row, i) => {
-      row.addEventListener("mouseenter", () => { svcHover = i; setSvc(i); });
-      row.addEventListener("mouseleave", () => { svcHover = -1; });
-    });
-  }
-  function updateSvc() {
-    if (!svcRows.length) return;
-    const y = scrollY();
-    const srTop = svcSecDocTop - y;
-    const srBottom = srTop + svcSecHeight;
-    if (srBottom < -100 || srTop > vh + 100) return;
-
-    if (svcList) {
-      const lrTop = svcListDocTop - y;
-      const listProg = clamp((vh * 0.58 - lrTop) / Math.max(1, svcListHeight));
-      if (svcBar) svcBar.style.transform = `scaleX(${listProg.toFixed(4)})`;
-      if (svcFig && !reduce) {
-        const py = (listProg - 0.5) * -18;
-        svcFig.style.setProperty("--svc-py", `${py.toFixed(1)}px`);
-      }
-    }
-
-    const mid = vh * 0.5;
-    let best = svcActive, bestD = Infinity;
-    svcRows.forEach((r, i) => {
-      const bTop = (r._docTop || 0) - y;
-      const rH = r._height || 60;
-      const rowProg = clamp((vh * 0.72 - bTop) / Math.max(1, rH * 1.15));
-      r.style.setProperty("--row-prog", rowProg.toFixed(3));
-      const d = Math.abs(bTop + rH / 2 - mid);
-      if (d < bestD) { bestD = d; best = i; }
-    });
-    if (svcHover < 0) setSvc(best);
-  }
-
-  /* ---------------------------------------------------------
-     Repertorio: Catálogo estático de secuencias arquitectónicas
-     - Modo Sala de Proyección (Theater / Spotlight) en Desktop
-     - Reproducción inline optimizada en Mobile
-     - Carga on-demand con progreso en tiempo real
-     - "Ver film completo" al finalizar la toma
-     --------------------------------------------------------- */
-  class RepertorioCard {
-    constructor(el) {
-      this.el = el;
-      this.src = el.dataset.src;
-      this.count = parseInt(el.dataset.count, 10) || 100;
-      this.version = el.dataset.version || "";
-      this.step = parseInt(el.dataset.step, 10) || 1;
-      this.fps = parseInt(el.dataset.fps, 10) || 24;
-      this.videoUrl = el.dataset.cardVideo || el.dataset.videoTrigger || "";
-      this.videoTitle = el.dataset.videoTitle || "Film cinematográfico";
-      this.badge = el.dataset.badge || "SEQ · 01";
-      this.title = el.dataset.title || "Film arquitectónico";
-      this.sub = el.dataset.sub || "";
-      this.take = el.dataset.take || "";
-
-      this.screen = $(".rep-card__screen", el);
-      this.canvas = $(".rep-card__canvas", el);
-      this.poster = $(".rep-card__poster", el);
-      this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
-      this.tcEl = $("[data-card-tc]", el);
-      this.fillEl = $("[data-card-fill]", el);
-      this.statusTxt = $("[data-status-text]", el);
-      this.playBtn = $(".rep-card__play-btn-main", el);
-      this.endOverlay = $(".rep-card__end-overlay", el);
-      this.fullFilmBtn = $("[data-rep-full-film]", el);
-      this.replayBtn = $("[data-rep-replay]", el);
-      this.cardLoader = $("[data-card-loader]", el);
-      this.cardLoaderTxt = $("[data-card-loader-txt]", el);
-      this.cardSpinBar = $("[data-card-spinner-bar]", el);
-
-      this.frames = [];
-      this.totalFrames = Math.ceil(this.count / this.step);
-      this.frameIndices = [];
-      for (let i = 0; i < this.totalFrames; i++) {
-        const rawIdx = Math.min(this.count, 1 + i * this.step);
-        this.frameIndices.push(rawIdx);
-      }
-
-      this.currentPos = 0;
-      this.loaded = false;
-      this.loading = false;
-      this.buffered = false;
-      this.hasDrawn = false;
-      this.lastIdx = -1;
-      this.isPlaying = false;
-      this.isEnded = false;
-      this.progress = 0;
-      this.loadedCount = 0;
-      // Umbral de streaming buffer: ~15 a 18 fotogramas (aprox 0.6s de video) para arranque ultra veloz
-      this.bufferTarget = Math.min(18, Math.max(10, Math.floor(this.totalFrames * 0.15)));
-      this._listeners = new Set();
-
-      if (this.canvas) {
-        this.canvas.width = 640;
-        this.canvas.height = 360;
-      }
-
-      this.bindEvents();
-    }
-
-    bindEvents() {
-      // Clic en el botón central de Play
-      if (this.playBtn) {
-        this.playBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.handlePlayClick();
-        });
-      }
-
-      // Clic en la pantalla de la tarjeta
-      if (this.screen) {
-        this.screen.addEventListener("click", (e) => {
-          if (e.target.closest("[data-rep-full-film]") || e.target.closest("[data-rep-replay]")) return;
-          this.handlePlayClick();
-        });
-      }
-
-      // Replay en móvil / inline
-      if (this.replayBtn) {
-        this.replayBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.replayInline();
-        });
-      }
-
-      // Ver film completo en móvil / inline
-      if (this.fullFilmBtn) {
-        this.fullFilmBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.videoUrl) {
-            openVideoModal(this.videoUrl, this.videoTitle);
-          }
-        });
-      }
-    }
-
-    handlePlayClick() {
-      // En horizontal / desktop (ancho > 768px): abrir modo teatro ampliado y centrado
-      if (window.innerWidth > 768 && repTheater) {
-        repTheater.open(this);
-        return;
-      }
-
-      // En vertical / móvil (ancho <= 768px): reproducir inline dentro de la tarjeta
-      if (this.isEnded) {
-        this.replayInline();
-      } else if (this.isPlaying) {
-        this.pauseInline();
-      } else {
-        this.playInline();
-      }
-    }
-
-    loadFrames(optOrProg, onComplete, onBuffer) {
-      let opt = {};
-      if (typeof optOrProg === "function") {
-        opt = { onProgress: optOrProg, onComplete, onBuffer };
-      } else if (optOrProg && typeof optOrProg === "object") {
-        opt = optOrProg;
-      }
-
-      // Si ya está 100% cargado
-      if (this.loaded) {
-        if (opt.onProgress) opt.onProgress(100, this.totalFrames, this.totalFrames);
-        if (opt.onBuffer) opt.onBuffer();
-        if (opt.onComplete) opt.onComplete();
-        return;
-      }
-
-      // Si el buffer ya está listo y el llamador pide aviso de buffer
-      if (this.buffered && opt.onBuffer) {
-        opt.onBuffer();
-      }
-
-      // Registrar callbacks de este llamador
-      this._listeners.add(opt);
-
-      // Si ya está descargando, enviar el porcentaje actual garantizado
-      if (this.loading) {
-        if (opt.onProgress) opt.onProgress(this.progress, this.loadedCount, this.totalFrames);
-        return;
-      }
-
-      this.loading = true;
-      this.el.classList.add("is-loading");
-
-      let qIdx = 0;
-      const total = this.frameIndices.length;
-      const parallel = 8;
-
-      const notifyProgress = (pct) => {
-        this._listeners.forEach((l) => {
-          if (l.onProgress) {
-            try { l.onProgress(pct, this.loadedCount, total); } catch(e) {}
-          }
-        });
-        if (this.cardLoaderTxt) this.cardLoaderTxt.textContent = `${pct}%`;
-        if (this.cardSpinBar) {
-          const circumference = 2 * Math.PI * 14; // ~88
-          const offset = circumference - (pct / 100) * circumference;
-          this.cardSpinBar.style.strokeDashoffset = offset.toFixed(1);
-        }
-      };
-
-      const notifyBuffer = () => {
-        this._listeners.forEach((l) => {
-          if (l.onBuffer) {
-            try { l.onBuffer(); } catch(e) {}
-          }
-        });
-      };
-
-      const notifyComplete = () => {
-        this._listeners.forEach((l) => {
-          if (l.onComplete) {
-            try { l.onComplete(); } catch(e) {}
-          }
-        });
-      };
-
-      const loadNext = () => {
-        if (qIdx >= total) return;
-        const i = qIdx++;
-        const rawIdx = this.frameIndices[i];
-        const img = new Image();
-        img.decoding = "async";
-
-        const onFrameReady = () => {
-          this.frames[i] = img;
-          this.loadedCount++;
-          const calcPct = Math.min(100, Math.round((this.loadedCount / total) * 100));
-          // Progreso monotónico: jamás retrocede
-          this.progress = Math.max(this.progress, calcPct);
-          notifyProgress(this.progress);
-
-          if (this.loadedCount >= 1 && !this.hasDrawn) {
-            this.el.classList.add("has-canvas");
-            this.draw(i);
-            this.hasDrawn = true;
-          }
-
-          // Desbloquear reproducción tan pronto como se complete el buffer inicial
-          if (!this.buffered && (this.loadedCount >= this.bufferTarget || this.loadedCount >= total)) {
-            this.buffered = true;
-            this.el.classList.remove("is-loading");
-            notifyBuffer();
-          }
-
-          if (this.loadedCount >= total) {
-            this.loaded = true;
-            this.buffered = true;
-            this.loading = false;
-            this.progress = 100;
-            this.el.classList.remove("is-loading");
-            notifyProgress(100);
-            notifyComplete();
-            this._listeners.clear();
-          }
-          loadNext();
-        };
-
-        img.onload = () => {
-          if (img.decode) {
-            img.decode().then(onFrameReady).catch(onFrameReady);
-          } else {
-            onFrameReady();
-          }
-        };
-        img.onerror = () => {
-          this.loadedCount++;
-          const calcPct = Math.min(100, Math.round((this.loadedCount / total) * 100));
-          this.progress = Math.max(this.progress, calcPct);
-          notifyProgress(this.progress);
-          if (!this.buffered && (this.loadedCount >= this.bufferTarget || this.loadedCount >= total)) {
-            this.buffered = true;
-            notifyBuffer();
-          }
-          if (this.loadedCount >= total) {
-            this.loaded = true;
-            this.buffered = true;
-            this.loading = false;
-            this.progress = 100;
-            this.el.classList.remove("is-loading");
-            notifyProgress(100);
-            notifyComplete();
-            this._listeners.clear();
-          }
-          loadNext();
-        };
-
-        const vParam = this.version ? `?v=${this.version}` : (this.count ? `?v=${this.count}` : "");
-        img.src = `${this.src}/md/${pad(rawIdx, 4)}.webp${vParam}`;
-      };
-
-      for (let k = 0; k < parallel; k++) loadNext();
-    }
-
-    playInline() {
-      // Pausar cualquier otra tarjeta activa
-      if (repCards && repCards.length) {
-        repCards.forEach((c) => {
-          if (c !== this && c.isPlaying) c.pauseInline();
-        });
-      }
-
-      if (this.buffered) {
-        this.startInlinePlayback();
-        if (!this.loaded) {
-          this.loadFrames();
-        }
-      } else {
-        this.loadFrames({
-          onBuffer: () => {
-            this.startInlinePlayback();
-          }
-        });
-      }
-    }
-
-    startInlinePlayback() {
-      this.isPlaying = true;
-      this.isEnded = false;
-      this.el.classList.remove("is-loading");
-      this.el.classList.add("is-playing");
-      this.el.classList.remove("is-ended");
-      if (this.statusTxt) this.statusTxt.textContent = "REC · EN VIVO";
-      const curIdx = Math.floor(this.currentPos);
-      this.draw(curIdx);
-    }
-
-    pauseInline() {
-      this.isPlaying = false;
-      this.el.classList.remove("is-playing");
-      if (this.statusTxt) this.statusTxt.textContent = "EN PAUSA";
-    }
-
-    replayInline() {
-      this.currentPos = 0;
-      this.lastIdx = -1;
-      this.isEnded = false;
-      this.el.classList.remove("is-ended");
-      this.updateProgress(0);
-      this.playInline();
-    }
-
-    onInlineFinished() {
-      this.isPlaying = false;
-      this.isEnded = true;
-      this.currentPos = this.totalFrames - 1;
-      this.draw(this.totalFrames - 1);
-      this.updateProgress(1);
-      this.el.classList.remove("is-playing");
-      this.el.classList.add("is-ended");
-      if (this.statusTxt) this.statusTxt.textContent = "TOMA COMPLETADA";
-    }
-
-    draw(frameIndex) {
-      if (!this.ctx || !this.canvas) return;
-      let img = this.frames[frameIndex];
-      if (!img) {
-        for (let d = 1; d < this.totalFrames; d++) {
-          if (this.frames[frameIndex - d]) { img = this.frames[frameIndex - d]; break; }
-          if (this.frames[frameIndex + d]) { img = this.frames[frameIndex + d]; break; }
-        }
-      }
-      if (!img || !img.naturalWidth) return;
-
-      const cw = this.canvas.width;
-      const ch = this.canvas.height;
-      if (!cw || !ch) return;
-
-      const iw = img.naturalWidth, ih = img.naturalHeight;
-      const s = Math.max(cw / iw, ch / ih);
-      const dw = iw * s, dh = ih * s;
-      const x = (cw - dw) / 2, y = (ch - dh) / 2;
-
-      this.ctx.drawImage(img, x, y, dw, dh);
-    }
-
-    updateProgress(progress) {
-      if (this.fillEl) {
-        this.fillEl.style.transform = `scaleX(${progress.toFixed(3)})`;
-      }
-    }
-
-    update(dt) {
-      if (!this.isPlaying || this.isEnded) return;
-
-      const playbackSpeed = this.fps / this.step;
-      this.currentPos += dt * playbackSpeed;
-
-      if (this.currentPos >= this.totalFrames - 1) {
-        this.onInlineFinished();
-        return;
-      }
-
-      const curIdx = Math.floor(this.currentPos);
-      if (curIdx !== this.lastIdx) {
-        this.draw(curIdx);
-        this.lastIdx = curIdx;
-
-        if (this.tcEl) {
-          const rawFrame = this.frameIndices[curIdx] || 1;
-          const totalSec = Math.floor(rawFrame / this.fps);
-          const remFr = rawFrame % this.fps;
-          this.tcEl.textContent = `00:${pad(totalSec, 2)}:${pad(remFr, 2)}`;
-        }
-
-        const progress = this.currentPos / (this.totalFrames - 1);
-        this.updateProgress(progress);
-      }
-    }
-  }
-
-  /* ---------------------------------------------------------
-     Repertorio Theater (Desktop Spotlight / Sala de Proyección)
-     --------------------------------------------------------- */
-  class RepertorioTheater {
-    constructor() {
-      this.el = $("#repTheater");
-      if (!this.el) return;
-      this.backdrop = $("[data-theater-close]", this.el);
-      this.stage = $("[data-theater-stage]", this.el);
-      this.canvas = $(".rep-theater__canvas", this.el);
-      this.poster = $("[data-theater-poster]", this.el);
-      this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
-      this.badgeEl = $("[data-theater-badge]", this.el);
-      this.titleEl = $("[data-theater-title]", this.el);
-      this.subEl = $("[data-theater-sub]", this.el);
-      this.loaderEl = $("[data-theater-loader]", this.el);
-      this.loaderTxt = $("[data-theater-loader-txt]", this.el);
-      this.spinBar = $("[data-theater-spin-bar]", this.el);
-      this.hudStatus = $("[data-theater-status]", this.el);
-      this.hudTc = $("[data-theater-tc]", this.el);
-      this.endOverlay = $("[data-theater-end]", this.el);
-      this.endTitle = $("[data-theater-end-title]", this.el);
-      this.endSub = $("[data-theater-end-sub]", this.el);
-      this.fullFilmBtn = $("[data-theater-full-film]", this.el);
-      this.pillBtn = $("[data-theater-pill-film]", this.el);
-      this.replayBtn = $("[data-theater-replay]", this.el);
-      this.fillEl = $("[data-theater-fill]", this.el);
-      this.stateIcon = $("[data-theater-state-icon]", this.el);
-
-      this.currentCard = null;
-      this.isOpen = false;
-      this.isPlaying = false;
-      this.isEnded = false;
-      this.currentPos = 0;
-      this.lastIdx = -1;
-      this._iconTimer = null;
-      this.sessionToken = 0;
-
-      if (this.canvas) {
-        this.canvas.width = 1280;
-        this.canvas.height = 720;
-      }
-
-      this.bindEvents();
-    }
-
-    bindEvents() {
-      // Botones de cierre y backdrop
-      $$("[data-theater-close]", this.el).forEach((btn) => {
-        btn.addEventListener("click", () => this.close());
-      });
-
-      // Clic en la pantalla: pausar / reanudar
-      if (this.stage) {
-        this.stage.addEventListener("click", (e) => {
-          if (
-            e.target.closest("[data-theater-full-film]") ||
-            e.target.closest("[data-theater-replay]") ||
-            e.target.closest("[data-theater-pill-film]") ||
-            e.target.closest("[data-theater-close]")
-          ) return;
-
-          if (this.isEnded) {
-            this.replay();
-          } else if (this.isPlaying) {
-            this.pause();
-          } else if (this.currentCard && this.currentCard.buffered) {
-            this.play();
-          }
-        });
-      }
-
-      // Repetir secuencia en modo teatro
-      if (this.replayBtn) {
-        this.replayBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.replay();
-        });
-      }
-
-      // Ver film completo: botón final o botón píldora durante la reproducción
-      const openFullFilm = (e) => {
-        if (e) e.stopPropagation();
-        if (this.currentCard && this.currentCard.videoUrl) {
-          const url = this.currentCard.videoUrl;
-          const title = this.currentCard.videoTitle;
-          this.close();
-          openVideoModal(url, title);
-        }
-      };
-
-      if (this.fullFilmBtn) {
-        this.fullFilmBtn.addEventListener("click", openFullFilm);
-      }
-      if (this.pillBtn) {
-        this.pillBtn.addEventListener("click", openFullFilm);
-      }
-
-      // Tecla Escape para salir de sala
-      addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && this.isOpen) {
-          this.close();
-        }
-      });
-    }
-
-    open(card) {
-      if (!card || !this.el) return;
-      this.currentCard = card;
-      const token = ++this.sessionToken;
-      this.isOpen = true;
-      this.isEnded = false;
-      this.isPlaying = false;
-      this.currentPos = 0;
-      this.lastIdx = -1;
-
-      // Actualizar encabezados
-      if (this.badgeEl) this.badgeEl.textContent = card.badge || "SEQ · 01";
-      if (this.titleEl) this.titleEl.textContent = card.title || "Film arquitectónico";
-      if (this.subEl) this.subEl.textContent = card.sub || "";
-      if (this.endTitle) this.endTitle.textContent = card.title || "";
-      if (this.endSub) this.endSub.textContent = card.take || "";
-
-      // Mostrar poster de portada de inmediato
-      if (this.poster && card.poster) {
-        this.poster.src = card.poster.src;
-        this.poster.style.opacity = "1";
-      }
-
-      // Reset HUD / Barra
-      if (this.fillEl) this.fillEl.style.transform = "scaleX(0)";
-      if (this.hudTc) this.hudTc.textContent = "00:00:00";
-      this.el.classList.remove("is-playing", "is-ended", "is-paused");
-      this.el.classList.add("is-open");
-      this.el.setAttribute("aria-hidden", "false");
-      body.classList.add("modal-open");
-      if (lenis) lenis.stop();
-
-      this.resizeCanvas();
-
-      // Si el buffer ya está listo, iniciar inmediatamente sin tiempo de espera
-      if (card.buffered) {
-        this.setLoader(false);
-        this.play();
-        if (!card.loaded) {
-          card.loadFrames();
-        }
-      } else {
-        if (this.hudStatus) this.hudStatus.textContent = "CARGANDO";
-        this.setLoader(true, card.progress);
-        card.loadFrames({
-          onProgress: (percent) => {
-            if (this.currentCard !== card || token !== this.sessionToken) return;
-            // Solo actualizar la pantalla de carga si aún NO comenzó la reproducción
-            if (!this.isPlaying && !card.buffered) {
-              this.setLoader(true, percent);
-            }
-          },
-          onBuffer: () => {
-            if (this.currentCard !== card || token !== this.sessionToken) return;
-            this.setLoader(false);
-            this.play();
-          },
-          onComplete: () => {
-            if (this.currentCard !== card || token !== this.sessionToken) return;
-            this.setLoader(false);
-          }
-        });
-      }
-    }
-
-    resizeCanvas() {
-      if (!this.canvas) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const rect = this.canvas.getBoundingClientRect();
-      const w = Math.round((rect.width > 50 ? rect.width : 1100) * dpr);
-      const h = Math.round((rect.height > 50 ? rect.height : 620) * dpr);
-      if (this.canvas.width !== w || this.canvas.height !== h) {
-        this.canvas.width = w;
-        this.canvas.height = h;
-      }
-    }
-
-    setLoader(show, percent) {
-      if (!this.loaderEl) return;
-      // El loader solo puede mostrarse si NO se está reproduciendo ni ha finalizado la toma
-      if (show && !this.isPlaying && !this.isEnded) {
-        this.loaderEl.classList.add("is-visible");
-        const safePct = Math.max(0, Math.min(100, Math.round(percent || 0)));
-        if (this.loaderTxt) this.loaderTxt.textContent = `Cargando secuencia · ${safePct}%`;
-        if (this.spinBar) {
-          const circumference = 2 * Math.PI * 18; // ~113.1
-          const offset = circumference - (safePct / 100) * circumference;
-          this.spinBar.style.strokeDashoffset = offset.toFixed(1);
-        }
-      } else {
-        this.loaderEl.classList.remove("is-visible");
-      }
-    }
-
-    play() {
-      this.isPlaying = true;
-      this.isEnded = false;
-      this.setLoader(false);
-      this.el.classList.remove("is-paused", "is-ended");
-      this.el.classList.add("is-playing");
-      if (this.hudStatus) this.hudStatus.textContent = "REC · EN VIVO";
-      if (this.poster) this.poster.style.opacity = "0";
-      this.triggerStateIcon("play");
-      const curIdx = Math.floor(this.currentPos);
-      this.draw(curIdx);
-    }
-
-    pause() {
-      this.isPlaying = false;
-      this.el.classList.remove("is-playing");
-      this.el.classList.add("is-paused");
-      if (this.hudStatus) this.hudStatus.textContent = "EN PAUSA";
-      this.triggerStateIcon("pause");
-    }
-
-    replay() {
-      this.currentPos = 0;
-      this.lastIdx = -1;
-      this.isEnded = false;
-      this.el.classList.remove("is-ended");
-      if (this.fillEl) this.fillEl.style.transform = "scaleX(0)";
-      this.play();
-    }
-
-    onFinished() {
-      this.isPlaying = false;
-      this.isEnded = true;
-      this.el.classList.remove("is-playing", "is-paused");
-      this.el.classList.add("is-ended");
-      if (this.hudStatus) this.hudStatus.textContent = "TOMA COMPLETADA";
-      if (this.fillEl) this.fillEl.style.transform = "scaleX(1)";
-    }
-
-    triggerStateIcon(type) {
-      if (!this.stateIcon) return;
-      this.stateIcon.className = `rep-theater__state-icon is-${type} is-flashing`;
-      clearTimeout(this._iconTimer);
-      this._iconTimer = setTimeout(() => {
-        if (this.stateIcon) this.stateIcon.classList.remove("is-flashing");
-      }, 550);
-    }
-
-    draw(frameIndex) {
-      if (!this.ctx || !this.canvas || !this.currentCard) return;
-      let img = this.currentCard.frames[frameIndex];
-      if (!img) {
-        for (let d = 1; d < this.currentCard.totalFrames; d++) {
-          if (this.currentCard.frames[frameIndex - d]) { img = this.currentCard.frames[frameIndex - d]; break; }
-          if (this.currentCard.frames[frameIndex + d]) { img = this.currentCard.frames[frameIndex + d]; break; }
-        }
-      }
-      if (!img || !img.naturalWidth) return;
-
-      const cw = this.canvas.width;
-      const ch = this.canvas.height;
-      if (!cw || !ch) return;
-
-      const iw = img.naturalWidth, ih = img.naturalHeight;
-      const s = Math.max(cw / iw, ch / ih);
-      const dw = iw * s, dh = ih * s;
-      const x = (cw - dw) / 2, y = (ch - dh) / 2;
-
-      this.ctx.drawImage(img, x, y, dw, dh);
-    }
-
-    update(dt) {
-      if (!this.isOpen || !this.isPlaying || this.isEnded || !this.currentCard) return;
-
-      const playbackSpeed = this.currentCard.fps / this.currentCard.step;
-      this.currentPos += dt * playbackSpeed;
-
-      if (this.currentPos >= this.currentCard.totalFrames - 1) {
-        this.onFinished();
-        return;
-      }
-
-      const curIdx = Math.floor(this.currentPos);
-      if (curIdx !== this.lastIdx) {
-        this.draw(curIdx);
-        this.lastIdx = curIdx;
-
-        if (this.hudTc) {
-          const rawFrame = this.currentCard.frameIndices[curIdx] || 1;
-          const totalSec = Math.floor(rawFrame / this.currentCard.fps);
-          const remFr = rawFrame % this.currentCard.fps;
-          this.hudTc.textContent = `00:${pad(totalSec, 2)}:${pad(remFr, 2)}`;
-        }
-
-        if (this.fillEl) {
-          const progress = this.currentPos / (this.currentCard.totalFrames - 1);
-          this.fillEl.style.transform = `scaleX(${progress.toFixed(3)})`;
-        }
-      }
-    }
-
-    close() {
-      if (!this.isOpen) return;
-      this.sessionToken++;
-      this.isOpen = false;
-      this.isPlaying = false;
-      this.isEnded = false;
-      this.setLoader(false);
-      this.el.classList.remove("is-open", "is-playing", "is-ended", "is-paused");
-      this.el.setAttribute("aria-hidden", "true");
-      body.classList.remove("modal-open");
-      if (lenis) lenis.start();
-    }
-  }
-
-  const repertorio = $(".repertorio");
-  const repCards = $$("[data-rep-card]").map((el) => new RepertorioCard(el));
-  const repTheater = new RepertorioTheater();
-
-  /* ---------------------------------------------------------
-     RepertorioTransition — Coreografía Cinética de Diapasón
-     Transición entre Obra II (Secuencia Residencial) y el Catálogo:
-     1. 6 persianas arquitectónicas funden el blanco de Obra II a negro cine.
-     2. 6 franjas verticales ("teclas de piano") entran de forma escalonada
-        con las portadas de los 6 videos y se deslizan en contrapunto.
-     3. En horizontal (Desktop/Tablet): cada franja vertical se transforma
-        espacialmente y encastra con precisión sub-píxel en la grilla 3x2 / 2x3.
-     4. En vertical (Mobile): las 6 franjas verticales se pliegan primero en
-        6 cintas horizontales apiladas en pantalla y luego se expanden en la
-        columna vertical 1x6 de videos.
-     --------------------------------------------------------- */
-  class RepertorioTransition {
-    constructor(secEl, cards) {
-      this.sec = secEl;
-      this.cards = cards || [];
-      if (!this.sec || !this.cards.length) return;
-
-      this.stage = $("[data-rep-stage]", this.sec);
-      this.runway = $("[data-rep-runway]", this.sec);
-      this.bodyEl = $("[data-rep-body]", this.sec);
-      this.headEl = $("[data-rep-head]", this.sec);
-      this.gridEl = $("[data-rep-grid]", this.sec);
-      this.keysWrap = $("[data-rep-keys]", this.sec);
-      this.shutters = $$("[data-rep-shutter]", this.sec);
-
-      this.hudEl = $("[data-rep-stage-hud]", this.sec);
-      this.footEl = $("[data-rep-stage-foot]", this.sec);
-      this.bgTitleEl = $("[data-rep-stage-title]", this.sec);
-      this.phaseEl = $("[data-rep-stage-phase]", this.sec);
-      this.modeEl = $("[data-rep-stage-mode]", this.sec);
-      this.pctEl = $("[data-rep-stage-pct]", this.sec);
-      this.barEl = $("[data-rep-stage-bar]", this.sec);
-      this.cotaEl = $("[data-rep-stage-cota]", this.sec);
-
-      this.keyEls = [];
-      this.cardTargets = [];
-      this.keyRects = [];
-      this.stackRects = [];
-
-      this.secTop = 0;
-      this.secHeight = 0;
-      this.morphEndY = 0;
-      this.morphLen = 1;
-      this.isMobile = false;
-      this.isTablet = false;
-      this.lastZone = -1;
-      this.curP = 0;
-      this.curEntryP = 0;
-      this.initialized = false;
-
-      if (reduce) {
-        if (this.stage) this.stage.style.display = "none";
-        if (this.runway) this.runway.style.display = "none";
-        this.sec.classList.remove("repertorio--choreo");
-        return;
-      }
-
-      this.buildKeys();
-      this.measure();
-    }
-
-    buildKeys() {
-      if (!this.keysWrap) return;
-      this.keysWrap.innerHTML = "";
-      this.keyEls = this.cards.map((card, i) => {
-        const el = card.el;
-        const posterSrc = card.poster ? card.poster.getAttribute("src") : "";
-        const posterAlt = card.poster ? card.poster.getAttribute("alt") : "";
-        const badge = card.badge || `SEQ · ${pad(i + 1)}`;
-        const titleNode = $(".rep-card__title", el);
-        const titleHTML = titleNode ? titleNode.innerHTML : (card.title || "");
-        const locNode = $(".rep-card__loc", el);
-        const locTxt = locNode ? locNode.textContent : "";
-        const lensNode = $(".rep-card__lens", el);
-        const lensTxt = lensNode ? lensNode.textContent : "";
-        const takeNode = $(".rep-card__take", el);
-        const takeTxt = takeNode ? takeNode.textContent : "";
-        const idxStr = pad(i + 1);
-
-        const key = document.createElement("div");
-        key.className = "rep-key";
-        key.dataset.repKey = String(i);
-        key.innerHTML = `
-          <div class="rep-key__screen">
-            <img class="rep-key__poster" src="${posterSrc}" alt="${posterAlt}" decoding="async">
-            <div class="rep-key__veil"></div>
-
-            <div class="rep-key__spine">
-              <div class="rep-key__spine-top">
-                <span class="rep-key__spine-idx">${idxStr}</span>
-                <span class="rep-key__spine-rule"></span>
-              </div>
-              <div class="rep-key__spine-bot">
-                <span class="rep-key__spine-title">${titleHTML}</span>
-                <span class="rep-key__spine-tag">${lensTxt || badge}</span>
-              </div>
-            </div>
-
-            <div class="rep-key__ribbon">
-              <div class="rep-key__ribbon-left">
-                <span class="rep-key__ribbon-idx">${idxStr}</span>
-                <span class="rep-key__ribbon-title">${titleHTML}</span>
-              </div>
-              <span class="rep-key__ribbon-tag">${lensTxt || badge}</span>
-            </div>
-
-            <div class="rep-card__hud-top">
-              <span class="rep-card__badge">${badge}</span>
-              <span class="rep-card__rec"><i class="rep-card__rec-dot"></i><span>24 FPS</span></span>
-            </div>
-            <div class="rep-card__reticle">
-              <span class="rep-card__cross"></span>
-            </div>
-            <div class="rep-card__play-cover">
-              <span class="rep-card__play-btn-main">
-                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19.5,12 8,19"/></svg>
-              </span>
-            </div>
-            <div class="rep-card__bar"><i></i></div>
-          </div>
-          <footer class="rep-card__info">
-            <div class="rep-card__meta-top">
-              <span class="rep-card__loc">${locTxt}</span>
-              <span class="rep-card__lens">${lensTxt}</span>
-            </div>
-            <h3 class="rep-card__title">${titleHTML}</h3>
-            <div class="rep-card__meta-bot">
-              <span class="rep-card__take">${takeTxt}</span>
-              <span class="rep-card__tc">00:00:00</span>
-            </div>
-          </footer>
-        `;
-        this.keysWrap.appendChild(key);
-        return {
-          el: key,
-          screenEl: $(".rep-key__screen", key),
-          posterEl: $(".rep-key__poster", key),
-          infoEl: $(".rep-card__info", key),
-        };
-      });
-    }
-
-    measure() {
-      if (!this.sec || reduce || !this.bodyEl || !this.gridEl) return;
-
-      // Limpiar temporalmente transformaciones para medir coordenadas reales de flujo en el documento
-      const prevBodyTransform = this.bodyEl.style.transform;
-      this.bodyEl.style.transform = "none";
-
-      const scroll = scrollY();
-      this.isMobile = vw <= 768;
-      this.isTablet = vw > 768 && vw <= 1080;
-
-      // Ajustar altura de la pista de coreografía antes de medir
-      const runwayVh = this.isMobile ? 2.05 : 2.15;
-      if (this.runway) {
-        this.runway.style.height = `${Math.round(vh * runwayVh)}px`;
-      }
-
-      const secRect = this.sec.getBoundingClientRect();
-      this.secTop = secRect.top + scroll;
-      this.secHeight = this.sec.offsetHeight;
-
-      const headRect = this.headEl ? this.headEl.getBoundingClientRect() : secRect;
-      const gridRect = this.gridEl.getBoundingClientRect();
-      this.headDocTop = headRect.top + scroll;
-      this.gridDocTop = gridRect.top + scroll;
-      this.gridHeight = gridRect.height;
-
-      // Calcular el punto exacto de scroll (morphEndY) donde las 6 franjas encastran en el catálogo real
-      if (this.isMobile) {
-        const navClearMob = clamp(vh * 0.088, 66, 82);
-        this.morphEndY = this.headDocTop - navClearMob;
-      } else if (this.isTablet) {
-        const navClearTab = clamp(vh * 0.095, 76, 96);
-        this.morphEndY = this.headDocTop - navClearTab;
-      } else {
-        const navClearDesk = clamp(vh * 0.095, 82, 104);
-        const headToGridBot = (this.gridDocTop + this.gridHeight) - this.headDocTop;
-        const availH = vh - navClearDesk - 20;
-        if (headToGridBot <= availH) {
-          const extra = Math.max(0, availH - headToGridBot);
-          this.morphEndY = this.headDocTop - (navClearDesk + extra * 0.32);
-        } else {
-          // Si la pantalla es baja de altura, priorizar que las 2 filas de la grilla 3x2 queden enmarcadas
-          const idealGridTop = Math.max(navClearDesk + 10, (vh - this.gridHeight) * 0.54);
-          this.morphEndY = this.gridDocTop - idealGridTop;
-        }
-      }
-
-      this.morphLen = Math.max(vh * 0.8, this.morphEndY - this.secTop);
-
-      // Medir las coordenadas exactas de destino (viewport en y = morphEndY) de cada una de las 6 tarjetas reales
-      this.cardTargets = this.cards.map((c) => {
-        const cr = c.el.getBoundingClientRect();
-        const sr = c.screen ? c.screen.getBoundingClientRect() : cr;
-        const docTop = cr.top + scroll;
-        const docLeft = cr.left;
-        return {
-          left: docLeft,
-          top: docTop - this.morphEndY,
-          width: cr.width,
-          height: cr.height,
-          screenH: sr.height,
-          infoH: Math.max(0, cr.height - sr.height),
-        };
-      });
-
-      // Calcular la geometría inicial de las 6 Franjas Verticales ("Teclas de Piano")
-      const n = this.cards.length;
-      if (this.isMobile) {
-        const padX = 16;
-        const stageW = vw - padX * 2;
-        const gap = 6;
-        const keyW = (stageW - gap * (n - 1)) / n;
-        const keyH = Math.round(clamp(vh * 0.52, 290, 440));
-        const baseY = Math.round(vh * 0.51 - keyH * 0.5);
-
-        this.keyRects = this.cards.map((_, i) => ({
-          left: padX + i * (keyW + gap),
-          top: baseY,
-          width: keyW,
-          height: keyH,
-        }));
-
-        // Estado intermedio en móvil: 6 cintas panorámicas horizontales apiladas una sobre otra en pantalla
-        const stackTop = Math.round(clamp(vh * 0.145, 92, 118));
-        const stackBot = Math.round(vh - clamp(vh * 0.08, 48, 68));
-        const stackAvailH = Math.max(320, stackBot - stackTop);
-        const sliceGap = 8;
-        const sliceH = Math.floor((stackAvailH - sliceGap * (n - 1)) / n);
-        const refTarget = this.cardTargets[0] || { left: padX, width: stageW };
-
-        this.stackRects = this.cards.map((_, i) => ({
-          left: refTarget.left,
-          top: stackTop + i * (sliceH + sliceGap),
-          width: refTarget.width,
-          height: sliceH,
-        }));
-      } else {
-        const padX = Math.max(24, Math.min(60, vw * 0.036));
-        const maxStageW = Math.min(vw - padX * 2, 1600);
-        const stageLeft = (vw - maxStageW) * 0.5;
-        const gap = Math.round(clamp(vw * 0.011, 10, 18));
-        const keyW = (maxStageW - gap * (n - 1)) / n;
-        const keyH = Math.round(clamp(vh * 0.60, 350, 590));
-        const baseY = Math.round(vh * 0.52 - keyH * 0.5);
-
-        this.keyRects = this.cards.map((_, i) => ({
-          left: stageLeft + i * (keyW + gap),
-          top: baseY,
-          width: keyW,
-          height: keyH,
-        }));
-      }
-
-      this.bodyEl.style.transform = prevBodyTransform;
-      this.initialized = true;
-      this.update(0.016, true);
-    }
-
-    update(dt, force = false) {
-      if (!this.sec || reduce || !this.initialized) return;
-
-      const y = scrollY();
-      // Fuera de rango amplio: limpiar o mantener estado extremo sin gastar CPU
-      if (y + vh < this.secTop - vh * 0.5) {
-        if (this.stage && this.stage.style.visibility !== "hidden") {
-          this.stage.style.visibility = "hidden";
-          this.stage.style.opacity = "0";
-        }
-        return;
-      }
-
-      if (y > this.secTop + this.secHeight + vh * 0.5) {
-        return;
-      }
-
-      const rawEntry = clamp((y + vh - this.secTop) / vh, 0, 1);
-      const rawP = (y - this.secTop) / this.morphLen;
-
-      // Suavizado inercial ligero para que el movimiento de las teclas sea sedoso incluso con rueda de ratón discreta
-      const k = force ? 1 : Math.min(1, 1 - Math.exp(-18 * (dt || 0.016)));
-      this.curEntryP += (rawEntry - this.curEntryP) * k;
-      this.curP += (rawP - this.curP) * k;
-      if (Math.abs(rawEntry - this.curEntryP) < 0.0005) this.curEntryP = rawEntry;
-      if (Math.abs(rawP - this.curP) < 0.0005) this.curP = rawP;
-
-      const entryP = this.curEntryP;
-      const p = clamp(this.curP, 0, 1);
-
-      // Si ya superó por completo la transición (rawP >= 1.02), liberar el flujo natural del catálogo
-      if (rawP >= 1.02 && this.curP >= 0.998) {
-        if (this.stage && this.stage.style.visibility !== "hidden") {
-          this.stage.style.opacity = "0";
-          this.stage.style.visibility = "hidden";
-        }
-        if (this.bodyEl && this.bodyEl.style.transform !== "none") {
-          this.bodyEl.style.transform = "none";
-        }
-        if (this.headEl && this.headEl.style.opacity !== "1") {
-          this.headEl.style.opacity = "1";
-          this.headEl.style.transform = "none";
-        }
-        if (this.gridEl && this.gridEl.style.opacity !== "1") {
-          this.gridEl.style.opacity = "1";
-          this.gridEl.style.pointerEvents = "auto";
-        }
-        return;
-      }
-
-      // Mostrar escenario sticky durante la transición
-      if (this.stage) {
-        const stageFadeOut = 1 - smooth(range(p, 0.92, 0.995));
-        this.stage.style.visibility = stageFadeOut <= 0.002 ? "hidden" : "visible";
-        this.stage.style.opacity = stageFadeOut.toFixed(3);
-      }
-
-      // 1. Mantener .repertorio__body anclado exactamente en sus coordenadas de destino mientras rawP <= 1.0
-      //    Así, en el momento del crossfade (p: 0.88 -> 0.99), las tarjetas reales y las franjas transformadas
-      //    están 100% superpuestas píxel a píxel sin deriva vertical.
-      if (this.bodyEl) {
-        if (rawP < 1.0) {
-          const shiftY = y - this.morphEndY;
-          this.bodyEl.style.transform = `translate3d(0, ${shiftY.toFixed(1)}px, 0)`;
-        } else {
-          this.bodyEl.style.transform = "none";
-        }
-      }
-
-      //Aparición progresiva del cabezal real del catálogo (.repertorio__head) y la grilla real (.repertorio__grid)
-      if (this.headEl) {
-        const headOp = smooth(range(p, 0.68, 0.91));
-        const headTy = (1 - headOp) * 18;
-        this.headEl.style.opacity = headOp.toFixed(3);
-        this.headEl.style.transform = headTy > 0.1 ? `translate3d(0, ${headTy.toFixed(1)}px, 0)` : "none";
-      }
-      if (this.gridEl) {
-        const gridOp = smooth(range(p, 0.89, 0.975));
-        this.gridEl.style.opacity = gridOp.toFixed(3);
-        this.gridEl.style.pointerEvents = gridOp > 0.85 ? "auto" : "none";
-      }
-
-      // 2. Persianas arquitectónicas (6 columnas oscuras que cierran en cascada sobre el blanco de Obra II)
-      const combinedEntry = entryP + Math.max(0, this.curP) * 2.1;
-      if (this.shutters && this.shutters.length) {
-        this.shutters.forEach((sh, i) => {
-          const stStart = 0.04 + i * 0.085;
-          const stEnd = 0.62 + i * 0.085;
-          const sProg = smooth(range(combinedEntry, stStart, stEnd));
-          const tyPct = (1 - sProg) * 102;
-          sh.style.transform = `translate3d(0, ${tyPct.toFixed(2)}%, 0)`;
-          const edgeOp = sProg < 0.99 ? 0.9 : Math.max(0, 1 - range(p, 0.05, 0.25));
-          sh.style.setProperty("--shutter-edge-op", edgeOp.toFixed(2));
-        });
-      }
-
-      // 3. HUD y título ambiental del escenario de transición
-      const hudIn = smooth(range(combinedEntry, 0.55, 1.05));
-      const hudOut = 1 - smooth(range(p, 0.64, 0.80));
-      const hudOp = hudIn * hudOut;
-      if (this.hudEl) {
-        this.hudEl.style.opacity = hudOp.toFixed(3);
-        this.hudEl.style.transform = `translate3d(0, ${((1 - hudOp) * -10).toFixed(1)}px, 0)`;
-      }
-      if (this.footEl) {
-        const footOp = hudIn * (1 - smooth(range(p, 0.78, 0.92)));
-        this.footEl.style.opacity = footOp.toFixed(3);
-        this.footEl.style.transform = `translate3d(0, ${((1 - footOp) * 10).toFixed(1)}px, 0)`;
-      }
-      if (this.bgTitleEl) {
-        const bgOp = smooth(range(combinedEntry, 0.65, 1.1)) * (1 - smooth(range(p, 0.44, 0.66)));
-        const bgScale = 0.96 + smooth(range(p, 0.0, 0.5)) * 0.06;
-        this.bgTitleEl.style.opacity = bgOp.toFixed(3);
-        this.bgTitleEl.style.transform = `translate3d(-50%, -50%, 0) scale(${bgScale.toFixed(3)})`;
-      }
-
-      // Actualizar lecturas de fase y telemetría
-      const pctNum = Math.round(p * 100);
-      if (this.pctEl) this.pctEl.textContent = `${pad(pctNum)}%`;
-      if (this.barEl) this.barEl.style.transform = `scaleX(${p.toFixed(3)})`;
-
-      const zone = p < 0.36 ? 0 : (p < 0.76 ? 1 : 2);
-      if (zone !== this.lastZone) {
-        if (this.lastZone !== -1 && entryP > 0.8) {
-          const notes = [440, 554.37, 659.25];
-          playTactileTick(notes[zone] || 520, 0.028, 0.02);
-        }
-        this.lastZone = zone;
-        if (this.phaseEl) {
-          const phases = this.isMobile
-            ? ["01 · Teclas Escalonadas", "02 · Pliegue Horizontal", "03 · Catálogo Vertical"]
-            : ["01 · Diapasón Escalonado", "02 · Metamorfosis Espacial", "03 · Encastre en Grilla"];
-          this.phaseEl.textContent = phases[zone];
-        }
-        if (this.modeEl) {
-          this.modeEl.textContent = this.isMobile
-            ? (zone === 0 ? "06 Franjas Verticales" : (zone === 1 ? "06 Cintas Apiladas" : "Columna 1×6 · 16:9"))
-            : (zone === 0 ? "06 Franjas en Contrapunto" : (zone === 1 ? "Expansión a Formato 16:9" : "Grilla de Catálogo 3×2"));
-        }
-        if (this.cotaEl) {
-          this.cotaEl.textContent = zone === 2 ? "Catálogo Activo · 4K" : "06 Franjas · 24 FPS";
-        }
-      }
-
-      // 4. Coreografía de cada una de las 6 Franjas ("Teclas de Piano") -> Tarjetas de Video
-      const stepUnit = this.isMobile ? 26 : 46;
-
-      this.keyEls.forEach((item, i) => {
-        const kRect = this.keyRects[i];
-        const tRect = this.cardTargets[i];
-        if (!kRect || !tRect) return;
-
-        // A. Entrada escalonada desde abajo (una tras otra de izquierda a derecha)
-        const eStart = 0.12 + i * 0.092;
-        const eEnd = 0.78 + i * 0.092;
-        const eProg = smooth(range(combinedEntry, eStart, eEnd));
-        const entryLiftY = (1 - eProg) * (vh * 0.44 + i * 36);
-
-        // B. Escalón de "Teclas de Piano" (cada franja a la derecha un escalón más abajo, moviéndose con el scroll)
-        //    - En p = 0.00: escalera diagonal marcada (izquierda arriba -> derecha abajo: (i - 2.5) * stepUnit).
-        //    - A medida que se desliza (p: 0.00 -> 0.40): las franjas se deslizan en contrapunto armónico
-        //      (las altas bajan, las bajas suben como teclas pulsadas en ola) hasta alinearse antes de abrirse.
-        const pianoPhase = clamp(p / 0.42, 0, 1);
-        const alignEnvelope = 1 - smooth(range(p, 0.28, 0.44));
-        const diagonalSlope = Math.cos(pianoPhase * Math.PI * 0.92);
-        const stairBase = (i - 2.5) * stepUnit * diagonalSlope * alignEnvelope;
-        const harmonicWave = Math.sin(pianoPhase * Math.PI * 1.85 + i * 0.85) * (this.isMobile ? 15 : 28) * Math.sin(pianoPhase * Math.PI);
-        const pianoY = kRect.top + entryLiftY + stairBase + harmonicWave;
-
-        let curX, curY, curW, curH, curScreenH;
-        let spineOp = 1, ribbonOp = 0, cardUiOp = 0, borderRadius = 4;
-        let bankDeg = 0;
-        let morphT = 0;
-
-        if (!this.isMobile) {
-          // =========================================================
-          // VERSIÓN HORIZONTAL (ESCRITORIO / TABLET):
-          // De las 6 Franjas Verticales Escalonadas -> Directo a su posición 3x2 / 2x3
-          // =========================================================
-          const mStart = 0.36 + i * 0.036;
-          const mEnd = 0.87 + i * 0.014;
-          morphT = smooth(range(p, mStart, mEnd));
-          const arc = Math.sin(morphT * Math.PI);
-
-          // Trayectoria curva elegante hacia su casillero en la grilla
-          const rowArcY = (i < 3 ? -1 : 1) * arc * 16;
-          curX = kRect.left + (tRect.left - kRect.left) * morphT;
-          curY = pianoY + (tRect.top - pianoY) * morphT + rowArcY;
-          curW = kRect.width + (tRect.width - kRect.width) * morphT;
-          curH = kRect.height + (tRect.height - kRect.height) * morphT;
-
-          // La pantalla de video pasa de ocupar el 100% de la franja vertical a la altura 16:9 exacta de la tarjeta
-          const startScreenH = kRect.height;
-          curScreenH = startScreenH + (tRect.screenH - startScreenH) * morphT;
-
-          // Sutil alabeo espacial durante el vuelo hacia su columna/fila
-          const dxNorm = (tRect.left - kRect.left) / Math.max(1, vw);
-          bankDeg = arc * dxNorm * 3.8;
-
-          spineOp = 1 - smooth(range(morphT, 0.08, 0.46));
-          cardUiOp = smooth(range(morphT, 0.50, 0.92));
-          borderRadius = 4 + morphT * 2;
-        } else {
-          // =========================================================
-          // VERSIÓN VERTICAL (MÓVIL):
-          // Fase 1 (p: 0.00 -> 0.34): 6 Franjas Verticales Escalonadas lado a lado (| | | | | |)
-          // Fase 2 (p: 0.32 -> 0.64): Pliegue en 6 Cintas Horizontales apiladas una sobre otra en pantalla (≡)
-          // Fase 3 (p: 0.62 -> 0.92): Expansión de cada cinta al video 16:9 completo en la columna vertical
-          // =========================================================
-          const sRect = this.stackRects[i] || tRect;
-          const m1 = smooth(range(p, 0.30 + i * 0.028, 0.60 + i * 0.016));
-          const m2 = smooth(range(p, 0.60 + i * 0.022, 0.89 + i * 0.012));
-          morphT = m1 * 0.5 + m2 * 0.5;
-
-          // Interpolación Etapa 1 -> Etapa 2 (Vertical a Cintas Horizontales Apiladas)
-          const midX = kRect.left + (sRect.left - kRect.left) * m1;
-          const midY = pianoY + (sRect.top - pianoY) * m1;
-          const midW = kRect.width + (sRect.width - kRect.width) * m1;
-          const midH = kRect.height + (sRect.height - kRect.height) * m1;
-
-          // Interpolación Etapa 2 -> Etapa 3 (Cintas Apiladas a Tarjetas 16:9 Reales del Catálogo)
-          curX = midX + (tRect.left - midX) * m2;
-          curY = midY + (tRect.top - midY) * m2;
-          curW = midW + (tRect.width - midW) * m2;
-          curH = midH + (tRect.height - midH) * m2;
-
-          const midScreenH = midH;
-          curScreenH = midScreenH + (tRect.screenH - midScreenH) * m2;
-
-          spineOp = 1 - smooth(range(m1, 0.10, 0.55));
-          ribbonOp = smooth(range(m1, 0.45, 0.88)) * (1 - smooth(range(m2, 0.08, 0.45)));
-          cardUiOp = smooth(range(m2, 0.42, 0.90));
-          borderRadius = 4 + m2 * 1;
-        }
-
-        // Parallax óptico interno del fotograma mientras la franja se mueve y encuadra
-        const imgScale = 1 + (1 - morphT) * 0.16;
-        const imgPanX = (1 - morphT) * ((2.5 - i) * 3.2);
-        const imgPanY = (1 - morphT) * (Math.sin(pianoPhase * Math.PI + i * 0.7) * 4.5);
-        const imgBright = 0.84 + morphT * 0.16;
-        const keyGleam = Math.sin(eProg * Math.PI * 0.5) * (1 - morphT);
-
-        const st = item.el.style;
-        st.opacity = eProg.toFixed(3);
-        st.width = `${curW.toFixed(1)}px`;
-        st.height = `${curH.toFixed(1)}px`;
-        st.borderRadius = `${borderRadius.toFixed(1)}px`;
-        st.transform = bankDeg !== 0
-          ? `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0) rotateZ(${bankDeg.toFixed(2)}deg)`
-          : `translate3d(${curX.toFixed(1)}px, ${curY.toFixed(1)}px, 0)`;
-
-        st.setProperty("--key-screen-h", `${curScreenH.toFixed(1)}px`);
-        st.setProperty("--key-spine-op", spineOp.toFixed(3));
-        st.setProperty("--key-ribbon-op", ribbonOp.toFixed(3));
-        st.setProperty("--key-card-ui-op", cardUiOp.toFixed(3));
-        st.setProperty("--key-img-scale", imgScale.toFixed(3));
-        st.setProperty("--key-img-x", `${imgPanX.toFixed(1)}%`);
-        st.setProperty("--key-img-y", `${imgPanY.toFixed(1)}%`);
-        st.setProperty("--key-img-bright", imgBright.toFixed(3));
-        st.setProperty("--key-gleam", keyGleam.toFixed(3));
-      });
-    }
-  }
-
-  const repTransition = new RepertorioTransition(repertorio, repCards);
-
-  function measureRepertorio() {
-    if (repTheater && repTheater.isOpen) {
-      repTheater.resizeCanvas();
-    }
-    if (repTransition) {
-      repTransition.measure();
-    }
-    if (!repCards || !repCards.length) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    repCards.forEach((c) => {
-      if (c.canvas) {
-        const rect = c.canvas.getBoundingClientRect();
-        if (rect.width > 50) {
-          const w = Math.round(rect.width * dpr);
-          const h = Math.round(rect.height * dpr);
-          if (c.canvas.width !== w || c.canvas.height !== h) {
-            c.canvas.width = w;
-            c.canvas.height = h;
-            if (c.lastIdx >= 0) c.draw(c.lastIdx);
-          }
-        }
-      }
-    });
-  }
-
-  function updateRepertorio(dt) {
-    if (repTransition) {
-      repTransition.update(dt);
-    }
-    if (repTheater && repTheater.isOpen) {
-      repTheater.update(dt);
-      return;
-    }
-    if (!repCards || !repCards.length) return;
-    for (let i = 0; i < repCards.length; i++) {
-      if (repCards[i].isPlaying) {
-        repCards[i].update(dt);
-      }
-    }
-  }
-
-  /* ---------------------------------------------------------
-     Atmósfera sonora (Web Audio)
+     Atmósfera sonora
      --------------------------------------------------------- */
   const soundBtn = $("#soundToggle");
   let audioCtx = null, master = null, filter = null, audioOn = false;
@@ -4808,11 +3549,10 @@
     const now = audioCtx.currentTime;
     master.gain.cancelScheduledValues(now);
     master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), now);
-    master.gain.exponentialRampToValueAtTime(audioOn ? 0.22 : 0.0001, now + (audioOn ? 1.6 : 0.9));
+    master.gain.exponentialRampToValueAtTime(audioOn ? 0.22 : 0.0001, now + (audioOn ? 1.4 : 0.8));
   }
   if (soundBtn) soundBtn.addEventListener("click", toggleAudio);
 
-  /* Pulsos acústicos táctiles suaves para interacción y coreografía */
   function playTactileTick(freq = 520, dur = 0.03, gainVal = 0.035) {
     if (!audioOn || !audioCtx) return;
     try {
@@ -4828,11 +3568,11 @@
       gn.connect(master || audioCtx.destination);
       osc.start(now);
       osc.stop(now + dur);
-    } catch (e) {}
+    } catch (_) {}
   }
 
   /* ---------------------------------------------------------
-     Reloj de Buenos Aires
+     Reloj & Copiar Correo
      --------------------------------------------------------- */
   const clockEl = $("[data-clock]");
   function updateClock() {
@@ -4849,46 +3589,6 @@
   updateClock();
   setInterval(updateClock, 15000);
 
-  /* ---------------------------------------------------------
-     Modal de Fotograma (Darkroom Still Lightbox) + Copiar Correo
-     --------------------------------------------------------- */
-  const smodal = $("#stillModal");
-  const smodalImg = $("[data-smodal-img]", smodal);
-  const smodalCaption = $("[data-smodal-caption]", smodal);
-
-  function openStillModal(src, caption = "") {
-    if (!smodal || !smodalImg || !src) return;
-    smodalImg.src = src;
-    smodalImg.alt = caption || "Fotograma de archivo";
-    if (smodalCaption) smodalCaption.textContent = caption;
-    smodal.classList.add("is-open");
-    smodal.setAttribute("aria-hidden", "false");
-    body.classList.add("modal-open");
-    playTactileTick(580, 0.03, 0.025);
-    if (lenis) lenis.stop();
-  }
-
-  function closeStillModal() {
-    if (!smodal || !smodalImg) return;
-    smodal.classList.remove("is-open");
-    smodal.setAttribute("aria-hidden", "true");
-    body.classList.remove("modal-open");
-    if (lenis) lenis.start();
-  }
-
-  $$("[data-still-src]").forEach((el) => {
-    el.addEventListener("click", (e) => {
-      if (e.target.closest("[data-video-trigger], a")) return;
-      const src = el.dataset.stillSrc;
-      const cap = el.dataset.stillCaption || "";
-      openStillModal(src, cap);
-    });
-  });
-
-  $$("[data-smodal-close]").forEach((el) => {
-    el.addEventListener("click", () => closeStillModal());
-  });
-
   const copyMailBtn = $("[data-copy-mail]");
   const copyMailTxt = $("[data-copy-txt]");
   let copyTimer = null;
@@ -4904,13 +3604,13 @@
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => {
         copyMailBtn.classList.remove("is-copied");
-        if (copyMailTxt) copyMailTxt.textContent = "Copiar dirección al portapapeles";
-      }, 2800);
+        if (copyMailTxt) copyMailTxt.textContent = "Copiar dirección de correo";
+      }, 2600);
     });
   }
 
   /* ---------------------------------------------------------
-     Modal de Reproducción Cinemática (YouTube)
+     Modal de YouTube
      --------------------------------------------------------- */
   const vmodal = $("#videoModal");
   const vmodalFrame = $("[data-vmodal-frame]", vmodal);
@@ -4918,20 +3618,15 @@
 
   function getYouTubeEmbedUrl(rawUrl) {
     if (!rawUrl) return "";
-    let videoId = "";
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = rawUrl.match(regExp);
-    if (match && match[2].length === 11) {
-      videoId = match[2];
-    }
+    const match = rawUrl.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+    const videoId = match && match[2].length === 11 ? match[2] : "";
     return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1` : rawUrl;
   }
 
   function openVideoModal(url, title = "Film cinematográfico") {
     if (!vmodal || !vmodalFrame) return;
-    const embedUrl = getYouTubeEmbedUrl(url);
     if (vmodalTitle) vmodalTitle.textContent = title;
-    vmodalFrame.src = embedUrl;
+    vmodalFrame.src = getYouTubeEmbedUrl(url);
     vmodal.classList.add("is-open");
     vmodal.setAttribute("aria-hidden", "false");
     body.classList.add("modal-open");
@@ -4950,28 +3645,19 @@
   $$("[data-video-trigger]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const url = btn.dataset.videoTrigger;
-      const title = btn.dataset.videoTitle || "Film cinematográfico";
-      openVideoModal(url, title);
+      openVideoModal(btn.dataset.videoTrigger, btn.dataset.videoTitle || "Film cinematográfico");
     });
   });
 
-  $$("[data-vmodal-close]").forEach((el) => {
-    el.addEventListener("click", () => closeVideoModal());
-  });
-
+  $$("[data-vmodal-close]").forEach((el) => el.addEventListener("click", closeVideoModal));
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (vmodal && vmodal.classList.contains("is-open")) closeVideoModal();
-      if (smodal && smodal.classList.contains("is-open")) closeStillModal();
-    }
+    if (e.key === "Escape" && vmodal && vmodal.classList.contains("is-open")) closeVideoModal();
   });
 
   /* ---------------------------------------------------------
-     Referencias de coreografía editorial en scroll
+     Referencias editoriales & Medidas
      --------------------------------------------------------- */
   const navEl = $(".nav");
-  const parallaxEls = $$("[data-parallax]");
   const navSecLinks = $$("[data-nav-sec]").map((a) => ({
     link: a,
     id: a.dataset.navSec,
@@ -4980,219 +3666,13 @@
     height: 0,
   }));
 
-  /* ---------------------------------------------------------
-     Estudio: Secuencia de fondo sutil (Casa del Lago) con velo blanco
-     --------------------------------------------------------- */
-  class EstudioBackground {
-    constructor(secEl) {
-      this.sec = secEl;
-      if (!this.sec) return;
-      this.canvas = $(".statement__bg-canvas", this.sec);
-      if (!this.canvas) return;
-      this.bgEl = $(".statement__bg", this.sec);
-      this.ctx = this.canvas ? this.canvas.getContext("2d", { alpha: false }) : null;
-      this.src = "assets/seq/casa-del-lago";
-      this.count = 134;
-      this.version = "1792737474";
-      this.frames = new Array(this.count);
-      this.loaded = false;
-      this.loading = false;
-      this.hasCanvas = false;
-      this.curP = 0;
-      this.targetP = 0;
-      this.lastPos = -1;
-      this.lastRamp = -1;
-      this.dirty = true;
-      this.token = 0;
-      this.set = null;
-      this.loadedOnce = false;
-
-      this.measure();
-      this.initObserver();
-    }
-
-    pickSet() {
-      return vw / vh < 0.9 ? "pt" : "md";
-    }
-
-    measure() {
-      if (!this.canvas) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = Math.round(vw * dpr);
-      const h = Math.round(vh * dpr);
-      if (this.canvas.width !== w || this.canvas.height !== h) {
-        this.canvas.width = w;
-        this.canvas.height = h;
-        this.dirty = true;
-      }
-      const set = this.pickSet();
-      if (this.set && set !== this.set) {
-        this.set = null;
-        this.frames = new Array(this.count);
-        this.loaded = false;
-        this.loading = false;
-        this.load();
-      }
-    }
-
-    initObserver() {
-      if (!this.sec) return;
-      if ("IntersectionObserver" in window) {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((e) => {
-            if (e.isIntersecting) {
-              this.load();
-              io.disconnect();
-            }
-          });
-        }, { rootMargin: "800px 0px" });
-        io.observe(this.sec);
-      }
-    }
-
-    order() {
-      const n = this.count;
-      const seen = new Uint8Array(n);
-      const out = [0];
-      seen[0] = 1;
-      for (let i = 3; i < n; i += 3) {
-        if (!seen[i]) { seen[i] = 1; out.push(i); }
-      }
-      if (!seen[n - 1]) { seen[n - 1] = 1; out.push(n - 1); }
-      for (let i = 1; i < n; i++) {
-        if (!seen[i]) { seen[i] = 1; out.push(i); }
-      }
-      return out;
-    }
-
-    load() {
-      if (this.loading || this.loaded) return;
-      const set = this.pickSet();
-      this.set = set;
-      this.loading = true;
-      const token = ++this.token;
-      const queue = this.order();
-      let qi = 0;
-      let loadedCount = 0;
-      const parallel = 3;
-
-      const next = () => {
-        if (token !== this.token || qi >= queue.length) return;
-        const i = queue[qi++];
-        const img = new Image();
-        img.decoding = "async";
-        const finish = (ok) => {
-          if (token !== this.token) return;
-          if (ok) {
-            this.frames[i] = img;
-            loadedCount++;
-            if (!this.hasCanvas) {
-              this.draw(0);
-            } else {
-              this.dirty = true;
-            }
-          }
-          if (loadedCount >= this.count) {
-            this.loaded = true;
-            this.loading = false;
-          }
-          next();
-        };
-        img.onload = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => finish(true));
-        img.onerror = () => finish(false);
-        const vParam = this.version ? `?v=${this.version}` : "";
-        img.src = `${this.src}/${set}/${pad(i + 1, 4)}.webp${vParam}`;
-      };
-
-      for (let k = 0; k < parallel; k++) next();
-    }
-
-    nearest(i) {
-      const f = this.frames;
-      if (f[i]) return f[i];
-      for (let d = 1; d < this.count; d++) {
-        if (f[i - d]) return f[i - d];
-        if (f[i + d]) return f[i + d];
-      }
-      return null;
-    }
-
-    draw(pos) {
-      if (!this.ctx || !this.canvas) return;
-      const n = this.count;
-      const f = Math.round(clamp(pos, 0, n - 1));
-
-      const img = this.nearest(f);
-      if (!img || !img.naturalWidth) return;
-      if (this.lastDrawnImg === img && !this.dirty) return;
-
-      const cw = this.canvas.width;
-      const ch = this.canvas.height;
-      if (!cw || !ch) return;
-
-      const iw = img.naturalWidth;
-      const ih = img.naturalHeight;
-      if (!iw || !ih) return;
-
-      const s = Math.max(cw / iw, ch / ih);
-      const dw = iw * s;
-      const dh = ih * s;
-      const x = (cw - dw) / 2;
-      const y = (ch - dh) / 2;
-
-      const ctx = this.ctx;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "low";
-      ctx.drawImage(img, x, y, dw, dh);
-      this.lastDrawnImg = img;
-      this.dirty = false;
-
-      if (!this.hasCanvas) {
-        this.hasCanvas = true;
-        if (this.bgEl) this.bgEl.classList.add("has-canvas");
-      }
-    }
-
-    update(targetProgress) {
-      if (reduce) {
-        if (!this.loadedOnce) {
-          this.loadedOnce = true;
-          this.draw(0);
-        }
-        return;
-      }
-      this.targetP = clamp(targetProgress, 0, 1);
-      this.curP += (this.targetP - this.curP) * 0.18;
-      const framePos = this.curP * (this.count - 1);
-      if (Math.abs(framePos - this.lastPos) > 0.02 || this.dirty) {
-        this.lastPos = framePos;
-        this.dirty = false;
-        this.draw(framePos);
-      }
-
-      // Progresión gradual hacia el blanco denso ("más opaco, menos transparente"):
-      // Al inicio (0.0 -> 0.12) se mantiene visible como ahora.
-      // Entre 0.12 y 0.78 se va haciendo cada vez más blanco y opaco.
-      // Al llegar a 0.78+ (antes del final de la sección) alcanza el blanco denso previo.
-      const rampProgress = clamp((this.curP - 0.12) / 0.66, 0, 1);
-      const rampVal = rampProgress * rampProgress * (3 - 2 * rampProgress);
-      if (this.bgEl && Math.abs(rampVal - this.lastRamp) > 0.005) {
-        this.lastRamp = rampVal;
-        this.bgEl.style.setProperty("--estudio-veil-ramp", rampVal.toFixed(3));
-      }
-    }
-  }
-
-  // #estudio — Carta de Incidencia Solar y Principios Vectoriales
   const estudioSec = $("#estudio");
-  const estudioBg = estudioSec ? new EstudioBackground(estudioSec) : null;
   const solarSun = $("[data-solar-sun]");
   const solarDeg = $("[data-solar-deg]");
   const solarHour = $("[data-solar-hour]");
   const principlesFill = $("[data-principles-fill]");
   const principleCards = $$("[data-principle]");
 
-  // #metodo — Plan de Vuelo y Riel de Fases
   const metodoSec = $("#metodo");
   const stepsGrid = metodoSec ? $(".steps", metodoSec) : null;
   const methodBar = $("[data-method-bar]");
@@ -5200,22 +3680,18 @@
   const methodSteps = $$("[data-method-step]");
   const methodPhase = $("[data-method-phase]");
   const METHOD_PHASE_NAMES = [
-    "FASE 01 · ANÁLISIS & PLANIFICACIÓN",
-    "FASE 02 · DISEÑO DE TRAYECTORIA",
-    "FASE 03 · PRODUCCIÓN EN VUELO",
-    "FASE 04 · EDICIÓN & ENTREGA",
+    "01 · Análisis espacial",
+    "02 · Diseño de trayectoria",
+    "03 · Rodaje FPV",
+    "04 · Máster y entrega 4K",
   ];
   let lastMethodIdx = -1;
 
-  // .quote — Plomada óptica y #contacto — Sello monumental
-  const quoteSec = $(".quote");
-  const quotePlumb = $("[data-quote-plumb]");
   const footSec = $(".foot");
   const footMark = $("[data-foot-mark]");
 
   let estudioDocTop = 0, estudioHeight = 0;
   let stepsGridDocTop = 0, stepsGridHeight = 0;
-  let quoteDocTop = 0, quoteHeight = 0, quoteMarkDocTop = 0, quoteMarkHeight = 0;
   let footDocTop = 0, footHeight = 0;
 
   function measureEditorial() {
@@ -5226,66 +3702,42 @@
         item.height = item.sec.offsetHeight;
       }
     });
-
     if (estudioSec) {
       estudioDocTop = estudioSec.getBoundingClientRect().top + scroll;
       estudioHeight = estudioSec.offsetHeight;
-      if (estudioBg) estudioBg.measure();
     }
     principleCards.forEach((c) => {
       c._docTop = c.getBoundingClientRect().top + scroll;
       c._height = c.offsetHeight;
     });
-
     if (stepsGrid) {
       stepsGridDocTop = stepsGrid.getBoundingClientRect().top + scroll;
       stepsGridHeight = stepsGrid.offsetHeight;
-    }
-
-    if (quoteSec) {
-      quoteDocTop = quoteSec.getBoundingClientRect().top + scroll;
-      quoteHeight = quoteSec.offsetHeight;
-    }
-    if (quoteMark) {
-      quoteMarkDocTop = quoteMark.getBoundingClientRect().top + scroll;
-      quoteMarkHeight = quoteMark.offsetHeight;
     }
     if (footSec) {
       footDocTop = footSec.getBoundingClientRect().top + scroll;
       footHeight = footSec.offsetHeight;
     }
-
     wordBlocks.forEach((b) => {
       b.docTop = b.el.getBoundingClientRect().top + scroll;
       b.height = b.el.offsetHeight;
     });
-
     lineBlocks.forEach((b) => {
       b.docTop = b.el.getBoundingClientRect().top + scroll;
       b.height = b.el.offsetHeight;
     });
-
-    parallaxEls.forEach((el) => {
-      el._docTop = el.getBoundingClientRect().top + scroll;
-      el._height = el.offsetHeight;
-      if (!el._img) el._img = $("img", el) || el.firstElementChild;
-      if (el._f === undefined) el._f = +el.dataset.parallax || 0.06;
-    });
   }
 
-  /* ---------------------------------------------------------
-     Medidas
-     --------------------------------------------------------- */
   function measureSeqs() {
     sequences.forEach((s) => { s.measure(); s.dirty = true; });
-    if (formatSeq) formatSeq.measure();
-    if (choreoSeq) choreoSeq.measure();
+    reels.forEach((r) => r.measure());
+    traceReels.forEach((tr) => { tr.measure(); tr.traceDirty = true; });
   }
+
   function measureAll() {
-    vw = innerWidth; vh = innerHeight;
+    vw = innerWidth;
+    vh = innerHeight;
     root.style.setProperty("--vh", `${vh}px`);
-    measureRepertorio();
-    measureSvc();
     measureEditorial();
     measureSeqs();
   }
@@ -5294,7 +3746,6 @@
   addEventListener("resize", () => {
     clearTimeout(rT);
     rT = setTimeout(() => {
-      // En móvil, la barra del navegador cambia la altura: sólo re-medir si cambia el ancho o mucho la altura.
       if (!finePointer && innerWidth === lastW && Math.abs(innerHeight - vh) < 120) return;
       lastW = innerWidth;
       measureAll();
@@ -5304,6 +3755,9 @@
   if (document.fonts) document.fonts.ready.then(measureAll);
   measureAll();
 
+  /* ---------------------------------------------------------
+     Loop principal (60fps)
+     --------------------------------------------------------- */
   let last = performance.now();
   let lastY = 0, navAcc = 0, currentNavId = "";
   let isNavHidden = false;
@@ -5316,7 +3770,6 @@
     const dy = y - lastY;
     const isScrolling = Math.abs(dy) > 0.05;
 
-    // Cursor con doble resorte inercial (núcleo + anillo desfasado)
     if (finePointer && cursor) {
       cx += (mx - cx) * 0.22;
       cy += (my - cy) * 0.22;
@@ -5324,27 +3777,19 @@
       ry += (my - ry) * 0.11;
       cursor.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
       if (cursorRing) {
-        const ringDx = rx - cx;
-        const ringDy = ry - cy;
         const cVel = Math.hypot(mx - rx, my - ry);
-        const rScale = 1 + Math.min(0.22, cVel * 0.0032);
-        cursorRing.style.setProperty("--ring-dx", `${ringDx.toFixed(1)}px`);
-        cursorRing.style.setProperty("--ring-dy", `${ringDy.toFixed(1)}px`);
-        cursorRing.style.setProperty("--ring-scale", rScale.toFixed(3));
+        cursorRing.style.setProperty("--ring-dx", `${(rx - cx).toFixed(1)}px`);
+        cursorRing.style.setProperty("--ring-dy", `${(ry - cy).toFixed(1)}px`);
+        cursorRing.style.setProperty("--ring-scale", (1 + Math.min(0.22, cVel * 0.0032)).toFixed(3));
       }
     }
 
-    // Navegación: se retira al bajar, vuelve al subir + indicador de capítulo activo
     if (isScrolling) {
       navAcc = Math.sign(dy) === Math.sign(navAcc) ? navAcc + dy : dy;
       let shouldHide = isNavHidden;
-      if (y < 100) {
-        shouldHide = false;
-      } else if (dy < -6 || navAcc < -12) {
-        shouldHide = false;
-      } else if (navAcc > 35 && dy > 0) {
-        shouldHide = true;
-      }
+      if (y < 100) shouldHide = false;
+      else if (dy < -6 || navAcc < -12) shouldHide = false;
+      else if (navAcc > 35 && dy > 0) shouldHide = true;
 
       if (shouldHide !== isNavHidden) {
         isNavHidden = shouldHide;
@@ -5359,79 +3804,52 @@
           const item = navSecLinks[i];
           if (!item.sec) continue;
           const sTop = item.docTop - y;
-          const sBottom = sTop + item.height;
-          if (sTop <= probeY && sBottom >= probeY * 0.5) {
-            activeId = item.id;
-          }
+          if (sTop <= probeY && sTop + item.height >= probeY * 0.5) activeId = item.id;
         }
         if (activeId !== currentNavId) {
           currentNavId = activeId;
-          navSecLinks.forEach((item) => {
-            item.link.classList.toggle("is-current", item.id === activeId);
-          });
+          navSecLinks.forEach((item) => item.link.classList.toggle("is-current", item.id === activeId));
         }
       }
     }
 
-    // #estudio: Carta de incidencia solar + vectores arquitectónicos de 1px + fondo secuencial Casa del Lago
     if (estudioSec) {
       const erTop = estudioDocTop - y;
       const erBottom = erTop + estudioHeight;
       if (erBottom > -80 && erTop < vh + 80) {
         const estP = clamp((vh * 0.85 - erTop) / Math.max(1, estudioHeight + vh * 0.25));
         const axisP = clamp((vh * 0.78 - erTop) / Math.max(1, estudioHeight * 0.88));
-        const sunX = 16 + estP * 68;
-        const sunY = 16 + Math.sin(estP * Math.PI) * 32;
-        estudioSec.style.setProperty("--sun-x", `${sunX.toFixed(1)}%`);
-        estudioSec.style.setProperty("--sun-y", `${sunY.toFixed(1)}%`);
         estudioSec.style.setProperty("--estudio-axis", axisP.toFixed(3));
+        estudioSec.style.setProperty("--solar-dash", (185 * (1 - estP)).toFixed(1));
 
-        if (estudioBg) {
-          const bgSpan = Math.max(1, estudioHeight + vh * 0.2);
-          const bgP = clamp((vh * 0.92 - erTop) / bgSpan, 0, 1);
-          estudioBg.update(bgP);
-        }
-
-        const dash = 185 * (1 - estP);
-        estudioSec.style.setProperty("--solar-dash", dash.toFixed(1));
         if (solarSun) {
           const theta = Math.PI * (1 - estP);
-          const cxSun = 70 + 58 * Math.cos(theta);
-          const cySun = 64 - 58 * Math.sin(theta);
-          solarSun.setAttribute("cx", cxSun.toFixed(1));
-          solarSun.setAttribute("cy", cySun.toFixed(1));
+          solarSun.setAttribute("cx", (70 + 58 * Math.cos(theta)).toFixed(1));
+          solarSun.setAttribute("cy", (64 - 58 * Math.sin(theta)).toFixed(1));
         }
-        if (solarDeg) {
-          const altDeg = Math.round(12 + Math.sin(estP * Math.PI) * 56);
-          solarDeg.textContent = `${altDeg}°`;
-        }
+        if (solarDeg) solarDeg.textContent = `${Math.round(12 + Math.sin(estP * Math.PI) * 56)}°`;
         if (solarHour) {
-          const totalMin = Math.round(450 + estP * 675); // 07:30 -> 18:45 ART
-          const hh = pad(Math.floor(totalMin / 60));
-          const mm = pad(totalMin % 60);
-          solarHour.textContent = `${hh}:${mm} ART`;
+          const totalMin = Math.round(450 + estP * 675);
+          solarHour.textContent = `${pad(Math.floor(totalMin / 60))}:${pad(totalMin % 60)} ART`;
         }
         if (principlesFill) {
-          const prP = clamp((vh * 0.68 - erTop - estudioHeight * 0.32) / Math.max(1, estudioHeight * 0.45));
+          const prP = clamp((vh * 0.68 - erTop - estudioHeight * 0.28) / Math.max(1, estudioHeight * 0.45));
           principlesFill.style.transform = `scaleX(${prP.toFixed(3)})`;
         }
         principleCards.forEach((card, idx) => {
           const crTop = (card._docTop || 0) - y;
           const crH = card._height || 200;
           const cp = clamp((vh * 0.86 - crTop) / Math.max(1, crH * 1.15));
-          const pDash = 120 * (1 - cp);
-          card.style.setProperty("--path-dash", pDash.toFixed(1));
+          card.style.setProperty("--path-dash", (120 * (1 - cp)).toFixed(1));
           card.classList.toggle("is-lit", cp > 0.35);
           if (!reduce) {
             const rel = (crTop + crH * 0.5 - vh * 0.5) / vh;
-            const stagger = (idx - 1) * 6;
-            card.style.setProperty("--prin-y", `${(rel * (8 + stagger)).toFixed(1)}px`);
+            card.style.setProperty("--prin-y", `${(rel * (6 + (idx - 1) * 5)).toFixed(1)}px`);
           }
         });
       }
     }
 
-    // #metodo: Riel de fases y telemetría de rodaje
     if (metodoSec && stepsGrid) {
       const mrTop = stepsGridDocTop - y;
       const mrBottom = mrTop + stepsGridHeight;
@@ -5443,112 +3861,51 @@
           lastMethodIdx = activeIdx;
           methodNodes.forEach((n, idx) => n.classList.toggle("is-active", idx <= activeIdx));
           methodSteps.forEach((s, idx) => s.classList.toggle("is-active-step", idx === activeIdx));
-          if (methodPhase && METHOD_PHASE_NAMES[activeIdx]) {
-            methodPhase.textContent = METHOD_PHASE_NAMES[activeIdx];
-          }
+          if (methodPhase && METHOD_PHASE_NAMES[activeIdx]) methodPhase.textContent = METHOD_PHASE_NAMES[activeIdx];
         }
       }
     }
 
-    // .quote: Plomada arquitectónica + #contacto: Sello especular
-    if (quoteSec && quotePlumb) {
-      const qrTop = quoteDocTop - y;
-      const qrBottom = qrTop + quoteHeight;
-      if (qrBottom > -40 && qrTop < vh + 40) {
-        const qp = clamp((vh * 0.78 - qrTop) / Math.max(1, quoteHeight * 0.75));
-        quotePlumb.style.transform = `scaleY(${qp.toFixed(3)})`;
-      }
-    }
     if (footSec && footMark && !reduce) {
       const frTop = footDocTop - y;
       const frBottom = frTop + footHeight;
       if (frBottom > -60 && frTop < vh + 60) {
         const fp = clamp((vh - frTop) / Math.max(1, footHeight + vh * 0.35));
-        const fy = (1 - fp) * 18;
-        const fShine = 15 + fp * 75;
-        footMark.style.setProperty("--foot-y", `${fy.toFixed(1)}px`);
-        footMark.style.setProperty("--foot-shine", `${fShine.toFixed(1)}%`);
+        footMark.style.setProperty("--foot-y", `${((1 - fp) * 16).toFixed(1)}px`);
+        footMark.style.setProperty("--foot-shine", `${(15 + fp * 75).toFixed(1)}%`);
       }
     }
 
-    // Tinta analógica y foco óptico continuo palabra por palabra (encendido inmediato al asomar)
     wordBlocks.forEach((b) => {
       const rTop = b.docTop - y;
       const rBottom = rTop + b.height;
       if (rTop > vh + 80 || rBottom < -80) return;
-
-      const start = vh * 0.80;
-      const end = vh * 0.42 - b.height * 0.35;
-      const raw = clamp((start - rTop) / Math.max(1, start - end));
-      const p = Math.pow(raw, 1.35);
-
-      if (Math.abs(p - b.lastP) < 0.001) return;
+      const start = vh * 0.85;
+      const end = vh * 0.45 - b.height * 0.3;
+      const p = Math.pow(clamp((start - rTop) / Math.max(1, start - end)), 1.25);
+      if (Math.abs(p - b.lastP) < 0.002) return;
       b.lastP = p;
-
-      const total = b.words.length;
-      const spread = 1.3;
-      const head = p * (total + spread);
-
+      const head = p * (b.words.length + 1.4);
       b.words.forEach((w, i) => {
-        const wProg = clamp((head - i) / spread);
-        const op = (0.28 + wProg * 0.72).toFixed(3);
-        const bl = ((1 - wProg) * 1.4).toFixed(1);
+        const op = (0.35 + clamp((head - i) / 1.4) * 0.65).toFixed(3);
         w.style.setProperty("--o", op);
-        w.style.setProperty("--bl", `${bl}px`);
       });
     });
 
-    // Parallax tipográfico desacoplado en títulos de gran escala
     if (!reduce) {
       lineBlocks.forEach((b) => {
         const rTop = b.docTop - y;
         const rBottom = rTop + b.height;
         if (rBottom < -60 || rTop > vh + 60) return;
         const relY = (rTop + b.height * 0.5 - vh * 0.5) / vh;
-        if (b.lines[0]) {
-          b.lines[0].style.setProperty("--ln-shift", `${(relY * -12).toFixed(1)}px`);
-        }
-        if (b.lines[1]) {
-          b.lines[1].style.setProperty("--ln-shift", `${(relY * 16).toFixed(1)}px`);
-        }
+        if (b.lines[0]) b.lines[0].style.setProperty("--ln-shift", `${(relY * -10).toFixed(1)}px`);
+        if (b.lines[1]) b.lines[1].style.setProperty("--ln-shift", `${(relY * 14).toFixed(1)}px`);
       });
-
-      if (quoteMark) {
-        const qrTop = quoteMarkDocTop - y;
-        const qrBottom = qrTop + quoteMarkHeight;
-        if (qrBottom > -40 && qrTop < vh + 40) {
-          const qShift = (qrTop + quoteMarkHeight * 0.5 - vh * 0.5) * 0.06;
-          quoteMark.style.setProperty("--quote-mark-y", `${qShift.toFixed(1)}px`);
-        }
-      }
     }
-
-    // Parallax interno de imágenes + respiración óptica de lente (.rimg)
-    parallaxEls.forEach((el) => {
-      const rTop = el._docTop - y;
-      const rBottom = rTop + el._height;
-      if (rBottom < 0 || rTop > vh) return;
-      const f = el._f;
-      const centerDist = rTop + el._height / 2 - vh / 2;
-      const off = centerDist * -f;
-      const img = el._img;
-      if (img) {
-        img.style.setProperty("--py", `${off.toFixed(1)}px`);
-        const zoom = 1 + Math.min(0.055, (Math.abs(centerDist) / Math.max(1, vh)) * 0.075);
-        img.style.setProperty("--rimg-zoom", zoom.toFixed(3));
-      }
-    });
 
     sequences.forEach((s) => s.update(dt));
-    if (formatSeq) formatSeq.update(dt);
-    if (choreoSeq) choreoSeq.update(dt);
-    updateSvc();
-    updateRepertorio(dt);
-
-    if (audioOn && filter) {
-      const target = Math.min(420, 160 + Math.abs(dy) * 1.6);
-      filter.frequency.setTargetAtTime(target, audioCtx.currentTime, 0.25);
-    }
+    reels.forEach((r) => r.update(dt));
+    traceReels.forEach((tr) => tr.update(dt));
 
     lastY = y;
     requestAnimationFrame(loop);
