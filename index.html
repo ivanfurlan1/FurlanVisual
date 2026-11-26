@@ -3,9 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
   <title>Furlan — Cine de Arquitectura &amp; Drones FPV</title>
   <meta name="description" content="Producción audiovisual especializada en drones FPV y tomas aéreas estabilizadas para arquitectura, desarrollos y espacios de autor.">
   <meta name="theme-color" content="#0d0d0c">
@@ -13,8 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..500;1,6..96,400..500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="preload" as="image" href="assets/seq/estrenar/poster.jpg?v=1795677196">
-  <link rel="stylesheet" href="css/styles.css?v=2026112605">
+  <link rel="preload" as="image" href="assets/seq/estrenar/poster.jpg?v=1795677196" media="(min-aspect-ratio: 9/10)">
+  <link rel="preload" as="image" href="assets/seq/estrenar/poster-pt.jpg?v=1795677196" media="(max-aspect-ratio: 9/10)">
+  <link rel="stylesheet" href="css/styles.css?v=2026112611">
 </head>
 <body class="is-loading">
 
@@ -48,22 +46,7 @@
       <span class="nav__name">Furlan</span>
       <span class="nav__tag">Cine de arquitectura</span>
     </a>
-    <nav class="nav__links" aria-label="Secciones">
-      <a href="#estudio" class="ulink" data-nav-sec="estudio">Estudio</a>
-      <a href="#propiedad" class="ulink" data-nav-sec="propiedad">Propiedad</a>
-      <a href="#trazado" class="ulink" data-nav-sec="trazado">Trazado</a>
-      <a href="#archivo" class="ulink" data-nav-sec="archivo">Archivo</a>
-      <a href="#repertorio" class="ulink" data-nav-sec="repertorio">Trabajos</a>
-      <a href="#film-03" class="ulink" data-nav-sec="film-03">Recorrido</a>
-      <a href="#film-04" class="ulink" data-nav-sec="film-04">Comercial</a>
-      <a href="#metodo" class="ulink" data-nav-sec="metodo">Método</a>
-      <a href="#contacto" class="ulink" data-nav-sec="contacto">Contacto</a>
-    </nav>
     <div class="nav__actions">
-      <button class="nav__sound" id="soundToggle" type="button" aria-pressed="false" aria-label="Atmósfera sonora" data-magnetic="0.3">
-        <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span class="nav__sound-label">Sonido</span>
-      </button>
       <button class="nav__index" type="button" aria-expanded="false" aria-controls="index" data-magnetic="0.3">
         <span class="nav__index-txt"><span>Índice</span><span>Cerrar</span></span>
         <span class="nav__index-ico" aria-hidden="true"><i></i><i></i></span>
@@ -101,12 +84,12 @@
       </div>
       <div class="index__col index__col--preview" aria-hidden="true">
         <figure class="index__preview">
-          <img src="assets/stills/residencia-los-robles/0265.webp" alt="" class="is-active" decoding="async">
-          <img src="assets/seq/casa-mauro/poster.jpg?v=1795677344" alt="" decoding="async">
-          <img src="assets/stills/casa-greenville/0240.webp" alt="" decoding="async">
-          <img src="assets/seq/casona-lago/poster.jpg?v=1795677209" alt="" decoding="async">
-          <img src="assets/stills/casa-del-lago/0135.webp" alt="" decoding="async">
-          <img src="assets/stills/anacleto/0457.webp" alt="" decoding="async">
+          <img data-src="assets/stills/residencia-los-robles/0265.webp" alt="" class="is-active" loading="lazy" decoding="async">
+          <img data-src="assets/seq/casa-mauro/poster.jpg?v=1795677344" alt="" loading="lazy" decoding="async">
+          <img data-src="assets/stills/casa-greenville/0240.webp" alt="" loading="lazy" decoding="async">
+          <img data-src="assets/seq/casona-lago/poster.jpg?v=1795677209" alt="" loading="lazy" decoding="async">
+          <img data-src="assets/stills/casa-del-lago/0135.webp" alt="" loading="lazy" decoding="async">
+          <img data-src="assets/stills/anacleto/0457.webp" alt="" loading="lazy" decoding="async">
         </figure>
       </div>
       <div class="index__foot">
@@ -422,12 +405,6 @@
             <div class="seq__cover" aria-hidden="true"></div>
             <div class="trace__entry-veil" aria-hidden="true"></div>
           </div>
-        </div>
-
-        <!-- Puente óptico desde el fundido en negro de Recorrido Completo -->
-        <div class="trace__entry-atmosphere" data-tr-entry-atmo aria-hidden="true">
-          <div class="trace__entry-aura"></div>
-          <div class="trace__entry-horizon"></div>
         </div>
 
         <!-- Capa atmósfera & ejes arquitectónicos del Archivo -->
@@ -826,9 +803,9 @@
         <header class="reel__header wrap">
           <div class="reel__header-left">
             <span class="eyebrow">04 · Archivo en movimiento</span>
-            <button class="reel__status" type="button" data-reel-toggle aria-pressed="true" aria-label="Alternar reproducción automática" data-magnetic="0.18">
+            <button class="reel__status" type="button" data-reel-toggle aria-pressed="true" aria-label="Alternar reproducción en bucle" data-magnetic="0.18">
               <i class="reel__status-dot" aria-hidden="true"></i>
-              <span data-reel-mode-lbl>Auto · Activo</span>
+              <span data-reel-mode-lbl>Bucle · Activo</span>
             </button>
           </div>
 
@@ -1005,7 +982,7 @@
             <div class="seq__scrub reel__scrub" role="slider" aria-label="Progreso del archivo en movimiento" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
               <span class="seq__track"><i data-reel-scrub-fill></i></span>
             </div>
-            <span class="reel__dock-hint">Deslizá o tocá un cuadro</span>
+            <span class="reel__dock-hint">Scroll o deslizá ↔ · En bucle</span>
           </div>
         </footer>
         </div>
@@ -1468,6 +1445,6 @@
   </div>
 
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
-  <script src="js/main.js?v=2026112605" defer></script>
+  <script src="js/main.js?v=2026112611" defer></script>
 </body>
 </html>
