@@ -97,6 +97,22 @@
   const netEffType = (netConn && netConn.effectiveType) || "4g";
   const isConstrainedNet = isSaveData || /^(slow-2g|2g|3g)$/i.test(netEffType);
 
+  const BUNDLE_SIZES = {
+    "assets/seq/estrenar": { lg: 29074830, md: 23830090, pt: 16116984 },
+    "assets/seq/casa-mauro": { lg: 18838068, md: 16736070 },
+    "assets/seq/casa-greenville": { lg: 29995132, md: 27212058, pt: 17671942 },
+    "assets/seq/casona-lago": { md: 13435574, sm: 7540574 },
+    "assets/seq/casa-fincas": { sm: 4147320, md: 6841188 },
+    "assets/seq/campo": { sm: 9070654, md: 15540708 },
+    "assets/seq/casa-negra": { sm: 3016516, md: 4901108 },
+    "assets/seq/vonharv3": { sm: 3324872, md: 5234356 },
+    "assets/seq/casona": { sm: 5028672, md: 8038800 },
+    "assets/seq/barrio": { sm: 7149948, md: 11997254 },
+    "assets/seq/casa-violeta": { sm: 8169284, md: 14026464 },
+    "assets/seq/casa-hudson": { lg: 18322668, md: 16002716 },
+    "assets/seq/anacleto": { lg: 33508818, md: 29751324, pt: 22498898 },
+  };
+
   const NET_PROFILE = {
     isLowMem,
     isSaveData,
@@ -105,12 +121,14 @@
     maxReelDpr: isLowMem ? 1.15 : 1.25,
     fetchConcurrency: isSaveData ? 2 : (isConstrainedNet ? 3 : 6),
     backgroundFetchConcurrency: isSaveData ? 0 : (isConstrainedNet ? 1 : 2),
-    decodeConcurrency: isLowMem ? 2 : 3,
-    blobBudgetBytes: (isLowMem ? 110 : 220) * 1024 * 1024,
-    bitmapBehind: isLowMem ? 5 : 8,
-    bitmapAhead: isLowMem ? 14 : 20,
-    reelBitmapBehind: 4,
-    reelBitmapAhead: isLowMem ? 10 : 14,
+    bundleConcurrency: isSaveData ? 2 : (isConstrainedNet ? 2 : 3),
+    decodeConcurrency: isLowMem ? 2 : 4,
+    blobBudgetBytes: (isLowMem ? 160 : 320) * 1024 * 1024,
+    bitmapBehind: isLowMem ? 8 : 12,
+    bitmapAhead: isLowMem ? 22 : 36,
+    reelBitmapBehind: isLowMem ? 4 : 6,
+    reelBitmapAhead: isLowMem ? 14 : 24,
+    keyframeStride: isLowMem ? 0 : 18,
   };
 
   function pickOptimalSet({ portraitAllowed = true, targetWidthPx = 1920 } = {}) {
@@ -473,6 +491,7 @@
      --------------------------------------------------------- */
   const frameBanks = new Map();
   let totalBlobBytes = 0;
+  let isPreloaderDone = false;
   const supportsImageBitmap = typeof window.createImageBitmap === "function";
 
   function decodeBlobToDrawable(blob) {
@@ -519,10 +538,21 @@
       this.lastAnchor = 0;
       this.lastUseAt = performance.now();
       this.listeners = new Set();
+      this.bundleExpectedBytes = (BUNDLE_SIZES[src] && BUNDLE_SIZES[src][set]) || (this.count * 65536);
+      this.bundleBytesTotal = this.bundleExpectedBytes;
+      this.bundleBytesLoaded = 0;
+      this.bundleActive = false;
+      this.bundleDone = false;
+      this.bundleFailed = false;
+      this.bundlePromise = null;
     }
 
     urlFor(idx) {
       return `${this.src}/${this.set}/${pad(idx + 1, 4)}.webp${this.vParam}`;
+    }
+
+    bundleUrl() {
+      return `${this.src}/${this.set}.fseq${this.vParam}`;
     }
 
     subscribe(fn) {
@@ -556,20 +586,35 @@
       return c;
     }
 
+    hasContiguousBlobs(startIdx, minContigFrames = 24) {
+      const s = clamp(Math.round(startIdx), 0, this.count - 1);
+      const remaining = (this.count - 1) - s;
+      const needContig = Math.min(remaining, minContigFrames);
+      for (let i = 0; i <= needContig; i++) {
+        const idx = s + i;
+        if (!this.blobs[idx] && !this.bitmaps[idx] && !this.failed[idx]) return false;
+      }
+      return true;
+    }
+
     hasReadyBuffer(startIdx, minContigFrames = 24, minDecodedFrames = 10) {
       const s = clamp(Math.round(startIdx), 0, this.count - 1);
       const remaining = (this.count - 1) - s;
       const needContig = Math.min(remaining, minContigFrames);
-      const needDecoded = Math.min(remaining + 1, minDecodedFrames);
       let decodedOk = 0;
+      let allBlobsReady = true;
       for (let i = 0; i <= needContig; i++) {
         const idx = s + i;
         if (this.bitmaps[idx] || this.failed[idx]) {
-          if (i < needDecoded) decodedOk++;
+          if (i < minDecodedFrames) decodedOk++;
         } else if (!this.blobs[idx]) {
+          allBlobsReady = false;
           return false;
         }
       }
+      const needDecoded = allBlobsReady && (this.bundleDone || minContigFrames >= 20)
+        ? Math.min(remaining + 1, 2)
+        : Math.min(remaining + 1, minDecodedFrames);
       return decodedOk >= needDecoded;
     }
 
@@ -619,21 +664,30 @@
 
     releaseBlobs(keepHead = 24) {
       const start = keepHead === true ? 24 : (keepHead === false ? 0 : Math.max(0, keepHead));
+      let freed = false;
       for (let i = start; i < this.count; i++) {
         const b = this.blobs[i];
         if (b) {
           this.blobBytes -= b.size;
           totalBlobBytes = Math.max(0, totalBlobBytes - b.size);
           this.blobs[i] = null;
+          freed = true;
         }
+      }
+      if (freed) {
+        this.bundleDone = false;
+        this.bundleBytesLoaded = 0;
+        this.bundlePromise = null;
       }
     }
 
     pruneWindow(anchorIdx, behind, ahead) {
       const minKeep = Math.max(0, anchorIdx - behind - 2);
       const maxKeep = Math.min(this.count - 1, anchorIdx + ahead + 3);
+      const stride = NET_PROFILE.keyframeStride;
       for (let i = 0; i < this.count; i++) {
         if (i < minKeep || i > maxKeep) {
+          if (stride && (i === 0 || i % stride === 0)) continue;
           if (this.bitmaps[i]) this.releaseBitmapAt(i);
         }
       }
@@ -674,6 +728,8 @@
     return bank;
   }
 
+  const FSEQ_CACHE_NAME = "furlan-fseq-v1";
+
   const AssetScheduler = (() => {
     const sources = [];
     const decodeQueue = [];
@@ -682,6 +738,184 @@
     let pumpScheduled = false;
     let lastSweep = 0;
     let lastHeroProgressEmit = 0;
+    let cacheHandlePromise = null;
+
+    function getCacheHandle() {
+      if (NET_PROFILE.isLowMem || typeof caches === "undefined") return Promise.resolve(null);
+      if (!cacheHandlePromise) {
+        cacheHandlePromise = caches.open(FSEQ_CACHE_NAME).catch(() => null);
+      }
+      return cacheHandlePromise;
+    }
+
+    function parseWholeFseqBuffer(bank, buffer) {
+      const bytes = new Uint8Array(buffer);
+      if (bytes.byteLength < 12) throw new Error("FSEQ too short");
+      if (bytes[0] !== 0x46 || bytes[1] !== 0x53 || bytes[2] !== 0x45 || bytes[3] !== 0x51) {
+        throw new Error("Invalid FSEQ magic");
+      }
+      const dv = new DataView(buffer, 0, 12);
+      const count = dv.getUint32(8, true);
+      const headerSize = 12 + count * 4;
+      if (bytes.byteLength < headerSize) throw new Error("FSEQ truncated header");
+
+      const lenView = new DataView(buffer, 12, count * 4);
+      let offset = headerSize;
+      for (let i = 0; i < count && i < bank.count; i++) {
+        const flen = lenView.getUint32(i * 4, true);
+        if (offset + flen > bytes.byteLength) break;
+        const blob = new Blob([bytes.subarray(offset, offset + flen)], { type: "image/webp" });
+        bank.storeBlob(i, blob);
+        offset += flen;
+      }
+    }
+
+    async function loadBundleForBank(bank, { priority = "auto", onProgress = null } = {}) {
+      if (bank.bundleDone) return true;
+      if (bank.bundleFailed) return false;
+      if (bank.bundlePromise) return bank.bundlePromise;
+
+      bank.bundleActive = true;
+      const url = bank.bundleUrl();
+
+      bank.bundlePromise = (async () => {
+        try {
+          const cache = await getCacheHandle();
+          if (cache) {
+            const cached = await cache.match(url);
+            if (cached) {
+              const buf = await cached.arrayBuffer();
+              bank.bundleBytesTotal = Math.max(1, buf.byteLength);
+              bank.bundleBytesLoaded = buf.byteLength;
+              parseWholeFseqBuffer(bank, buf);
+              bank.bundleDone = true;
+              bank.bundleActive = false;
+              if (onProgress) onProgress(bank);
+              schedulePump();
+              return true;
+            }
+          }
+
+          let res = null;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              res = await fetch(url, priority === "high" ? { priority: "high" } : {});
+              if (res.ok) break;
+              if (res.status === 404) break;
+            } catch (_) {
+              if (attempt === 1) throw _;
+            }
+            await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+          }
+
+          if (!res || !res.ok) {
+            throw new Error(`FSEQ HTTP ${res ? res.status : "ERR"}`);
+          }
+
+          const cl = parseInt(res.headers.get("content-length") || "0", 10);
+          if (cl > 0) bank.bundleBytesTotal = cl;
+
+          if (!res.body || !res.body.getReader) {
+            const buf = await res.arrayBuffer();
+            bank.bundleBytesTotal = Math.max(1, buf.byteLength);
+            bank.bundleBytesLoaded = buf.byteLength;
+            parseWholeFseqBuffer(bank, buf);
+            if (cache) {
+              cache.put(url, new Response(buf, { headers: { "Content-Type": "application/octet-stream" } })).catch(() => {});
+            }
+            bank.bundleDone = true;
+            bank.bundleActive = false;
+            if (onProgress) onProgress(bank);
+            schedulePump();
+            return true;
+          }
+
+          const reader = res.body.getReader();
+          const saveChunks = cache ? [] : null;
+          let carry = new Uint8Array(0);
+          let headerParsed = false;
+          let frameCount = 0;
+          let lengths = null;
+          let frameIdx = 0;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value || !value.byteLength) continue;
+
+            if (saveChunks) saveChunks.push(value);
+            bank.bundleBytesLoaded += value.byteLength;
+
+            let buf;
+            if (carry.length > 0) {
+              buf = new Uint8Array(carry.length + value.byteLength);
+              buf.set(carry, 0);
+              buf.set(value, carry.length);
+            } else {
+              buf = value;
+            }
+
+            let pos = 0;
+            if (!headerParsed && buf.length >= 12) {
+              if (buf[0] !== 0x46 || buf[1] !== 0x53 || buf[2] !== 0x45 || buf[3] !== 0x51) {
+                throw new Error("Invalid FSEQ stream");
+              }
+              const dv = new DataView(buf.buffer, buf.byteOffset, 12);
+              frameCount = dv.getUint32(8, true);
+              const headerSize = 12 + frameCount * 4;
+              if (buf.length >= headerSize) {
+                lengths = new Uint32Array(frameCount);
+                const lenView = new DataView(buf.buffer, buf.byteOffset + 12, frameCount * 4);
+                let dataBytes = 0;
+                for (let i = 0; i < frameCount; i++) {
+                  const fl = lenView.getUint32(i * 4, true);
+                  lengths[i] = fl;
+                  dataBytes += fl;
+                }
+                bank.bundleBytesTotal = headerSize + dataBytes;
+                pos = headerSize;
+                headerParsed = true;
+              }
+            }
+
+            if (headerParsed && lengths) {
+              while (frameIdx < frameCount && frameIdx < bank.count) {
+                const need = lengths[frameIdx];
+                if (pos + need > buf.length) break;
+                const blob = new Blob([buf.subarray(pos, pos + need)], { type: "image/webp" });
+                bank.storeBlob(frameIdx, blob);
+                pos += need;
+                frameIdx++;
+              }
+            }
+
+            carry = pos < buf.length ? buf.slice(pos) : new Uint8Array(0);
+            if (onProgress) onProgress(bank);
+            if (typeof window.__onBankProgress === "function") window.__onBankProgress(bank);
+          }
+
+          if (cache && saveChunks) {
+            const fullBlob = new Blob(saveChunks, { type: "application/octet-stream" });
+            cache.put(url, new Response(fullBlob)).catch(() => {});
+          }
+
+          bank.bundleBytesLoaded = Math.max(bank.bundleBytesLoaded, bank.bundleBytesTotal);
+          bank.bundleDone = true;
+          bank.bundleActive = false;
+          if (onProgress) onProgress(bank);
+          if (typeof window.__onBankProgress === "function") window.__onBankProgress(bank);
+          schedulePump();
+          return true;
+        } catch (_) {
+          bank.bundleActive = false;
+          bank.bundleFailed = true;
+          schedulePump();
+          return false;
+        }
+      })();
+
+      return bank.bundlePromise;
+    }
 
     function registerSource(srcObj) {
       if (!sources.includes(srcObj)) sources.push(srcObj);
@@ -689,6 +923,7 @@
 
     function pickNextFrameFromJob(job) {
       const { bank, anchor, start, end } = job;
+      if (bank.bundleActive || bank.bundleDone) return -1;
       const a = clamp(Math.round(anchor), start, end);
       for (let i = a; i <= end; i++) {
         if (!bank.hasData(i) && !bank.fetching.has(i)) return i;
@@ -710,15 +945,16 @@
       return jobs;
     }
 
-    function enqueueDecode(bank, idx, urgent = false) {
+    function enqueueDecode(bank, idx, urgent = false, priorityScore = 1) {
       if (bank.bitmaps[idx] || bank.decoding.has(idx) || bank.queuedDecode.has(idx) || !bank.blobs[idx]) return;
       bank.queuedDecode.add(idx);
+      const item = { bank, idx, urgent: !!urgent, priorityScore };
       if (urgent) {
-        decodeQueue.unshift({ bank, idx, urgent: true });
+        decodeQueue.unshift(item);
       } else {
-        decodeQueue.push({ bank, idx, urgent: false });
+        decodeQueue.push(item);
       }
-      if (decodeQueue.length > 48) {
+      if (decodeQueue.length > 72) {
         const dropped = decodeQueue.pop();
         if (dropped) dropped.bank.queuedDecode.delete(dropped.idx);
       }
@@ -764,23 +1000,49 @@
 
         const isNearReel = job.isReel && job.priority > 1.25;
         const behind = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapBehind : (isNearReel ? 1 : 2)) : NET_PROFILE.bitmapBehind;
-        const ahead = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapAhead : (isNearReel ? 3 : 10)) : (job.priority === 0 ? NET_PROFILE.bitmapAhead : 14);
+        const ahead = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapAhead : (isNearReel ? 4 : 12)) : (job.priority === 0 ? NET_PROFILE.bitmapAhead : 18);
         const a = clamp(Math.round(job.anchor), job.start, job.end);
         job.bank.lastAnchor = a;
         job.bank.pruneWindow(a, behind, ahead);
 
-        const winStart = Math.max(job.start, a - Math.min(3, behind));
+        const winStart = Math.max(job.start, a - Math.min(4, behind));
         const winEnd = Math.min(job.end, a + ahead);
         for (let f = a; f <= winEnd; f++) {
           if (job.bank.blobs[f] && !job.bank.bitmaps[f] && !job.bank.decoding.has(f) && !job.bank.queuedDecode.has(f)) {
-            enqueueDecode(job.bank, f, f - a <= 4);
+            enqueueDecode(job.bank, f, f - a <= 5 && job.priority === 0, job.priority);
           }
         }
         for (let f = a - 1; f >= winStart; f--) {
           if (job.bank.blobs[f] && !job.bank.bitmaps[f] && !job.bank.decoding.has(f) && !job.bank.queuedDecode.has(f)) {
-            enqueueDecode(job.bank, f, false);
+            enqueueDecode(job.bank, f, false, job.priority);
           }
         }
+        if (NET_PROFILE.keyframeStride && !isNearReel) {
+          const stride = NET_PROFILE.keyframeStride;
+          for (let f = 0; f < job.bank.count; f += stride) {
+            if (job.bank.blobs[f] && !job.bank.bitmaps[f] && !job.bank.decoding.has(f) && !job.bank.queuedDecode.has(f)) {
+              enqueueDecode(job.bank, f, false, job.priority + 0.5);
+            }
+          }
+        }
+      }
+
+      if (decodeQueue.length > 1) {
+        for (let i = decodeQueue.length - 1; i >= 0; i--) {
+          const item = decodeQueue[i];
+          const job = activeBankMap.get(item.bank.key);
+          if (!job && !item.urgent) {
+            item.bank.queuedDecode.delete(item.idx);
+            decodeQueue.splice(i, 1);
+          }
+        }
+        decodeQueue.sort((a, b) => {
+          if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+          const pa = a.priorityScore || 0;
+          const pb = b.priorityScore || 0;
+          if (Math.abs(pa - pb) > 0.1) return pa - pb;
+          return Math.abs(a.idx - a.bank.lastAnchor) - Math.abs(b.idx - b.bank.lastAnchor);
+        });
       }
 
       const now = performance.now();
@@ -788,7 +1050,13 @@
         lastSweep = now;
         frameBanks.forEach((bank) => {
           if (!activeBankMap.has(bank.key)) {
-            bank.releaseBitmaps();
+            const keepStride = NET_PROFILE.keyframeStride;
+            for (let i = 0; i < bank.count; i++) {
+              if (keepStride && (i === 0 || i % keepStride === 0)) continue;
+              if (bank.bitmaps[i]) bank.releaseBitmapAt(i);
+            }
+            bank.decoding.clear();
+            bank.queuedDecode.clear();
           }
         });
 
@@ -812,6 +1080,15 @@
       pumpScheduled = false;
       const jobs = gatherJobs();
       syncActiveWindows(jobs);
+
+      if (!isPreloaderDone) return;
+
+      for (let i = 0; i < jobs.length; i++) {
+        const b = jobs[i].bank;
+        if (!b.bundleDone && !b.bundleActive && !b.bundleFailed && jobs[i].priority <= 1.65) {
+          loadBundleForBank(b, { priority: jobs[i].priority === 0 ? "high" : "auto" });
+        }
+      }
 
       while (activeFetches < NET_PROFILE.fetchConcurrency) {
         let chosenJob = null;
@@ -850,7 +1127,7 @@
             const aheadLimit = chosenJob.isReel ? NET_PROFILE.reelBitmapAhead : NET_PROFILE.bitmapAhead;
             const behindLimit = chosenJob.isReel ? NET_PROFILE.reelBitmapBehind : NET_PROFILE.bitmapBehind;
             if (chosenJob.priority <= 1.65 && chosenIdx >= bank.lastAnchor - behindLimit && chosenIdx <= bank.lastAnchor + aheadLimit) {
-              enqueueDecode(bank, chosenIdx, dist <= 6);
+              enqueueDecode(bank, chosenIdx, dist <= 6, chosenJob.priority);
             }
             if (typeof window.__onBankProgress === "function") {
               const now = performance.now();
@@ -887,6 +1164,7 @@
       registerSource,
       schedulePump,
       enqueueDecode,
+      loadBundleForBank,
     };
   })();
 
@@ -1390,13 +1668,12 @@
     }
 
     setVisualFilter(blurPx, grayVal = 0) {
-      // Evita Gaussian blur GPU en vivo sobre canvas 1080p+; mantiene grayscale ligero con saltos discretos
-      const g = Math.max(0, Math.min(1, Math.round(grayVal * 20) / 20));
-      if (g === this.lastGray) return;
-      this.lastGray = g;
-      const f = g > 0.02 ? `grayscale(${g})` : "none";
-      this.canvas.style.filter = f;
-      if (this.posterImg) this.posterImg.style.filter = f;
+      // Mantiene el canvas libre de filtros CSS en tiempo real para máximo framerate GPU
+      if (this.lastGray !== 0) {
+        this.lastGray = 0;
+        this.canvas.style.filter = "none";
+        if (this.posterImg) this.posterImg.style.filter = "none";
+      }
     }
 
     setText(el, o, ty) {
@@ -1778,6 +2055,7 @@
           ? bank.hasReadyBuffer(curIdx, 6, 3)
           : bank.hasReadyBuffer(curIdx, startNeed, startDecode);
         const isWaitingBuf = !this.isBufferReady
+          && !bank.hasContiguousBlobs(curIdx, startNeed)
           && !this.autoPlayPaused
           && !this.autoPlaySuspended
           && (this.isHero ? (rawP >= 0.012) : (viewportEntry >= 0.94 || rawP >= -0.06))
@@ -3017,8 +3295,11 @@
       return pickOptimalSet({ portraitAllowed: true, targetWidthPx });
     }
 
-    pickReelSet() {
-      return "md";
+    pickReelSet(idx = 0) {
+      if (idx === 0) {
+        return (NET_PROFILE.isConstrainedNet || NET_PROFILE.isLowMem) ? "sm" : "md";
+      }
+      return "sm";
     }
 
     initCards() {
@@ -3531,12 +3812,11 @@
     }
 
     setTraceFilter(blurPx, grayVal = 0) {
-      const g = Math.max(0, Math.min(1, Math.round(grayVal * 20) / 20));
-      if (g === this.lastTraceGray) return;
-      this.lastTraceGray = g;
-      const f = g > 0.02 ? `grayscale(${g})` : "none";
-      this.traceCanvas.style.filter = f;
-      if (this.tracePosterImg) this.tracePosterImg.style.filter = f;
+      if (this.lastTraceGray !== 0) {
+        this.lastTraceGray = 0;
+        this.traceCanvas.style.filter = "none";
+        if (this.tracePosterImg) this.tracePosterImg.style.filter = "none";
+      }
     }
 
     loadCard(card) {
@@ -3547,10 +3827,11 @@
 
     loadNeighborhood(centerIdx) {
       if (!this.cards.length) return;
-      const set = this.pickReelSet(0);
       const order = [centerIdx, centerIdx + 1, centerIdx - 1, centerIdx + 2];
       order.forEach((idx) => {
-        if (idx >= 0 && idx < this.cards.length) attachCardBank(this.cards[idx], set);
+        if (idx >= 0 && idx < this.cards.length) {
+          attachCardBank(this.cards[idx], this.pickReelSet(idx));
+        }
       });
       AssetScheduler.schedulePump();
     }
@@ -3565,7 +3846,6 @@
       const jobs = [];
       const needTrace = rawP < BRIDGE_END_P + 0.05;
       const traceBank = needTrace ? (this.traceBank || this.ensureTraceBank()) : null;
-      const set = this.pickReelSet(0);
       const center = this.activeIdx >= 0 ? this.activeIdx : 0;
 
       if (traceBank && needTrace) {
@@ -3604,7 +3884,7 @@
       if (!inView) {
         if (!NET_PROFILE.isSaveData && this.cards[0]) {
           const c0 = this.cards[0];
-          const b0 = attachCardBank(c0, set);
+          const b0 = attachCardBank(c0, this.pickReelSet(0));
           const prio = dist <= viewH * 1.6 ? 1.3 : 2.9 + Math.min(1.5, dist / Math.max(1, viewH * 6));
           jobs.push({
             bank: b0,
@@ -3623,7 +3903,7 @@
         // Mientras corre Planificación en Planta, precargar por completo la primera tarjeta del Reel y arrancar la 2da
         if (this.cards[0]) {
           const c0 = this.cards[0];
-          const b0 = attachCardBank(c0, set);
+          const b0 = attachCardBank(c0, this.pickReelSet(0));
           jobs.push({
             bank: b0,
             priority: 0.45,
@@ -3636,7 +3916,7 @@
         }
         if (this.cards[1] && !NET_PROFILE.isSaveData) {
           const c1 = this.cards[1];
-          const b1 = attachCardBank(c1, set);
+          const b1 = attachCardBank(c1, this.pickReelSet(1));
           jobs.push({
             bank: b1,
             priority: 1.1,
@@ -3652,7 +3932,7 @@
 
       this.cards.forEach((card, i) => {
         const d = Math.abs(i - center);
-        const bank = attachCardBank(card, set);
+        const bank = attachCardBank(card, this.pickReelSet(card.idx));
         const startIdx = card.from - 1;
         const endIdx = card.to - 1;
         const anchorIdx = clamp(Math.round(card.curFrame) - 1, startIdx, endIdx);
@@ -4144,7 +4424,9 @@
           ? (this.traceBufferReady && this.firstCardBufferReady)
           : this.traceBufferReady;
 
-        const isWaitingBuf = !readyToAdvance && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
+        const blobsMissing = !traceBank.hasContiguousBlobs(curTraceIdx, 36)
+          || (inBridge && c0Bank && !c0Bank.hasContiguousBlobs(firstCard.from - 1, 36));
+        const isWaitingBuf = !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
         let waitPct = 100;
         if (isWaitingBuf) {
           const tPct = traceBank.getBufferPercent(curTraceIdx, 36);
@@ -4453,7 +4735,7 @@
           }
 
           if (card.bufEl) {
-            const waitingCard = isCenterCard && !card.isLoopBuffered;
+            const waitingCard = isCenterCard && !card.isLoopBuffered && (!cardBank || !cardBank.hasContiguousBlobs(loopIdx, 28));
             if (!waitingCard) {
               card.bufWaitSince = 0;
               if (card.bufVisible) {
@@ -4532,23 +4814,34 @@
   const traceReels = $$(".trace-reel").map((el) => new UnifiedTraceReel(el));
 
   /* ---------------------------------------------------------
-     PRELOADER INTELIGENTE (Buffer contiguo de apertura + decodificación GPU)
+     PRELOADER GLOBAL POR STREAMING (.fseq) + PRE-DECODIFICACIÓN GPU
+     Carga todas las secuencias en memoria con progreso real por bytes
+     para garantizar reproducción 100% fluida desde el primer scroll.
      --------------------------------------------------------- */
   const loaderCount = $("[data-loader-count]");
   const loaderBar = $("[data-loader-bar]");
+  const loaderStatus = $("[data-loader-status]");
   const tStart = performance.now();
   let loadTarget = 0, loadShown = 0, ready = false;
+  let lastLoaderStatusText = "";
+
+  function setLoaderStatus(txt) {
+    if (loaderStatus && txt !== lastLoaderStatusText) {
+      lastLoaderStatusText = txt;
+      loaderStatus.textContent = txt;
+    }
+  }
 
   function tickLoader(now) {
     if (ready) return;
-    const minT = reduce ? 0 : 850;
+    const minT = reduce ? 0 : 480;
     const timeCap = clamp((now - tStart) / minT);
     const goal = Math.min(loadTarget, reduce ? 1 : timeCap);
-    loadShown += (goal - loadShown) * 0.16;
-    if (goal - loadShown < 0.004) loadShown = goal;
+    loadShown += (goal - loadShown) * 0.22;
+    if (goal - loadShown < 0.0025) loadShown = goal;
     if (loaderCount) loaderCount.textContent = pad(Math.round(loadShown * 100), 3);
     if (loaderBar) loaderBar.style.transform = `scaleX(${loadShown.toFixed(4)})`;
-    if (loadShown >= 0.996) return setReady();
+    if (loadShown >= 0.996 && loadTarget >= 0.999) return setReady();
     requestAnimationFrame(tickLoader);
   }
   requestAnimationFrame(tickLoader);
@@ -4556,10 +4849,12 @@
   function setReady() {
     if (ready) return;
     ready = true;
+    isPreloaderDone = true;
     window.__onBankProgress = null;
     window.__onBankDecode = null;
     if (loaderCount) loaderCount.textContent = "100";
     if (loaderBar) loaderBar.style.transform = "scaleX(1)";
+    setLoaderStatus("· Listo");
     body.classList.add("is-loaded");
     const openCurtains = () => {
       body.classList.add("is-ready");
@@ -4571,39 +4866,146 @@
     if (reduce) {
       openCurtains();
     } else {
-      setTimeout(openCurtains, 260);
+      setTimeout(openCurtains, 240);
     }
   }
 
   const getObsRoot = () => (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
 
-  if (sequences.length) {
-    const heroSeq = sequences[0];
-    const heroBank = heroSeq.ensureBank();
-    const preloadGoal = Math.min(heroSeq.count, NET_PROFILE.isConstrainedNet ? 36 : 72);
-    const decodeGoal = Math.min(24, preloadGoal);
-
-    const updateHeroPreloadProgress = () => {
-      if (ready) return;
-      const loadedContig = heroBank.contiguousLoadedFrom(0);
-      const decodedContig = heroBank.contiguousDecodedFrom(0);
-      const fetchP = clamp(loadedContig / preloadGoal, 0, 1);
-      const decodeP = clamp(decodedContig / decodeGoal, 0, 1);
-      loadTarget = Math.max(loadTarget, fetchP * 0.85 + decodeP * 0.15);
-      if (loadedContig >= preloadGoal && decodedContig >= decodeGoal) {
-        loadTarget = 1;
-      }
+  (function startGlobalPreload() {
+    const items = [];
+    const seenKeys = new Set();
+    const addBank = (bank, startIdx = 0) => {
+      if (!bank || seenKeys.has(bank.key)) return;
+      seenKeys.add(bank.key);
+      items.push({ bank, startIdx });
     };
 
-    window.__onBankProgress = (b) => { if (b === heroBank) updateHeroPreloadProgress(); };
-    window.__onBankDecode = (b) => { if (b === heroBank) updateHeroPreloadProgress(); };
-    AssetScheduler.schedulePump();
+    if (sequences[0]) addBank(sequences[0].ensureBank(), 0);
+    if (sequences[1]) addBank(sequences[1].ensureBank(), 0);
+    if (traceReels[0]) {
+      addBank(traceReels[0].ensureTraceBank(), 0);
+      const tr = traceReels[0];
+      if (tr.cards[0]) addBank(attachCardBank(tr.cards[0], tr.pickReelSet(0)), tr.cards[0].from - 1);
+    }
+    if (sequences[2]) addBank(sequences[2].ensureBank(), 0);
+    if (sequences[3]) addBank(sequences[3].ensureBank(), 0);
 
-    // Tope de seguridad sólo para conexiones extremadamente lentas u offline
-    setTimeout(() => { if (!ready) loadTarget = 1; }, 10000);
-  } else {
-    loadTarget = 1;
-  }
+    if (!NET_PROFILE.isSaveData && traceReels[0]) {
+      const tr = traceReels[0];
+      for (let i = 1; i < tr.cards.length; i++) {
+        const c = tr.cards[i];
+        addBank(attachCardBank(c, tr.pickReelSet(c.idx)), c.from - 1);
+      }
+    }
+
+    if (!items.length) {
+      loadTarget = 1;
+      return;
+    }
+
+    const INITIAL_DECODE_PER_BANK = 12;
+    let allStreamsDone = false;
+    let finishGraceTimer = 0;
+
+    function queueInitialDecodes(bank, startIdx) {
+      const end = Math.min(bank.count - 1, startIdx + INITIAL_DECODE_PER_BANK - 1);
+      for (let f = startIdx; f <= end; f++) {
+        if (bank.blobs[f]) AssetScheduler.enqueueDecode(bank, f, bank === items[0].bank, 0);
+      }
+      if (NET_PROFILE.keyframeStride) {
+        for (let f = 0; f < bank.count; f += NET_PROFILE.keyframeStride) {
+          if (bank.blobs[f]) AssetScheduler.enqueueDecode(bank, f, false, 0.8);
+        }
+      }
+    }
+
+    function computeGlobalProgress() {
+      if (ready) return;
+      let loadedBytes = 0;
+      let expectedBytes = 0;
+      let decodedInit = 0;
+      let totalInit = 0;
+      let doneCount = 0;
+
+      for (let i = 0; i < items.length; i++) {
+        const { bank, startIdx } = items[i];
+        const bTotal = Math.max(1, bank.bundleBytesTotal || bank.bundleExpectedBytes);
+        expectedBytes += bTotal;
+
+        if (bank.bundleDone) {
+          loadedBytes += bTotal;
+          doneCount++;
+        } else if (bank.bundleFailed) {
+          const loadedFrames = bank.contiguousLoadedFrom(0);
+          loadedBytes += Math.round((loadedFrames / bank.count) * bTotal);
+          if (loadedFrames >= bank.count) doneCount++;
+        } else {
+          loadedBytes += Math.min(bTotal, bank.bundleBytesLoaded);
+        }
+
+        const initSpan = Math.min(INITIAL_DECODE_PER_BANK, bank.count - startIdx);
+        totalInit += initSpan;
+        for (let f = startIdx; f < startIdx + initSpan; f++) {
+          if (bank.bitmaps[f] || bank.failed[f]) decodedInit++;
+        }
+      }
+
+      const byteFrac = clamp(loadedBytes / Math.max(1, expectedBytes), 0, 1);
+      const decFrac = clamp(decodedInit / Math.max(1, totalInit), 0, 1);
+      const nextTarget = clamp(byteFrac * 0.94 + decFrac * 0.06, 0, 1);
+      loadTarget = Math.max(loadTarget, nextTarget);
+
+      if (byteFrac < 0.995) {
+        const loadedMB = (loadedBytes / (1024 * 1024)).toFixed(0);
+        const totalMB = (expectedBytes / (1024 * 1024)).toFixed(0);
+        setLoaderStatus(`· ${loadedMB} / ${totalMB} MB`);
+      } else if (decFrac < 1) {
+        setLoaderStatus("· Optimizando secuencias");
+      }
+
+      if (doneCount >= items.length) {
+        if (!allStreamsDone) {
+          allStreamsDone = true;
+          for (let i = 0; i < items.length; i++) {
+            queueInitialDecodes(items[i].bank, items[i].startIdx);
+          }
+          finishGraceTimer = setTimeout(() => {
+            if (!ready) loadTarget = 1;
+          }, 2400);
+        }
+        if (decodedInit >= totalInit) {
+          clearTimeout(finishGraceTimer);
+          loadTarget = 1;
+        }
+      }
+    }
+
+    window.__onBankProgress = () => computeGlobalProgress();
+    window.__onBankDecode = () => computeGlobalProgress();
+
+    let nextIdx = 0;
+    const workerCount = Math.min(NET_PROFILE.bundleConcurrency, items.length);
+    async function runWorker(workerId) {
+      while (nextIdx < items.length && !ready) {
+        const idx = nextIdx++;
+        const { bank, startIdx } = items[idx];
+        const ok = await AssetScheduler.loadBundleForBank(bank, {
+          priority: idx <= 1 ? "high" : "auto",
+          onProgress: () => computeGlobalProgress(),
+        });
+        if (ok) {
+          queueInitialDecodes(bank, startIdx);
+        }
+        computeGlobalProgress();
+      }
+    }
+
+    for (let w = 0; w < workerCount; w++) {
+      runWorker(w);
+    }
+    computeGlobalProgress();
+  })();
 
   /* ---------------------------------------------------------
      Revelados inmediatos

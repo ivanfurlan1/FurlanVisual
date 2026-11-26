@@ -246,6 +246,11 @@ em { font-style: italic; }
   color: var(--stone);
   opacity: 0;
   animation: loaderFade 0.5s var(--ease) 0.22s forwards;
+  white-space: nowrap;
+}
+.loader__status {
+  color: rgba(236, 232, 225, 0.56);
+  margin-left: 4px;
 }
 
 .loader__line {
