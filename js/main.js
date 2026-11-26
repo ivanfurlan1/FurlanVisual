@@ -23,6 +23,58 @@
       el.textContent = val;
     }
   };
+  const setVisCached = (el, vis) => {
+    if (el && el._vis !== vis) {
+      el._vis = vis;
+      el.style.visibility = vis;
+    }
+  };
+  const setOpacityCached = (el, opStr) => {
+    if (el && el._op !== opStr) {
+      el._op = opStr;
+      el.style.opacity = opStr;
+    }
+  };
+
+  function createBufferBadge(container, labelPrefix = "Cargando secuencia") {
+    if (!container) return null;
+    const el = document.createElement("div");
+    el.className = "seq-buffer";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = `<span class="seq-buffer__dot"></span><span class="seq-buffer__txt">${labelPrefix}</span><span class="seq-buffer__pct">0%</span>`;
+    container.appendChild(el);
+    return {
+      el,
+      pctEl: el.querySelector(".seq-buffer__pct"),
+      visible: false,
+      lastPct: -1,
+      waitSince: 0,
+    };
+  }
+
+  function syncBufferBadge(badge, waiting, pct) {
+    if (!badge) return;
+    if (!waiting) {
+      badge.waitSince = 0;
+      if (badge.visible) {
+        badge.visible = false;
+        badge.el.classList.remove("is-visible");
+      }
+      return;
+    }
+    const now = performance.now();
+    if (!badge.waitSince) badge.waitSince = now;
+    if (now - badge.waitSince < 180) return;
+    if (!badge.visible) {
+      badge.visible = true;
+      badge.el.classList.add("is-visible");
+    }
+    const rounded = Math.max(0, Math.min(99, Math.round(pct || 0)));
+    if (badge.pctEl && rounded !== badge.lastPct) {
+      badge.lastPct = rounded;
+      badge.pctEl.textContent = `${rounded}%`;
+    }
+  }
 
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -52,8 +104,9 @@
     maxCanvasDpr: isLowMem ? 1.15 : 1.35,
     maxReelDpr: isLowMem ? 1.15 : 1.25,
     fetchConcurrency: isSaveData ? 2 : (isConstrainedNet ? 3 : 6),
+    backgroundFetchConcurrency: isSaveData ? 0 : (isConstrainedNet ? 1 : 2),
     decodeConcurrency: isLowMem ? 2 : 3,
-    blobBudgetBytes: (isLowMem ? 72 : 128) * 1024 * 1024,
+    blobBudgetBytes: (isLowMem ? 110 : 220) * 1024 * 1024,
     bitmapBehind: isLowMem ? 5 : 8,
     bitmapAhead: isLowMem ? 14 : 20,
     reelBitmapBehind: 4,
@@ -112,7 +165,12 @@
     vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
 
   let isUserTouching = false;
-  window.addEventListener("touchstart", () => { isUserTouching = true; }, { passive: true });
+  let navigatingUntil = 0;
+  window.addEventListener("wheel", () => { navigatingUntil = 0; }, { passive: true });
+  window.addEventListener("touchstart", () => {
+    isUserTouching = true;
+    navigatingUntil = 0;
+  }, { passive: true });
   window.addEventListener("touchend", () => { isUserTouching = false; }, { passive: true });
   window.addEventListener("touchcancel", () => { isUserTouching = false; }, { passive: true });
 
@@ -125,6 +183,10 @@
   function scrollToTarget(target, opts = {}) {
     const el = typeof target === "string" ? $(target) : target;
     const y = typeof target === "number" ? target : (el ? el.getBoundingClientRect().top + scrollY() : 0);
+    if (opts.isNavigation) {
+      const durMs = Math.round(((opts.duration || 1.35) + 0.25) * 1000);
+      navigatingUntil = opts.immediate ? 0 : (performance.now() + durMs);
+    }
     if (scrollContainer && isVerticalScroller()) {
       if (reduce || opts.immediate) {
         scrollContainer.scrollTop = y;
@@ -318,16 +380,27 @@
      --------------------------------------------------------- */
   function runHybridScrollEngine({ top, len, dt, viewportEntry, rawP, baseDuration, speedScale = 1, peekPx: customPeekPx, minSpeed = 0.45, state, hasFrames, isHero }) {
     if (reduce) return;
+    if (performance.now() < navigatingUntil) {
+      state.lastTrackedY = scrollY();
+      state.subpixelAcc = 0;
+      state.upScrollAcc = 0;
+      return;
+    }
     const dtSec = Math.min(dt || 0.016, 0.04);
     const peekPx = customPeekPx !== undefined ? customPeekPx : Math.round(Math.min(vh * 0.13, 105));
     const endY = top + len + peekPx;
     const y = scrollY();
-    const isFullyInView = isHero ? (rawP >= 0.025) : (viewportEntry >= 0.975 || rawP >= -0.03);
+    const isFullyInView = isHero ? (rawP >= 0.012) : (viewportEntry >= 0.94 || rawP >= -0.06);
     const inActiveZone = isFullyInView && y < endY - 0.5;
 
     if (!inActiveZone || state.autoPlayPaused || !hasFrames) {
-      if (y >= endY - 0.5 || (!isHero && viewportEntry < 0.8) || (isHero && rawP < 0.015)) {
+      if (y >= endY - 0.5 || (!isHero && viewportEntry < 0.8) || (isHero && rawP < 0.01)) {
         state.autoPlaySuspended = false;
+        state.subpixelAcc = 0;
+        state.upScrollAcc = 0;
+        state.lastTrackedY = undefined;
+      } else if (!hasFrames && inActiveZone) {
+        state.lastTrackedY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : y;
         state.subpixelAcc = 0;
       }
       return;
@@ -346,8 +419,8 @@
       const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
       const userDiff = targetY - y;
 
-      if (userDiff < -1.5) state.autoPlaySuspended = true;
-      else if (userDiff > 2.0) state.autoPlaySuspended = false;
+      if (userDiff < -8.0) state.autoPlaySuspended = true;
+      else if (userDiff > 2.5) state.autoPlaySuspended = false;
 
       if (!state.autoPlaySuspended) {
         const userForwardLead = Math.max(0, userDiff);
@@ -365,10 +438,14 @@
       const scrollDelta = currentY - state.lastTrackedY;
       state.lastTrackedY = currentY;
 
-      if (scrollDelta < -1.5) {
-        state.autoPlaySuspended = true;
-        state.subpixelAcc = 0;
+      if (scrollDelta < -0.5) {
+        state.upScrollAcc = (state.upScrollAcc || 0) + scrollDelta;
+        if (state.upScrollAcc <= -8.0) {
+          state.autoPlaySuspended = true;
+          state.subpixelAcc = 0;
+        }
       } else if (scrollDelta > 2.0) {
+        state.upScrollAcc = 0;
         state.autoPlaySuspended = false;
       }
 
@@ -434,6 +511,7 @@
       this.blobs = new Array(this.count).fill(null);
       this.bitmaps = new Array(this.count).fill(null);
       this.failed = new Uint8Array(this.count);
+      this.retries = new Uint8Array(this.count);
       this.fetching = new Set();
       this.decoding = new Set();
       this.queuedDecode = new Set();
@@ -478,19 +556,37 @@
       return c;
     }
 
-    hasContiguousAhead(startIdx, minAhead = 6) {
+    hasReadyBuffer(startIdx, minContigFrames = 24, minDecodedFrames = 10) {
       const s = clamp(Math.round(startIdx), 0, this.count - 1);
-      const end = Math.min(this.count - 1, s + minAhead);
-      const needDecoded = Math.min(3, end - s + 1);
+      const remaining = (this.count - 1) - s;
+      const needContig = Math.min(remaining, minContigFrames);
+      const needDecoded = Math.min(remaining + 1, minDecodedFrames);
       let decodedOk = 0;
-      for (let i = s; i <= end; i++) {
-        if (this.bitmaps[i] || this.failed[i]) {
-          if (i - s < needDecoded) decodedOk++;
-        } else if (!this.blobs[i]) {
+      for (let i = 0; i <= needContig; i++) {
+        const idx = s + i;
+        if (this.bitmaps[idx] || this.failed[idx]) {
+          if (i < needDecoded) decodedOk++;
+        } else if (!this.blobs[idx]) {
           return false;
         }
       }
       return decodedOk >= needDecoded;
+    }
+
+    getBufferPercent(startIdx, targetFrames = 36) {
+      const s = clamp(Math.round(startIdx), 0, this.count - 1);
+      const span = Math.max(1, Math.min(this.count - s, targetFrames));
+      let readyCount = 0;
+      for (let i = 0; i < span; i++) {
+        const idx = s + i;
+        if (this.bitmaps[idx] || this.failed[idx]) readyCount += 1;
+        else if (this.blobs[idx]) readyCount += 0.72;
+      }
+      return (readyCount / span) * 100;
+    }
+
+    hasContiguousAhead(startIdx, minAhead = 6) {
+      return this.hasReadyBuffer(startIdx, minAhead, 3);
     }
 
     storeBlob(idx, blob) {
@@ -521,8 +617,8 @@
       this.queuedDecode.clear();
     }
 
-    releaseBlobs(keepZero = true) {
-      const start = keepZero ? 1 : 0;
+    releaseBlobs(keepHead = 24) {
+      const start = keepHead === true ? 24 : (keepHead === false ? 0 : Math.max(0, keepHead));
       for (let i = start; i < this.count; i++) {
         const b = this.blobs[i];
         if (b) {
@@ -658,13 +754,17 @@
     }
 
     function syncActiveWindows(jobs) {
-      const activeBankKeys = new Set();
+      const activeBankMap = new Map();
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
-        if (job.priority > 1.35) continue;
-        activeBankKeys.add(job.bank.key);
-        const behind = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapBehind : 2) : NET_PROFILE.bitmapBehind;
-        const ahead = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapAhead : 8) : (job.priority === 0 ? NET_PROFILE.bitmapAhead : 12);
+        if (job.priority > 1.65) continue;
+        const prevJob = activeBankMap.get(job.bank.key);
+        if (prevJob && prevJob.priority <= job.priority) continue;
+        activeBankMap.set(job.bank.key, job);
+
+        const isNearReel = job.isReel && job.priority > 1.25;
+        const behind = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapBehind : (isNearReel ? 1 : 2)) : NET_PROFILE.bitmapBehind;
+        const ahead = job.isReel ? (job.priority === 0 ? NET_PROFILE.reelBitmapAhead : (isNearReel ? 3 : 10)) : (job.priority === 0 ? NET_PROFILE.bitmapAhead : 14);
         const a = clamp(Math.round(job.anchor), job.start, job.end);
         job.bank.lastAnchor = a;
         job.bank.pruneWindow(a, behind, ahead);
@@ -687,7 +787,7 @@
       if (now - lastSweep > 450) {
         lastSweep = now;
         frameBanks.forEach((bank) => {
-          if (!activeBankKeys.has(bank.key)) {
+          if (!activeBankMap.has(bank.key)) {
             bank.releaseBitmaps();
           }
         });
@@ -699,10 +799,10 @@
             sources[i].collectBankDistances(y, vh, distMap);
           }
           const candidates = Array.from(frameBanks.values())
-            .filter((b) => !activeBankKeys.has(b.key) && b.blobBytes > 0 && (distMap.get(b.key) || 999999) > vh * 2.4)
+            .filter((b) => !activeBankMap.has(b.key) && b.blobBytes > 0 && (distMap.get(b.key) || 999999) > vh * 2.4)
             .sort((a, b) => (distMap.get(b.key) || 999999) - (distMap.get(a.key) || 999999));
           for (let i = 0; i < candidates.length && totalBlobBytes > NET_PROFILE.blobBudgetBytes * 0.85; i++) {
-            candidates[i].releaseBlobs(true);
+            candidates[i].releaseBlobs(24);
           }
         }
       }
@@ -725,6 +825,11 @@
           }
         }
         if (!chosenJob || chosenIdx === -1) break;
+        if (chosenJob.priority >= 2.0) {
+          if (NET_PROFILE.backgroundFetchConcurrency <= 0) break;
+          if (activeFetches >= NET_PROFILE.backgroundFetchConcurrency) break;
+          if (totalBlobBytes >= NET_PROFILE.blobBudgetBytes * 0.88) break;
+        }
 
         const bank = chosenJob.bank;
         bank.fetching.add(chosenIdx);
@@ -744,12 +849,12 @@
             const dist = Math.abs(chosenIdx - bank.lastAnchor);
             const aheadLimit = chosenJob.isReel ? NET_PROFILE.reelBitmapAhead : NET_PROFILE.bitmapAhead;
             const behindLimit = chosenJob.isReel ? NET_PROFILE.reelBitmapBehind : NET_PROFILE.bitmapBehind;
-            if (chosenJob.priority <= 1.35 && chosenIdx >= bank.lastAnchor - behindLimit && chosenIdx <= bank.lastAnchor + aheadLimit) {
+            if (chosenJob.priority <= 1.65 && chosenIdx >= bank.lastAnchor - behindLimit && chosenIdx <= bank.lastAnchor + aheadLimit) {
               enqueueDecode(bank, chosenIdx, dist <= 6);
             }
             if (typeof window.__onBankProgress === "function") {
               const now = performance.now();
-              if (now - lastHeroProgressEmit > 30 || chosenIdx < 60) {
+              if (now - lastHeroProgressEmit > 30 || chosenIdx < 75) {
                 lastHeroProgressEmit = now;
                 window.__onBankProgress(bank);
               }
@@ -758,9 +863,15 @@
           })
           .catch(() => {
             bank.fetching.delete(chosenIdx);
-            bank.failed[chosenIdx] = 1;
             activeFetches--;
-            if (typeof window.__onBankProgress === "function") window.__onBankProgress(bank);
+            const attempt = (bank.retries[chosenIdx] || 0) + 1;
+            bank.retries[chosenIdx] = attempt;
+            if (attempt <= 2) {
+              setTimeout(schedulePump, 220 * attempt);
+            } else {
+              bank.failed[chosenIdx] = 1;
+              if (typeof window.__onBankProgress === "function") window.__onBankProgress(bank);
+            }
             schedulePump();
           });
       }
@@ -920,6 +1031,8 @@
       this.isOffscreen = false;
       this.lastCinemaPassed = false;
       this.lastHasChapterGlow = false;
+      this.isBufferReady = false;
+      this.bufferBadge = this.isHybrid ? createBufferBadge(this.stage) : null;
 
       if (this.isHybrid && !this.isTrace && this.media) {
         this.media.addEventListener("click", (e) => {
@@ -983,7 +1096,7 @@
       } else {
         tw = Math.min(vw * 0.86, 1420);
         th = tw * 9 / 16;
-        const maxH = Math.min(vh * 0.72, vh - 190);
+        const maxH = Math.min(vh * 0.68, vh - 236);
         if (th > maxH) { th = maxH; tw = th * 16 / 9; }
       }
       return { tw: Math.round(tw), th: Math.round(th) };
@@ -1030,7 +1143,7 @@
         } else {
           kw = Math.min(vw * 0.68, 980);
           kh = Math.round(kw * (9 / 16));
-          const maxKh = Math.min(vh * 0.62, vh - 220);
+          const maxKh = Math.min(vh * 0.60, vh - 240);
           if (kh > maxKh) {
             kh = maxKh;
             kw = Math.round(kh * (16 / 9));
@@ -1064,7 +1177,7 @@
         } else {
           cwBox = Math.min(vw * 0.82, 1320);
           chBox = Math.round(cwBox * (9 / 16));
-          const maxCh = Math.min(vh * 0.70, vh - 210);
+          const maxCh = Math.min(vh * 0.68, vh - 232);
           if (chBox > maxCh) {
             chBox = maxCh;
             cwBox = Math.round(chBox * (16 / 9));
@@ -1098,6 +1211,9 @@
       if (!this.isFullscreen && !this.isKinetic && !this.isCinema) {
         setCssVar(this.stage.style, this._stageVars, "--frame-scale", this.fullScale.toFixed(4));
       }
+      if (this.dirty && this.bank) {
+        this.draw(this.cur);
+      }
     }
 
     ensureBank(set = this.pickSet()) {
@@ -1130,7 +1246,7 @@
       const secEnd = this.top + this.len + viewH;
       const inView = y + viewH >= this.top - viewH * 0.25 && y <= secEnd + viewH * 0.25;
       const dist = inView ? 0 : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
-      if (!inView && dist > viewH * 2.4 && !this.isHero) return [];
+      if (!inView && dist > viewH * 2.4 && !this.isHero && NET_PROFILE.isSaveData) return [];
 
       const bank = this.ensureBank();
       const anchor = inView ? clamp(Math.round(this.cur), 0, this.count - 1) : 0;
@@ -1146,18 +1262,40 @@
           end: this.count - 1,
           isReel: false,
         });
-      } else if (dist <= viewH * 1.4) {
-        const preEnd = Math.min(this.count - 1, 27);
+      } else if (dist <= viewH * 1.6) {
+        const preEnd = Math.min(this.count - 1, 40);
         jobs.push({
           bank,
-          priority: 1,
+          priority: 0.7,
           distance: dist,
           anchor: 0,
           start: 0,
           end: preEnd,
           isReel: false,
         });
-        if (!NET_PROFILE.isConstrainedNet) {
+        if (!NET_PROFILE.isSaveData) {
+          jobs.push({
+            bank,
+            priority: 1.8,
+            distance: dist,
+            anchor: preEnd + 1,
+            start: 0,
+            end: this.count - 1,
+            isReel: false,
+          });
+        }
+      } else if (dist <= viewH * 3.0) {
+        const preEnd = Math.min(this.count - 1, 36);
+        jobs.push({
+          bank,
+          priority: 1.5,
+          distance: dist,
+          anchor: 0,
+          start: 0,
+          end: preEnd,
+          isReel: false,
+        });
+        if (!NET_PROFILE.isSaveData) {
           jobs.push({
             bank,
             priority: 2.5,
@@ -1168,26 +1306,40 @@
             isReel: false,
           });
         }
-      } else if (dist <= viewH * 2.4) {
+      } else if (this.isHero && dist <= viewH * 4.5) {
         jobs.push({
           bank,
-          priority: 2.2,
+          priority: 2.4,
           distance: dist,
           anchor: 0,
           start: 0,
-          end: Math.min(this.count - 1, 23),
+          end: Math.min(this.count - 1, 72),
           isReel: false,
         });
-      } else if (this.isHero && dist <= viewH * 4) {
+      } else if (!NET_PROFILE.isSaveData) {
+        // Precarga progresiva en cascada del resto de secuencias de la página
+        const preEnd = Math.min(this.count - 1, 36);
+        const distWeight = Math.min(2.0, dist / Math.max(1, viewH * 6));
         jobs.push({
           bank,
-          priority: 2.8,
+          priority: 2.7 + distWeight * 0.5,
           distance: dist,
           anchor: 0,
           start: 0,
-          end: Math.min(this.count - 1, 53),
+          end: preEnd,
           isReel: false,
         });
+        if (!NET_PROFILE.isConstrainedNet) {
+          jobs.push({
+            bank,
+            priority: 3.4 + distWeight,
+            distance: dist,
+            anchor: preEnd + 1,
+            start: 0,
+            end: this.count - 1,
+            isReel: false,
+          });
+        }
       }
       return jobs;
     }
@@ -1422,6 +1574,15 @@
 
       if (!this.set && viewportEntry > 0) this.load();
       if (y + vh < this.top - vh || y > this.top + this.len + vh) {
+        if (this.isCinema) {
+          const nextTraceTop = (typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
+          const passed = y >= nextTraceTop;
+          if (passed !== this.lastCinemaPassed) {
+            this.lastCinemaPassed = passed;
+            this.el.classList.toggle("is-cinema-passed", passed);
+          }
+        }
+        syncBufferBadge(this.bufferBadge, false, 100);
         if (!this.isOffscreen) {
           this.isOffscreen = true;
           this.el.classList.add("is-offscreen");
@@ -1431,17 +1592,32 @@
       if (this.isOffscreen) {
         this.isOffscreen = false;
         this.el.classList.remove("is-offscreen");
+        this.dirty = true;
+        this.needsVisualSync = true;
+        AssetScheduler.schedulePump();
       }
 
       if (!this.isHero && viewportEntry <= 0) {
+        syncBufferBadge(this.bufferBadge, false, 100);
         if (this.lastRenderedState !== "pre" || this.dirty) {
           this.lastRenderedState = "pre";
           this.needsVisualSync = true;
           this.cur = 0;
           this.progress = 0;
+          if (this.lead) this.setText(this.lead, 1, -18);
+          for (let i = 0; i < this.chapters.length; i++) {
+            const ch = this.chapters[i];
+            if (ch.lastVis !== "hidden") {
+              ch.lastVis = "hidden";
+              ch.lastOp = "0";
+              ch.n.style.opacity = "0";
+              ch.n.style.visibility = "hidden";
+              if (ch.tick) ch.tick.classList.remove("is-active");
+            }
+          }
           if (this.isKinetic) {
-            setCssVar(st, sv, "--kseq-clip-x", "28%");
-            setCssVar(st, sv, "--kseq-clip-y", "6%");
+            setCssVar(st, sv, "--kseq-clip-x", "49.4%");
+            setCssVar(st, sv, "--kseq-clip-y", "8%");
             setCssVar(st, sv, "--kseq-ty", "0px");
             setCssVar(st, sv, "--kseq-curtain-y", "0px");
             setCssVar(st, sv, "--kseq-scale", "0.94");
@@ -1450,8 +1626,16 @@
             setCssVar(st, sv, "--outro-card-op", "0");
             setCssVar(st, sv, "--outro-card-vis", "hidden");
             setCssVar(st, sv, "--outro-card-pe", "none");
-            if (this.kWingL) { this.kWingL.style.opacity = "1"; this.kWingL.style.transform = "translate3d(0,0,0)"; }
-            if (this.kWingR) { this.kWingR.style.opacity = "1"; this.kWingR.style.transform = "translate3d(0,0,0)"; }
+            if (this.kWingL) {
+              setVisCached(this.kWingL, "visible");
+              setOpacityCached(this.kWingL, "1");
+              this.kWingL.style.transform = "translate3d(0,0,0)";
+            }
+            if (this.kWingR) {
+              setVisCached(this.kWingR, "visible");
+              setOpacityCached(this.kWingR, "1");
+              this.kWingR.style.transform = "translate3d(0,0,0)";
+            }
           } else if (this.isCinema) {
             const cs = this.el.style;
             const ev = this._elVars;
@@ -1475,7 +1659,7 @@
               this.lastCinemaPassed = false;
               this.el.classList.remove("is-cinema-passed");
             }
-            if (this.cinemaPrelude) this.cinemaPrelude.style.visibility = "visible";
+            setVisCached(this.cinemaPrelude, "visible");
             this.setVisualFilter(0, 0.25);
           } else if (this.isTrace) {
             this.traceCur = 0;
@@ -1495,11 +1679,30 @@
       const pinMaxProg = 0.9;
 
       if (rawP >= 1.0 + exitRange) {
+        syncBufferBadge(this.bufferBadge, false, 100);
         if (this.lastRenderedState !== "post" || this.dirty) {
           this.lastRenderedState = "post";
           this.needsVisualSync = true;
           this.cur = n - 1;
           this.progress = 1;
+          if (this.hero) {
+            this.setText(this.hero, 0, -3);
+            if (!this.lastHeroGone) {
+              this.lastHeroGone = true;
+              this.el.classList.add("is-hero-hidden");
+            }
+          }
+          if (this.lead) this.setText(this.lead, 0, -3.5);
+          for (let i = 0; i < this.chapters.length; i++) {
+            const ch = this.chapters[i];
+            if (ch.lastVis !== "hidden") {
+              ch.lastVis = "hidden";
+              ch.lastOp = "0";
+              ch.n.style.opacity = "0";
+              ch.n.style.visibility = "hidden";
+              if (ch.tick) ch.tick.classList.remove("is-active");
+            }
+          }
           if (this.isTrace) {
             this.traceCur = 1;
             this.updateTrace(1, 1.0 + exitRange, 1, 0.016);
@@ -1510,8 +1713,10 @@
             setCssVar(st, sv, "--kseq-scale", "1");
             setCssVar(st, sv, "--kseq-hud-op", "0.2");
             setCssVar(st, sv, "--kseq-inner-hud", "0");
-            if (this.kWingL) this.kWingL.style.opacity = "0";
-            if (this.kWingR) this.kWingR.style.opacity = "0";
+            setVisCached(this.kWingL, "hidden");
+            setOpacityCached(this.kWingL, "0");
+            setVisCached(this.kWingR, "hidden");
+            setOpacityCached(this.kWingR, "0");
           } else if (this.isCinema) {
             const cs = this.el.style;
             const ev = this._elVars;
@@ -1532,7 +1737,7 @@
               this.lastCinemaPassed = true;
               this.el.classList.add("is-cinema-passed");
             }
-            if (this.cinemaPrelude) this.cinemaPrelude.style.visibility = "hidden";
+            setVisCached(this.cinemaPrelude, "hidden");
             this.draw(n - 1);
             this.lastCur = n - 1;
           } else if (!this.isFullscreen) {
@@ -1566,7 +1771,21 @@
         const nextTraceTop = (this.isCinema && typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
         const cinemaPeek = this.isCinema ? Math.max(2, (nextTraceTop - (this.top + this.len)) + 2) : undefined;
         const curIdx = clamp(Math.round(this.cur), 0, n - 1);
-        const bufferReady = !!(this.bank && this.bank.hasContiguousAhead(curIdx, 6));
+        const startNeed = Math.min(36, Math.max(12, Math.ceil(n * 0.2)));
+        const startDecode = Math.min(12, startNeed);
+        const bank = this.ensureBank();
+        this.isBufferReady = this.isBufferReady
+          ? bank.hasReadyBuffer(curIdx, 6, 3)
+          : bank.hasReadyBuffer(curIdx, startNeed, startDecode);
+        const isWaitingBuf = !this.isBufferReady
+          && !this.autoPlayPaused
+          && !this.autoPlaySuspended
+          && (this.isHero ? (rawP >= 0.012) : (viewportEntry >= 0.94 || rawP >= -0.06))
+          && y < (this.top + this.len + (cinemaPeek || 10))
+          && !(this.isCinema && y >= nextTraceTop);
+        const bufPct = isWaitingBuf ? bank.getBufferPercent(curIdx, startNeed) : 100;
+        syncBufferBadge(this.bufferBadge, isWaitingBuf, bufPct);
+
         if (!(this.isCinema && y >= nextTraceTop)) {
           runHybridScrollEngine({
             top: this.top,
@@ -1578,7 +1797,7 @@
             peekPx: cinemaPeek,
             minSpeed: this.isCinema ? 0.72 : 0.45,
             state: this,
-            hasFrames: bufferReady,
+            hasFrames: this.isBufferReady,
             isHero: this.isHero,
           });
         }
@@ -1655,8 +1874,8 @@
       if (this.isKinetic) {
         const isMob = vw <= 900 || (vw / vh < 0.95);
         const openT = smooth(range(p, 0.02, 0.42));
-        setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * (isMob ? 24 : 30)).toFixed(2)}%`);
-        setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 6).toFixed(2)}%`);
+        setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * 49.4).toFixed(2)}%`);
+        setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 8).toFixed(2)}%`);
 
         const wakeT = smooth(range(p, -0.10, 0.08));
         const kOutro = smooth(range(prog, 0.88, 1.0));
@@ -1665,8 +1884,8 @@
         this.setVisualFilter(0, 1 - wakeT);
 
         const wingMove = openT;
-        const wingOp = 1 - smooth(range(p, 0.22, 0.40));
-        const wingShiftX = wingMove * (isMob ? vw * 0.22 : vw * 0.20);
+        const wingOp = 1 - smooth(range(p, 0.24, 0.42));
+        const wingShiftX = wingMove * (isMob ? vw * 0.30 : vw * 0.26);
         const wingVis = wingOp <= 0.005 ? "hidden" : "visible";
         const wingOpStr = wingOp.toFixed(3);
         if (this.kWingL) {
@@ -2677,6 +2896,9 @@
       this.traceBitmapsReleased = false;
       this.lastReelPct = -1;
       this.needsVisualSync = true;
+      this.traceBufferReady = false;
+      this.firstCardBufferReady = false;
+      this.bufferBadge = createBufferBadge(this.stage);
 
       // Referencias SVG & HUD de planta
       this.tracePathCore = $("#tracePathCore", this.traceOverlay);
@@ -2843,6 +3065,7 @@
               <span class="reel-card__chip reel-card__chip--idx">${pad(idx + 1)}</span>
               <span class="reel-card__chip">${durSec.toFixed(1)}s · FPV</span>
             </div>
+            <div class="reel-card__buffer" aria-hidden="true"><span class="seq-buffer__dot"></span><span class="reel-card__buf-txt">Cargando · 0%</span></div>
             <span class="reel-card__prog" aria-hidden="true"><i></i></span>
           </div>
         `;
@@ -2850,6 +3073,8 @@
         const canvas = $(".reel-card__canvas", cardEl);
         const ctx = canvas.getContext("2d", { alpha: false });
         const progBar = $(".reel-card__prog i", cardEl);
+        const bufEl = $(".reel-card__buffer", cardEl);
+        const bufTxt = $(".reel-card__buf-txt", cardEl);
 
         const item = {
           idx,
@@ -2857,6 +3082,12 @@
           canvas,
           ctx,
           progBar,
+          bufEl,
+          bufTxt,
+          bufVisible: false,
+          bufWaitSince: 0,
+          lastBufPct: -1,
+          isLoopBuffered: false,
           src,
           count,
           from,
@@ -3234,6 +3465,9 @@
         this.reelSet = nextReelSet;
       }
       this.lastOverlayKey = "";
+      if (this.traceDirty && this.traceBank) {
+        this.drawTrace(this.traceFrameCur);
+      }
     }
 
     ensureTraceBank(set = this.pickTraceSet()) {
@@ -3325,12 +3559,14 @@
       const secEnd = this.top + this.len + viewH;
       const inView = y + viewH >= this.top - viewH * 0.25 && y <= secEnd + viewH * 0.25;
       const dist = inView ? 0 : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
-      if (!inView && dist > viewH * 2.4) return [];
+      if (!inView && dist > viewH * 2.4 && NET_PROFILE.isSaveData) return [];
 
       const rawP = (y - this.top) / this.len;
       const jobs = [];
       const needTrace = rawP < BRIDGE_END_P + 0.05;
       const traceBank = needTrace ? (this.traceBank || this.ensureTraceBank()) : null;
+      const set = this.pickReelSet(0);
+      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
 
       if (traceBank && needTrace) {
         if (inView) {
@@ -3344,50 +3580,95 @@
             isReel: false,
           });
         } else if (dist <= viewH * 1.6) {
-          const preEnd = Math.min(this.count - 1, 27);
-          jobs.push({ bank: traceBank, priority: 1, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
-          if (!NET_PROFILE.isConstrainedNet) {
+          const preEnd = Math.min(this.count - 1, 40);
+          jobs.push({ bank: traceBank, priority: 0.7, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
+          if (!NET_PROFILE.isSaveData) {
+            jobs.push({ bank: traceBank, priority: 1.7, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
+          }
+        } else if (dist <= viewH * 3.0) {
+          const preEnd = Math.min(this.count - 1, 36);
+          jobs.push({ bank: traceBank, priority: 1.5, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
+          if (!NET_PROFILE.isSaveData) {
             jobs.push({ bank: traceBank, priority: 2.5, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
           }
-        } else {
-          jobs.push({ bank: traceBank, priority: 2.2, distance: dist, anchor: 0, start: 0, end: Math.min(this.count - 1, 23), isReel: false });
+        } else if (!NET_PROFILE.isSaveData) {
+          const preEnd = Math.min(this.count - 1, 36);
+          const distWeight = Math.min(2.0, dist / Math.max(1, viewH * 6));
+          jobs.push({ bank: traceBank, priority: 2.7 + distWeight * 0.5, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
+          if (!NET_PROFILE.isConstrainedNet) {
+            jobs.push({ bank: traceBank, priority: 3.3 + distWeight, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
+          }
         }
       }
 
-      const set = this.pickReelSet(0);
-      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
-      if (inView && rawP >= 0.04 && rawP < BRIDGE_START_P - 0.05 && this.cards[0]) {
-        const c0 = this.cards[0];
-        const b0 = attachCardBank(c0, set);
-        jobs.push({
-          bank: b0,
-          priority: 1,
-          distance: 50,
-          anchor: c0.from - 1,
-          start: c0.from - 1,
-          end: Math.min(c0.to - 1, c0.from - 1 + 27),
-          isReel: true,
-        });
-      } else if (inView && rawP >= BRIDGE_START_P - 0.05) {
-        this.cards.forEach((card, i) => {
-          const d = Math.abs(i - center);
-          if (d > 2) return;
-          const bank = attachCardBank(card, set);
-          const startIdx = card.from - 1;
-          const endIdx = card.to - 1;
-          const anchorIdx = clamp(Math.round(card.curFrame) - 1, startIdx, endIdx);
-          if (i === center) {
-            jobs.push({ bank, priority: 0, distance: 0, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-          } else if (d === 1) {
-            jobs.push({ bank, priority: 1.2, distance: 1, anchor: anchorIdx, start: startIdx, end: Math.min(endIdx, anchorIdx + 24), isReel: true });
-            if (!NET_PROFILE.isConstrainedNet) {
-              jobs.push({ bank, priority: 2.3, distance: 1, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-            }
-          } else if (!NET_PROFILE.isConstrainedNet) {
-            jobs.push({ bank, priority: 2.6, distance: 2, anchor: startIdx, start: startIdx, end: Math.min(endIdx, startIdx + 11), isReel: true });
-          }
-        });
+      if (!inView) {
+        if (!NET_PROFILE.isSaveData && this.cards[0]) {
+          const c0 = this.cards[0];
+          const b0 = attachCardBank(c0, set);
+          const prio = dist <= viewH * 1.6 ? 1.3 : 2.9 + Math.min(1.5, dist / Math.max(1, viewH * 6));
+          jobs.push({
+            bank: b0,
+            priority: prio,
+            distance: dist,
+            anchor: c0.from - 1,
+            start: c0.from - 1,
+            end: dist <= viewH * 1.6 ? c0.to - 1 : Math.min(c0.to - 1, c0.from - 1 + 36),
+            isReel: true,
+          });
+        }
+        return jobs;
       }
+
+      if (rawP < BRIDGE_START_P - 0.04) {
+        // Mientras corre Planificación en Planta, precargar por completo la primera tarjeta del Reel y arrancar la 2da
+        if (this.cards[0]) {
+          const c0 = this.cards[0];
+          const b0 = attachCardBank(c0, set);
+          jobs.push({
+            bank: b0,
+            priority: 0.45,
+            distance: 10,
+            anchor: c0.from - 1,
+            start: c0.from - 1,
+            end: c0.to - 1,
+            isReel: true,
+          });
+        }
+        if (this.cards[1] && !NET_PROFILE.isSaveData) {
+          const c1 = this.cards[1];
+          const b1 = attachCardBank(c1, set);
+          jobs.push({
+            bank: b1,
+            priority: 1.1,
+            distance: 40,
+            anchor: c1.from - 1,
+            start: c1.from - 1,
+            end: Math.min(c1.to - 1, c1.from - 1 + 48),
+            isReel: true,
+          });
+        }
+        return jobs;
+      }
+
+      this.cards.forEach((card, i) => {
+        const d = Math.abs(i - center);
+        const bank = attachCardBank(card, set);
+        const startIdx = card.from - 1;
+        const endIdx = card.to - 1;
+        const anchorIdx = clamp(Math.round(card.curFrame) - 1, startIdx, endIdx);
+        if (i === center) {
+          jobs.push({ bank, priority: 0, distance: 0, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
+        } else if (d === 1) {
+          jobs.push({ bank, priority: 0.7, distance: 1, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
+        } else if (d === 2) {
+          jobs.push({ bank, priority: 1.5, distance: 2, anchor: startIdx, start: startIdx, end: Math.min(endIdx, startIdx + 36), isReel: true });
+          if (!NET_PROFILE.isSaveData) {
+            jobs.push({ bank, priority: 2.3, distance: 2, anchor: startIdx, start: startIdx, end: endIdx, isReel: true });
+          }
+        } else if (!NET_PROFILE.isSaveData && !NET_PROFILE.isConstrainedNet) {
+          jobs.push({ bank, priority: 3.1 + d * 0.12, distance: d, anchor: startIdx, start: startIdx, end: endIdx, isReel: true });
+        }
+      });
       return jobs;
     }
 
@@ -3561,10 +3842,7 @@
 
       const traceVisible = rawEntryP >= 0 && ((1 - exitSvgFade) * svgWake > 0.005 || hudOp > 0.005);
       const visStr = traceVisible ? "visible" : "hidden";
-      if (this.traceOverlay._vis !== visStr) {
-        this.traceOverlay._vis = visStr;
-        this.traceOverlay.style.visibility = visStr;
-      }
+      setVisCached(this.traceOverlay, visStr);
       this.traceOverlayHidden = !traceVisible && bridgeT >= 0.34;
       if (this.traceConsole) {
         const peStr = hudOp > 0.15 ? "auto" : "none";
@@ -3774,6 +4052,7 @@
       if (viewportEntry > 0 && !this.traceSet) this.loadTrace();
       if (viewportEntry > 0 && this.activeIdx < 0) this.setActiveClip(0);
       if (y + vh < this.top - vh || y > this.top + this.len + vh) {
+        syncBufferBadge(this.bufferBadge, false, 100);
         if (!this.isOffscreen) {
           this.isOffscreen = true;
           this.el.classList.add("is-offscreen");
@@ -3783,19 +4062,25 @@
       if (this.isOffscreen) {
         this.isOffscreen = false;
         this.el.classList.remove("is-offscreen");
+        this.needsVisualSync = true;
+        this.traceDirty = true;
+        this.cards.forEach((c) => { c.dirty = true; });
+        AssetScheduler.schedulePump();
       }
 
       if (viewportEntry <= 0 || rawP < 0) {
+        syncBufferBadge(this.bufferBadge, false, 100);
         if (rawP < -0.005 || viewportEntry < 0.95) {
           this.autoPlaySuspended = false;
           this.subpixelAcc = 0;
+          this.upScrollAcc = 0;
           this.lastTrackedY = undefined;
         }
         if (!this.lastPreState || this.traceDirty) {
           this.lastPreState = true;
           this.needsVisualSync = true;
           this.traceOverlayHidden = false;
-          this.reelLayerHidden = false;
+          this.reelLayerHidden = true;
           this.prog = 0;
           this.progCur = 0;
           this.traceCur = 0;
@@ -3808,10 +4093,10 @@
           setCssVar(mws, mwc, "--trace-darken-op", "0");
           setCssVar(mws, mwc, "--trace-entry-veil-op", "1");
           setCssVar(mws, mwc, "--trace-entry-veil-s", "1");
-          mws.visibility = "hidden";
+          setVisCached(this.traceMediaWrap, "hidden");
           this.setTraceFilter(0, 0.55);
           setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", "0");
-          this.reelLayer.style.visibility = "hidden";
+          setVisCached(this.reelLayer, "hidden");
           if (this.lastReelInteractive) {
             this.lastReelInteractive = false;
             this.reelLayer.classList.remove("is-interactive");
@@ -3839,9 +4124,36 @@
 
       if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < BRIDGE_END_P && performance.now() > (this.seekingUntil || 0)) {
         const curTraceIdx = clamp(Math.round(this.traceFrameCur), 0, this.count - 1);
-        const hasTrace = !!(this.traceBank && this.traceBank.hasContiguousAhead(curTraceIdx, 6));
+        const traceBank = this.traceBank || this.ensureTraceBank();
+        this.traceBufferReady = this.traceBufferReady
+          ? traceBank.hasReadyBuffer(curTraceIdx, 6, 3)
+          : traceBank.hasReadyBuffer(curTraceIdx, 36, 12);
+
         const firstCard = this.cards[0];
-        const hasFirstCard = !!(firstCard && firstCard.bank && firstCard.bank.hasContiguousAhead(0, 6));
+        const c0Bank = firstCard ? attachCardBank(firstCard, this.pickReelSet(0)) : null;
+        if (c0Bank) {
+          this.firstCardBufferReady = this.firstCardBufferReady
+            ? c0Bank.hasReadyBuffer(firstCard.from - 1, 6, 3)
+            : c0Bank.hasReadyBuffer(firstCard.from - 1, 36, 12);
+        } else {
+          this.firstCardBufferReady = false;
+        }
+
+        const inBridge = rawP >= BRIDGE_START_P;
+        const readyToAdvance = inBridge
+          ? (this.traceBufferReady && this.firstCardBufferReady)
+          : this.traceBufferReady;
+
+        const isWaitingBuf = !readyToAdvance && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
+        let waitPct = 100;
+        if (isWaitingBuf) {
+          const tPct = traceBank.getBufferPercent(curTraceIdx, 36);
+          waitPct = inBridge && c0Bank
+            ? Math.min(tPct, c0Bank.getBufferPercent(firstCard.from - 1, 36))
+            : tPct;
+        }
+        syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
+
         const traceEndLen = Math.max(1, this.len * BRIDGE_END_P);
         const traceRawP = rawP / BRIDGE_END_P;
 
@@ -3856,12 +4168,15 @@
           peekPx: 0,
           minSpeed: 0.42,
           state: this,
-          hasFrames: rawP < BRIDGE_START_P ? hasTrace : (hasTrace || hasFirstCard),
+          hasFrames: readyToAdvance,
           isHero: false,
         });
-      } else if (rawP >= BRIDGE_END_P) {
-        this.lastTrackedY = y;
-        this.subpixelAcc = 0;
+      } else {
+        syncBufferBadge(this.bufferBadge, false, 100);
+        if (rawP >= BRIDGE_END_P) {
+          this.lastTrackedY = y;
+          this.subpixelAcc = 0;
+        }
       }
 
       const targetProg = clamp(rawP, 0, 1);
@@ -3891,7 +4206,12 @@
 
       // Sólo actualizar la capa de planta mientras no haya salido completamente de escena
       if (bridgeT < 0.62) {
-        this.traceBitmapsReleased = false;
+        if (this.traceBitmapsReleased) {
+          this.traceBitmapsReleased = false;
+          this.traceDirty = true;
+          this.lastTraceFrameDrawn = -1;
+          AssetScheduler.schedulePump();
+        }
         const targetTraceF = traceVideoProg * (this.count - 1);
         const tk = reduce ? 1 : (1 - Math.exp(-26 * dtSec));
         this.traceFrameCur += (targetTraceF - this.traceFrameCur) * tk;
@@ -3910,7 +4230,7 @@
         setCssVar(mws, mwc, "--trace-entry-veil-op", (1 - veilOpen).toFixed(3));
         setCssVar(mws, mwc, "--trace-entry-veil-s", (1 + veilOpen * 0.55).toFixed(3));
         const tmVis = traceMediaFade <= 0.005 ? "hidden" : "visible";
-        if (this.traceMediaWrap._vis !== tmVis) { this.traceMediaWrap._vis = tmVis; mws.visibility = tmVis; }
+        setVisCached(this.traceMediaWrap, tmVis);
         this.setTraceFilter(0, traceMediaGray);
 
         if (traceMediaFade > 0.005 && (Math.abs(this.traceFrameCur - this.lastTraceFrameDrawn) > 0.002 || this.traceDirty)) {
@@ -3934,11 +4254,8 @@
           }
         }
       } else {
-        if (this.traceMediaWrap._vis !== "hidden") {
-          this.traceMediaWrap._vis = "hidden";
-          this.traceMediaWrap.style.visibility = "hidden";
-          setCssVar(this.traceMediaWrap.style, this._mediaVars, "--tr-trace-media-op", "0");
-        }
+        setVisCached(this.traceMediaWrap, "hidden");
+        setCssVar(this.traceMediaWrap.style, this._mediaVars, "--tr-trace-media-op", "0");
         if (!this.traceBitmapsReleased && this.traceBank) {
           this.traceBitmapsReleased = true;
           this.traceBank.releaseBitmaps();
@@ -3956,7 +4273,7 @@
         if (!this.reelLayerHidden) {
           this.reelLayerHidden = true;
           setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", "0");
-          this.reelLayer.style.visibility = "hidden";
+          setVisCached(this.reelLayer, "hidden");
           if (this.lastReelInteractive) {
             this.lastReelInteractive = false;
             this.reelLayer.classList.remove("is-interactive");
@@ -3979,10 +4296,7 @@
       const hudReveal = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.74, 1.00));
 
       setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", backdropReveal.toFixed(3));
-      if (this.reelLayer._vis !== "visible") {
-        this.reelLayer._vis = "visible";
-        this.reelLayer.style.visibility = "visible";
-      }
+      setVisCached(this.reelLayer, "visible");
       const isInteractive = bridgeT >= 0.78;
       if (isInteractive !== this.lastReelInteractive) {
         this.lastReelInteractive = isInteractive;
@@ -4119,10 +4433,52 @@
           clipP = clamp((bridgeT - 0.20) / 0.80, 0, 1);
           card.loopSec = clipP * clipDur;
           card.loopRate = 1;
+          if (card.bufEl && card.bufVisible) {
+            card.bufVisible = false;
+            card.bufWaitSince = 0;
+            card.bufEl.classList.remove("is-visible");
+          }
         } else {
           const isCenterCard = i === nearestIdx && bridgeT >= 1 && !this.loopPaused && !reduce;
-          const targetRate = isCenterCard ? 1 : 0;
-          const rateK = Math.min(1, dtSec * (isCenterCard ? 14 : 10));
+          const cardBank = attachCardBank(card, this.pickReelSet(card.idx));
+          const loopIdx = clamp(Math.round(card.curFrame) - 1, card.from - 1, card.to - 1);
+          if (isCenterCard && cardBank) {
+            const startNeed = Math.min(28, card.span - 1);
+            const startDec = Math.min(10, startNeed + 1);
+            card.isLoopBuffered = card.isLoopBuffered
+              ? cardBank.hasReadyBuffer(loopIdx, 5, 2)
+              : cardBank.hasReadyBuffer(loopIdx, startNeed, startDec);
+          } else if (!isCenterCard) {
+            card.isLoopBuffered = false;
+          }
+
+          if (card.bufEl) {
+            const waitingCard = isCenterCard && !card.isLoopBuffered;
+            if (!waitingCard) {
+              card.bufWaitSince = 0;
+              if (card.bufVisible) {
+                card.bufVisible = false;
+                card.bufEl.classList.remove("is-visible");
+              }
+            } else {
+              const nowT = performance.now();
+              if (!card.bufWaitSince) card.bufWaitSince = nowT;
+              if (nowT - card.bufWaitSince >= 180) {
+                if (!card.bufVisible) {
+                  card.bufVisible = true;
+                  card.bufEl.classList.add("is-visible");
+                }
+                const pct = Math.max(0, Math.min(99, Math.round(cardBank.getBufferPercent(loopIdx, 28))));
+                if (card.bufTxt && pct !== card.lastBufPct) {
+                  card.lastBufPct = pct;
+                  card.bufTxt.textContent = `Cargando · ${pct}%`;
+                }
+              }
+            }
+          }
+
+          const targetRate = isCenterCard && card.isLoopBuffered ? 1 : 0;
+          const rateK = Math.min(1, dtSec * (targetRate ? 14 : 10));
           card.loopRate += (targetRate - card.loopRate) * rateK;
           if (Math.abs(targetRate - card.loopRate) < 0.005) card.loopRate = targetRate;
 
@@ -4224,8 +4580,8 @@
   if (sequences.length) {
     const heroSeq = sequences[0];
     const heroBank = heroSeq.ensureBank();
-    const preloadGoal = Math.min(heroSeq.count, NET_PROFILE.isConstrainedNet ? 28 : 54);
-    const decodeGoal = Math.min(18, preloadGoal);
+    const preloadGoal = Math.min(heroSeq.count, NET_PROFILE.isConstrainedNet ? 36 : 72);
+    const decodeGoal = Math.min(24, preloadGoal);
 
     const updateHeroPreloadProgress = () => {
       if (ready) return;
@@ -4244,7 +4600,7 @@
     AssetScheduler.schedulePump();
 
     // Tope de seguridad sólo para conexiones extremadamente lentas u offline
-    setTimeout(() => { if (!ready) loadTarget = 1; }, 7500);
+    setTimeout(() => { if (!ready) loadTarget = 1; }, 10000);
   } else {
     loadTarget = 1;
   }
@@ -4315,17 +4671,33 @@
     if (!href || href === "#") return;
     let target = href === "#top" ? 0 : $(href);
     if (target === null) return;
+    sequences.forEach((s) => {
+      s.autoPlayPaused = false;
+      s.autoPlaySuspended = false;
+      s.subpixelAcc = 0;
+      s.upScrollAcc = 0;
+      s.lastTrackedY = undefined;
+    });
+    traceReels.forEach((tr) => {
+      tr.autoPlayPaused = false;
+      tr.autoPlaySuspended = false;
+      tr.subpixelAcc = 0;
+      tr.upScrollAcc = 0;
+      tr.lastTrackedY = undefined;
+    });
     if (href === "#trazado" && traceReels.length) {
       const tr = traceReels[0];
-      tr.autoPlaySuspended = false;
       target = tr.top + Math.round(tr.len * 0.088);
+    } else if (href === "#archivo" && traceReels.length) {
+      const tr = traceReels[0];
+      target = tr.top + Math.round(tr.len * 0.425);
     }
     const wasOpen = body.classList.contains("index-open");
     if (wasOpen) {
       setIndex(false);
-      setTimeout(() => scrollToTarget(target, { immediate: true }), 550);
+      setTimeout(() => scrollToTarget(target, { immediate: true, isNavigation: true }), 550);
     } else {
-      scrollToTarget(target);
+      scrollToTarget(target, { isNavigation: true });
     }
   }
 
@@ -4433,7 +4805,7 @@
   let copyTimer = null;
   if (copyMailBtn) {
     copyMailBtn.addEventListener("click", () => {
-      const email = copyMailBtn.dataset.copyMail || "hola@furlan.film";
+      const email = copyMailBtn.dataset.copyMail || "Furlanproducciones@gmail.com";
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(email).catch(() => {});
       }
@@ -4443,7 +4815,7 @@
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => {
         copyMailBtn.classList.remove("is-copied");
-        if (copyMailTxt) copyMailTxt.textContent = "Copiar dirección de correo";
+        if (copyMailTxt) copyMailTxt.textContent = "Copiar correo";
       }, 2600);
     });
   }
@@ -4454,6 +4826,7 @@
   const vmodal = $("#videoModal");
   const vmodalFrame = $("[data-vmodal-frame]", vmodal);
   const vmodalTitle = $("[data-vmodal-title]", vmodal);
+  const vmodalExt = $("[data-vmodal-ext]", vmodal);
 
   function getYouTubeEmbedUrl(rawUrl) {
     if (!rawUrl) return "";
@@ -4465,6 +4838,7 @@
   function openVideoModal(url, title = "Film cinematográfico") {
     if (!vmodal || !vmodalFrame) return;
     if (vmodalTitle) vmodalTitle.textContent = title;
+    if (vmodalExt) vmodalExt.href = url || "https://www.youtube.com";
     vmodalFrame.src = getYouTubeEmbedUrl(url);
     vmodal.classList.add("is-open");
     vmodal.setAttribute("aria-hidden", "false");
@@ -4497,6 +4871,9 @@
      Referencias editoriales & Medidas
      --------------------------------------------------------- */
   const navEl = $(".nav");
+  const lightSections = ["#estudio", "#film-03", "#metodo"]
+    .map((sel) => ({ el: $(sel), docTop: 0, height: 0 }))
+    .filter((item) => item.el);
   const navSecLinks = $$("[data-nav-sec]").map((a) => ({
     link: a,
     id: a.dataset.navSec,
@@ -4535,6 +4912,10 @@
 
   function measureEditorial() {
     const scroll = scrollY();
+    lightSections.forEach((item) => {
+      item.docTop = item.el.getBoundingClientRect().top + scroll;
+      item.height = item.el.offsetHeight;
+    });
     navSecLinks.forEach((item) => {
       if (item.sec) {
         item.docTop = item.sec.getBoundingClientRect().top + scroll;
@@ -4602,6 +4983,7 @@
   let last = performance.now();
   let lastY = 0, lastPumpY = -9999, lastPumpT = 0, navAcc = 0, currentNavId = "";
   let isNavHidden = false;
+  let isNavLight = false;
   let rafId = 0;
   let lastEstLitMask = -1;
   const edTxtCache = {};
@@ -4666,6 +5048,22 @@
         }
       }
 
+      if (navEl && lightSections.length) {
+        const navProbeY = y + 34;
+        let overLight = false;
+        for (let i = 0; i < lightSections.length; i++) {
+          const item = lightSections[i];
+          if (navProbeY >= item.docTop && navProbeY <= item.docTop + item.height) {
+            overLight = true;
+            break;
+          }
+        }
+        if (overLight !== isNavLight) {
+          isNavLight = overLight;
+          navEl.classList.toggle("is-light", overLight);
+        }
+      }
+
       if (estudioSec) {
         const erTop = estudioDocTop - y;
         const erBottom = erTop + estudioHeight;
@@ -4673,7 +5071,7 @@
           const estP = clamp((vh * 0.85 - erTop) / Math.max(1, estudioHeight + vh * 0.25));
           const axisP = clamp((vh * 0.78 - erTop) / Math.max(1, estudioHeight * 0.88));
           estudioSec.style.setProperty("--estudio-axis", axisP.toFixed(3));
-          estudioSec.style.setProperty("--solar-dash", (185 * (1 - estP)).toFixed(1));
+          estudioSec.style.setProperty("--solar-dash", (1 - estP).toFixed(3));
 
           if (solarSun) {
             const theta = Math.PI * (1 - estP);
