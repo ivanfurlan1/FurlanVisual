@@ -102,13 +102,6 @@
     "assets/seq/casa-mauro": { lg: 18838068, md: 16736070 },
     "assets/seq/casa-greenville": { lg: 29995132, md: 27212058, pt: 17671942 },
     "assets/seq/casona-lago": { md: 13435574, sm: 7540574 },
-    "assets/seq/casa-fincas": { sm: 4147320, md: 6841188 },
-    "assets/seq/campo": { sm: 9070654, md: 15540708 },
-    "assets/seq/casa-negra": { sm: 3016516, md: 4901108 },
-    "assets/seq/vonharv3": { sm: 3324872, md: 5234356 },
-    "assets/seq/casona": { sm: 5028672, md: 8038800 },
-    "assets/seq/barrio": { sm: 7149948, md: 11997254 },
-    "assets/seq/casa-violeta": { sm: 8169284, md: 14026464 },
     "assets/seq/casa-hudson": { lg: 18322668, md: 16002716 },
     "assets/seq/anacleto": { lg: 33508818, md: 29751324, pt: 22498898 },
   };
@@ -128,7 +121,7 @@
     bitmapAhead: isLowMem ? 22 : 36,
     reelBitmapBehind: isLowMem ? 4 : 6,
     reelBitmapAhead: isLowMem ? 14 : 24,
-    keyframeStride: isLowMem ? 0 : 18,
+    keyframeStride: isLowMem ? 0 : 8,
   };
 
   function pickOptimalSet({ portraitAllowed = true, targetWidthPx = 1920 } = {}) {
@@ -184,10 +177,24 @@
 
   let isUserTouching = false;
   let navigatingUntil = 0;
-  window.addEventListener("wheel", () => { navigatingUntil = 0; }, { passive: true });
-  window.addEventListener("touchstart", () => {
+  let lastUpInputAt = 0;
+  let lastTouchY = 0;
+  let hybridFrameId = 0;
+  let hybridOwnerFrame = -1;
+  window.addEventListener("wheel", (e) => {
+    navigatingUntil = 0;
+    if (e.deltaY < -0.5) lastUpInputAt = performance.now();
+  }, { passive: true });
+  window.addEventListener("touchstart", (e) => {
     isUserTouching = true;
     navigatingUntil = 0;
+    lastTouchY = e.touches && e.touches[0] ? e.touches[0].clientY : 0;
+  }, { passive: true });
+  window.addEventListener("touchmove", (e) => {
+    if (!e.touches || !e.touches[0]) return;
+    const cy = e.touches[0].clientY;
+    if (cy - lastTouchY > 2) lastUpInputAt = performance.now();
+    lastTouchY = cy;
   }, { passive: true });
   window.addEventListener("touchend", () => { isUserTouching = false; }, { passive: true });
   window.addEventListener("touchcancel", () => { isUserTouching = false; }, { passive: true });
@@ -398,7 +405,9 @@
      --------------------------------------------------------- */
   function runHybridScrollEngine({ top, len, dt, viewportEntry, rawP, baseDuration, speedScale = 1, peekPx: customPeekPx, minSpeed = 0.45, state, hasFrames, isHero }) {
     if (reduce) return;
-    if (performance.now() < navigatingUntil) {
+    if (hybridOwnerFrame === hybridFrameId) return;
+    const now = performance.now();
+    if (now < navigatingUntil) {
       state.lastTrackedY = scrollY();
       state.subpixelAcc = 0;
       state.upScrollAcc = 0;
@@ -424,6 +433,8 @@
       return;
     }
 
+    hybridOwnerFrame = hybridFrameId;
+
     let speedFactor = speedScale;
     if (rawP > 0.84) {
       const tDecel = clamp((rawP - 0.84) / (0.16 + peekPx / Math.max(1, len)), 0, 1);
@@ -436,13 +447,22 @@
     if (lenis && !isVerticalScroller()) {
       const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
       const userDiff = targetY - y;
+      const recentUp = (now - lastUpInputAt) < 420;
 
-      if (userDiff < -8.0) state.autoPlaySuspended = true;
-      else if (userDiff > 2.5) state.autoPlaySuspended = false;
+      if (userDiff < -6.0 || recentUp) {
+        if (userDiff < -6.0) state.autoPlaySuspended = true;
+        return;
+      }
+      if (state.autoPlaySuspended && userDiff > 8.0) {
+        state.autoPlaySuspended = false;
+      }
 
-      if (!state.autoPlaySuspended) {
+      // Si el usuario scrollea rápido hacia adelante con la rueda, dejamos a Lenis correr nativo sin amplificar ni saltear secciones
+      if (userDiff > 10.0) return;
+
+      if (!state.autoPlaySuspended && userDiff >= -1.5) {
         const userForwardLead = Math.max(0, userDiff);
-        const userDy = userForwardLead * (1 - Math.exp(-14 * dtSec));
+        const userDy = userForwardLead * (1 - Math.exp(-8 * dtSec));
         const nextY = Math.min(endY, y + autoDy + userDy);
         const remainingLead = Math.max(0, userForwardLead - userDy);
         lenis.scrollTo(nextY, { immediate: true });
@@ -462,12 +482,12 @@
           state.autoPlaySuspended = true;
           state.subpixelAcc = 0;
         }
-      } else if (scrollDelta > 2.0) {
+      } else if (scrollDelta > 4.0 && (now - lastUpInputAt) > 360) {
         state.upScrollAcc = 0;
         state.autoPlaySuspended = false;
       }
 
-      if (!state.autoPlaySuspended && currentY < endY - 0.5) {
+      if (!state.autoPlaySuspended && (now - lastUpInputAt) > 360 && currentY < endY - 0.5) {
         if (isUserTouching) {
           state.subpixelAcc = 0;
         } else {
@@ -1050,13 +1070,18 @@
         lastSweep = now;
         frameBanks.forEach((bank) => {
           if (!activeBankMap.has(bank.key)) {
+            // Mantiene bitmaps tibios 3.8s en equipos normales para re-scrollear rápido sin parones
+            if (!NET_PROFILE.isLowMem && (now - (bank.lastUseAt || 0)) < 3800) return;
             const keepStride = NET_PROFILE.keyframeStride;
             for (let i = 0; i < bank.count; i++) {
-              if (keepStride && (i === 0 || i % keepStride === 0)) continue;
+              if (keepStride && (i === 0 || i === bank.count - 1 || i % keepStride === 0)) continue;
               if (bank.bitmaps[i]) bank.releaseBitmapAt(i);
             }
             bank.decoding.clear();
             bank.queuedDecode.clear();
+            for (let q = decodeQueue.length - 1; q >= 0; q--) {
+              if (decodeQueue[q].bank === bank) decodeQueue.splice(q, 1);
+            }
           }
         });
 
@@ -2160,18 +2185,20 @@
 
       if (this.isKinetic) {
         const isMob = vw <= 900 || (vw / vh < 0.95);
-        const openT = smooth(range(p, 0.02, 0.42));
+        // Comienza a abrir suavemente apenas entra la lámina en pantalla, sin esperar 100vh en blanco
+        const kOpenProg = clamp((y - (this.top - vh * 0.72)) / Math.max(1, vh * 0.72 + this.len * 0.24), 0, 1);
+        const openT = reduce ? 1 : smooth(kOpenProg);
         setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * 49.4).toFixed(2)}%`);
         setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 8).toFixed(2)}%`);
 
-        const wakeT = smooth(range(p, -0.10, 0.08));
+        const wakeT = smooth(range(viewportEntry, 0.18, 0.85));
         const kOutro = smooth(range(prog, 0.88, 1.0));
-        setCssVar(st, sv, "--cover-opacity", Math.max((1 - wakeT) * 0.34, kOutro * 0.44).toFixed(3));
+        setCssVar(st, sv, "--cover-opacity", Math.max((1 - wakeT) * 0.30, kOutro * 0.44).toFixed(3));
         setCssVar(st, sv, "--frame-opacity", "1");
         this.setVisualFilter(0, 1 - wakeT);
 
-        const wingMove = openT;
-        const wingOp = 1 - smooth(range(p, 0.24, 0.42));
+        const wingMove = smooth(range(kOpenProg, 0.10, 1.0));
+        const wingOp = 1 - smooth(range(kOpenProg, 0.56, 0.96));
         const wingShiftX = wingMove * (isMob ? vw * 0.30 : vw * 0.26);
         const wingVis = wingOp <= 0.005 ? "hidden" : "visible";
         const wingOpStr = wingOp.toFixed(3);
@@ -2196,12 +2223,12 @@
           }
         }
 
-        const mobEntryShiftY = isMob ? (-(1 - smooth(viewportEntry)) * (vh * 0.16)) : 0;
-        setCssVar(st, sv, "--kseq-ty", `${mobEntryShiftY.toFixed(1)}px`);
-        setCssVar(st, sv, "--kseq-curtain-y", `${mobEntryShiftY.toFixed(1)}px`);
+        const entryShiftY = reduce ? 0 : -(1 - smooth(range(viewportEntry, 0.08, 1.0))) * (vh * (isMob ? 0.16 : 0.18));
+        setCssVar(st, sv, "--kseq-ty", `${entryShiftY.toFixed(1)}px`);
+        setCssVar(st, sv, "--kseq-curtain-y", `${entryShiftY.toFixed(1)}px`);
         setCssVar(st, sv, "--kseq-scale", (0.94 + openT * 0.06).toFixed(4));
 
-        const hudOp = smooth(range(p, 0.28, 0.44)) * (1 - smooth(range(p, 0.88, 0.96)));
+        const hudOp = smooth(range(kOpenProg, 0.62, 1.0)) * (1 - smooth(range(p, 0.88, 0.96)));
         setCssVar(st, sv, "--kseq-hud-op", hudOp.toFixed(3));
         setCssVar(st, sv, "--kseq-hud-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         setCssVar(st, sv, "--kseq-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
@@ -2234,24 +2261,27 @@
           this.lastCinemaPassed = passed;
           this.el.classList.toggle("is-cinema-passed", passed);
         }
-        const lineT = reduce ? 1 : smooth(range(viewportEntry, 0.18, 0.88));
-        const lineFade = reduce ? 0 : smooth(range(p, 0.10, 0.30));
+        // Apertura anamórfica temprana y centrada apenas la sala entra en vista (sin esperar 100vh en negro)
+        const cinemaOpenProg = clamp((y - (this.top - vh * 0.78)) / Math.max(1, vh * 0.78 + this.len * 0.14), 0, 1);
+        const openT = reduce ? 1 : smooth(cinemaOpenProg);
+
+        const lineT = reduce ? 1 : smooth(range(viewportEntry, 0.12, 0.78));
+        const lineFade = reduce ? 0 : smooth(range(cinemaOpenProg, 0.58, 0.95));
         setCssVar(cs, ev, "--cinema-line", lineT.toFixed(3));
         setCssVar(cs, ev, "--cinema-line-op", (lineT * (1 - lineFade)).toFixed(3));
 
-        const entryTy = isMob && !reduce ? -(1 - smooth(viewportEntry)) * (vh * 0.12) : 0;
+        const entryTy = reduce ? 0 : -(1 - smooth(range(viewportEntry, 0.08, 1.0))) * (vh * (isMob ? 0.16 : 0.20));
         setCssVar(cs, ev, "--cinema-ty", `${entryTy.toFixed(1)}px`);
 
-        const openT = reduce ? 1 : smooth(range(p, -0.02, 0.22));
         setCssVar(cs, ev, "--cinema-clip-x", `${((1 - openT) * (isMob ? 8 : 10)).toFixed(2)}%`);
         setCssVar(cs, ev, "--cinema-clip-y", `${((1 - openT) * 48.2).toFixed(2)}%`);
 
-        const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.9 * (1 - openT * 0.85);
+        const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.92 * (1 - openT * 0.75);
         setCssVar(cs, ev, "--cinema-beam-op", beamOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-beam-s", (0.35 + openT * 0.65).toFixed(3));
 
-        const preludeIn = reduce ? 0 : smooth(range(viewportEntry, 0.25, 0.82));
-        const preludeOut = reduce ? 1 : smooth(range(p, 0.03, 0.18));
+        const preludeIn = reduce ? 0 : smooth(range(viewportEntry, 0.14, 0.52));
+        const preludeOut = reduce ? 1 : smooth(range(cinemaOpenProg, 0.46, 0.88));
         const preludeOp = preludeIn * (1 - preludeOut);
         setCssVar(cs, ev, "--cinema-prelude-op", preludeOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-prelude-y", `${(-preludeOut * 16).toFixed(1)}px`);
@@ -2263,7 +2293,7 @@
           }
         }
 
-        const wakeT = reduce ? 1 : smooth(range(p, -0.04, 0.14));
+        const wakeT = reduce ? 1 : smooth(range(cinemaOpenProg, 0.08, 0.55));
         const cinemaDarken = smooth(range(p, 0.910, 0.985));
         const blackoutT = reduce ? (p >= 0.98 ? 1 : 0) : smooth(range(p, 0.930, 0.996));
 
@@ -2272,14 +2302,14 @@
         const endScale = reduce ? 1 : (1 - blackoutT * 0.018);
         setCssVar(cs, ev, "--cinema-scale", (openScale * endScale).toFixed(4));
 
-        const hudIn = reduce ? 1 : smooth(range(p, 0.18, 0.30));
+        const hudIn = reduce ? 1 : smooth(range(cinemaOpenProg, 0.66, 1.0));
         const hudOp = hudIn * (1 - cinemaDarken);
         setCssVar(cs, ev, "--cinema-hud-op", hudOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-hud-top-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         setCssVar(cs, ev, "--cinema-hud-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
 
         const marksOp = openT * (1 - cinemaDarken) * 0.85;
-        const ambientOp = openT * (1 - cinemaDarken) * 0.55;
+        const ambientOp = openT * (1 - cinemaDarken) * 0.58;
         setCssVar(cs, ev, "--cinema-marks-op", marksOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-ambient", ambientOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-amb-s", (0.96 + openT * 0.04).toFixed(3));
@@ -2394,761 +2424,53 @@
 
   const sequences = $$(".seq").map((el) => new Sequence(el));
 
-  /* ---------------------------------------------------------
-     MOTOR DE ARCHIVO EN MOVIMIENTO (#archivo — Galería cinética 3D)
-     --------------------------------------------------------- */
-  function attachCardBank(card, set) {
-    if (card.bank && card.loadedSet === set) return card.bank;
-    if (card.unsubBank) { card.unsubBank(); card.unsubBank = null; }
-    card.loadedSet = set;
-    card.lastDrawnIdx = -1;
-    card.lastDrawnExact = false;
-    card.dirty = true;
-    card.bank = getFrameBank(card.src, card.count, card.version, set);
-    card.unsubBank = card.bank.subscribe((frameIdx, isBitmap) => {
-      if (!isBitmap) return;
-      const targetIdx = clamp(Math.round(card.curFrame) - 1, 0, card.count - 1);
-      if (Math.abs(frameIdx - targetIdx) <= 2 || (frameIdx === targetIdx && !card.lastDrawnExact)) {
-        card.dirty = true;
-      }
-    });
-    return card.bank;
-  }
-
-  class ReelArchive {
-    constructor(el) {
-      this.el = el;
-      this.stage = $(".reel__stage", el);
-      this.deckWrap = $(".reel__deck-wrap", el);
-      this.deck = $("[data-reel-deck]", el);
-      this.strip = $("[data-reel-strip]", el);
-      this.scrub = $(".reel__scrub", el);
-      this.scrubFill = $("[data-reel-scrub-fill]", el);
-      this.tcEl = $("[data-reel-tc]", el);
-
-      this.modeLblEl = $("[data-reel-mode-lbl]", el);
-      this.idxEl = $("[data-reel-idx]", el);
-      this.totalEl = $("[data-reel-total]", el);
-      this.topCatEl = $("[data-reel-top-cat]", el);
-      this.topFpsEl = $("[data-reel-top-fps]", el);
-
-      this.captionEl = $("[data-reel-caption]", el);
-      this.capSlots = $$("[data-reel-cap-slot]", el).map((slot) => ({
-        el: slot,
-        num: $(".reel__cap-num", slot),
-        cat: $(".reel__cap-cat", slot),
-        loc: $(".reel__cap-loc", slot),
-        title: $(".reel__cap-title", slot),
-        desc: $(".reel__cap-desc", slot),
-      }));
-      this.capSlotIdx = 0;
-
-      this.isHybrid = el.dataset.mode !== "manual";
-      this.baseDuration = parseFloat(el.dataset.duration) || 12.8;
-      this.autoPlayPaused = false;
-      this.autoPlaySuspended = false;
-      this.lastTrackedY = undefined;
-
-      this.cards = [];
-      this.thumbs = [];
-      this.carouselCur = 0;
-      this.progCur = 0;
-      this.activeIdx = -1;
-      this.tiltRx = 0;
-      this.tiltRy = 0;
-      this.prog = 0;
-      this.set = null;
-      this.isScrubbing = false;
-
-      this.initCards();
-      this.bindControls();
-      this.measure();
-      AssetScheduler.registerSource(this);
-    }
-
-    pickSet() {
-      return "md";
-    }
-
-    initCards() {
-      const cardEls = $$(".reel-card", this.deck);
-      const total = cardEls.length;
-      if (this.totalEl) this.totalEl.textContent = pad(total);
-
-      cardEls.forEach((cardEl, idx) => {
-        const src = cardEl.dataset.src;
-        const count = Math.max(1, +(cardEl.dataset.count || 1));
-        const from = clamp(+(cardEl.dataset.from || 1), 1, count);
-        const to = clamp(+(cardEl.dataset.to || count), from, count);
-        const version = cardEl.dataset.version || "";
-        const fps = Math.max(12, +(cardEl.dataset.fps || 24));
-        const span = Math.max(1, to - from + 1);
-        const durSec = span / fps;
-        const vParam = version ? `?v=${version}` : "";
-        let aspect = 16 / 9;
-        if (cardEl.dataset.aspect) {
-          const parts = cardEl.dataset.aspect.split(/[/:]/).map(Number);
-          if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
-            aspect = parts[0] / parts[1];
-          }
-        }
-
-        cardEl.innerHTML = `
-          <div class="reel-card__frame">
-            <div class="reel-card__media">
-              <canvas class="reel-card__canvas" aria-hidden="true"></canvas>
-              <picture class="reel-card__poster">
-                <img src="${src}/poster.jpg${vParam}" alt="" loading="${idx === 0 ? "eager" : "lazy"}" decoding="${idx === 0 ? "sync" : "async"}">
-              </picture>
-            </div>
-            <div class="reel-card__vignette" aria-hidden="true"></div>
-            <div class="reel-card__shade" aria-hidden="true"></div>
-            <div class="reel-card__lead-veil" aria-hidden="true"></div>
-            <div class="reel-card__marks" aria-hidden="true">
-              <span class="seq__mark seq__mark--tl"></span>
-              <span class="seq__mark seq__mark--tr"></span>
-              <span class="seq__mark seq__mark--bl"></span>
-              <span class="seq__mark seq__mark--br"></span>
-            </div>
-            <div class="reel-card__hud" aria-hidden="true">
-              <span class="reel-card__chip reel-card__chip--idx">${pad(idx + 1)}</span>
-              <span class="reel-card__chip">${durSec.toFixed(1)}s · FPV</span>
-            </div>
-            <span class="reel-card__prog" aria-hidden="true"><i></i></span>
-          </div>
-        `;
-
-        const canvas = $(".reel-card__canvas", cardEl);
-        const ctx = canvas.getContext("2d", { alpha: false });
-        const progBar = $(".reel-card__prog i", cardEl);
-
-        const item = {
-          idx,
-          el: cardEl,
-          canvas,
-          ctx,
-          progBar,
-          src,
-          count,
-          from,
-          to,
-          span,
-          version,
-          fps,
-          aspect,
-          cat: cardEl.dataset.cat || "Archivo FPV",
-          loc: cardEl.dataset.loc || "Buenos Aires",
-          title: cardEl.dataset.title || `Secuencia <em>${pad(idx + 1)}</em>`,
-          desc: cardEl.dataset.desc || "",
-          loadedSet: null,
-          loading: false,
-          lastDrawnImg: null,
-          dirty: true,
-          hasCanvas: false,
-          lastProg: -1,
-          curFrame: from,
-          loopSec: 0,
-          loopRate: 0,
-          _css: {},
-          lastThumbP: -1,
-          wasExpanded: false,
-        };
-
-        cardEl.addEventListener("click", (e) => {
-          if (performance.now() < this.suppressClickUntil) {
-            e.preventDefault();
-            return;
-          }
-          if (Math.abs(idx - this.carouselCur) >= 0.42) {
-            this.seekToClip(idx);
-          }
-        });
-        bindCursorTarget(cardEl);
-        this.cards.push(item);
-
-        if (this.strip) {
-          const thumbBtn = document.createElement("button");
-          thumbBtn.type = "button";
-          thumbBtn.className = "reel__thumb";
-          thumbBtn.setAttribute("role", "tab");
-          thumbBtn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
-          thumbBtn.setAttribute("aria-label", `Ver secuencia ${pad(idx + 1)}`);
-          const thumbSrc = from > 1
-            ? `${src}/md/${pad(from, 4)}.webp${vParam}`
-            : `${src}/poster.jpg${vParam}`;
-          thumbBtn.innerHTML = `
-            <img src="${thumbSrc}" alt="" loading="lazy" decoding="async">
-            <span class="reel__thumb-no">${pad(idx + 1)}</span>
-            <span class="reel__thumb-bar" aria-hidden="true"></span>
-          `;
-          thumbBtn.addEventListener("click", () => this.seekToClip(idx));
-          bindCursorTarget(thumbBtn);
-          this.strip.appendChild(thumbBtn);
-          this.thumbs.push(thumbBtn);
-        }
-      });
-    }
-
-    bindControls() {
-      $$("[data-reel-toggle]", this.el).forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.togglePlayPause();
-        });
-        bindCursorTarget(btn);
-      });
-
-      const prevBtn = $("[data-reel-prev]", this.el);
-      const nextBtn = $("[data-reel-next]", this.el);
-      if (prevBtn) {
-        prevBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const target = Math.max(0, (this.activeIdx >= 0 ? this.activeIdx : 0) - 1);
-          this.seekToClip(target);
-        });
-        bindCursorTarget(prevBtn);
-      }
-      if (nextBtn) {
-        nextBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const target = Math.min(this.cards.length - 1, (this.activeIdx >= 0 ? this.activeIdx : 0) + 1);
-          this.seekToClip(target);
-        });
-        bindCursorTarget(nextBtn);
-      }
-
-      if (this.scrub) {
-        bindTimelineScrub(
-          this.scrub,
-          (r, opts) => this.seekToProgress(r, opts),
-          (active) => { this.isScrubbing = active; }
-        );
-        this.scrub.addEventListener("keydown", (e) => {
-          const step = e.shiftKey ? 0.12 : 0.04;
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToProgress(clamp(this.prog + step)); }
-          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToProgress(clamp(this.prog - step)); }
-        });
-      }
-
-      if (this.deckWrap) {
-        let touchX = 0, touchY = 0, tracking = false;
-        this.deckWrap.addEventListener("touchstart", (e) => {
-          if (e.touches.length !== 1) return;
-          touchX = e.touches[0].clientX;
-          touchY = e.touches[0].clientY;
-          tracking = true;
-        }, { passive: true });
-        this.deckWrap.addEventListener("touchend", (e) => {
-          if (!tracking || !e.changedTouches.length) return;
-          tracking = false;
-          const dx = e.changedTouches[0].clientX - touchX;
-          const dy = e.changedTouches[0].clientY - touchY;
-          if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.35) {
-            const cur = this.activeIdx >= 0 ? this.activeIdx : 0;
-            const next = dx < 0 ? Math.min(this.cards.length - 1, cur + 1) : Math.max(0, cur - 1);
-            if (next !== cur) this.seekToClip(next);
-          }
-        }, { passive: true });
-      }
-    }
-
-    togglePlayPause() {
-      if (this.prog >= 0.99) {
-        this.autoPlayPaused = false;
-        this.autoPlaySuspended = false;
-        this.syncPauseUI();
-        this.seekToProgress(0.01);
-        playTactileTick(720, 0.025, 0.018);
-        return;
-      }
-      this.autoPlayPaused = !this.autoPlayPaused;
-      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
-      this.syncPauseUI();
-      playTactileTick(this.autoPlayPaused ? 480 : 660, 0.02, 0.015);
-    }
-
-    syncPauseUI() {
-      this.el.classList.toggle("is-paused", this.autoPlayPaused);
-      if (this.modeLblEl) {
-        this.modeLblEl.textContent = this.autoPlayPaused ? "Pausado" : "Auto · Activo";
-      }
-      $$("[data-reel-toggle]", this.el).forEach((btn) => {
-        btn.setAttribute("aria-pressed", String(!this.autoPlayPaused));
-      });
-    }
-
-    seekToProgress(p, opts = {}) {
-      const targetP = clamp(p, 0, 1);
-      const targetY = this.top + targetP * this.len;
-      this.seekingUntil = performance.now() + (opts.immediate ? 120 : 780);
-      if (!this.autoPlayPaused) this.autoPlaySuspended = false;
-      scrollToTarget(targetY, { duration: 0.72, immediate: !!opts.immediate });
-    }
-
-    seekToClip(idx) {
-      const n = Math.max(1, this.cards.length);
-      const safeIdx = clamp(idx, 0, n - 1);
-      const introShare = 0.11;
-      const clipStart = n === 1 ? 0 : (safeIdx + (safeIdx === 0 ? 0.02 : 0.06)) / n;
-      const targetP = clamp(introShare + clipStart * (1 - introShare), introShare, 0.985);
-      this.seekToProgress(targetP);
-      playTactileTick(620 + safeIdx * 24, 0.02, 0.014);
-    }
-
-    measure() {
-      const portrait = vw / vh < 0.92 || vw <= 680;
-      let w, h, step;
-      if (portrait) {
-        w = clamp(Math.round(vw * 0.82), 264, 540);
-        h = Math.round(w * (9 / 16));
-        const maxH = Math.max(160, Math.min(vh * 0.40, vh - 290));
-        if (h > maxH) {
-          h = Math.round(maxH);
-          w = Math.round(h * (16 / 9));
-        }
-        step = Math.round(w * 0.90);
-      } else {
-        w = clamp(Math.round(vw * 0.49), 380, 840);
-        h = Math.round(w * (9 / 16));
-        const maxH = Math.max(220, Math.min(vh * 0.46, vh - 310));
-        if (h > maxH) {
-          h = Math.round(maxH);
-          w = Math.round(h * (16 / 9));
-        }
-        step = Math.round(w * 0.84);
-      }
-
-      this.cardW = w;
-      this.cardH = h;
-      this.cardStep = step;
-      this.stage.style.setProperty("--reel-w", `${w}px`);
-      this.stage.style.setProperty("--reel-h", `${h}px`);
-
-      this.top = this.el.offsetTop;
-      this.len = Math.max(1, this.el.offsetHeight - vh);
-
-      const dpr = Math.min(window.devicePixelRatio || 1, NET_PROFILE.maxReelDpr);
-      const cw = Math.round(w * dpr);
-      const ch = Math.round(h * dpr);
-      this.cards.forEach((c) => {
-        if (c.canvas.width !== cw || c.canvas.height !== ch) {
-          c.canvas.width = cw;
-          c.canvas.height = ch;
-          c.dirty = true;
-        }
-      });
-
-      const nextSet = this.pickSet();
-      if (this.set && nextSet !== this.set) {
-        this.set = nextSet;
-        this.cards.forEach((c) => { c.loadedSet = null; c.dirty = true; });
-        if (this.activeIdx >= 0) this.loadNeighborhood(this.activeIdx);
-      } else {
-        this.set = nextSet;
-      }
-    }
-
-    loadCard(card) {
-      if (!card) return;
-      const set = this.set || this.pickSet();
-      attachCardBank(card, set);
-      AssetScheduler.schedulePump();
-    }
-
-    loadNeighborhood(centerIdx) {
-      if (!this.cards.length) return;
-      const set = this.set || this.pickSet();
-      const order = [centerIdx, centerIdx + 1, centerIdx - 1, centerIdx + 2];
-      order.forEach((idx) => {
-        if (idx >= 0 && idx < this.cards.length) attachCardBank(this.cards[idx], set);
-      });
-      AssetScheduler.schedulePump();
-    }
-
-    getLoadJobs(y, viewH) {
-      if (!this.cards.length) return [];
-      const secEnd = this.top + this.len + viewH;
-      const inView = y + viewH >= this.top - viewH * 0.25 && y <= secEnd + viewH * 0.25;
-      const dist = inView ? 0 : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
-      if (!inView && dist > viewH * 2.6 && NET_PROFILE.isConstrainedNet) return [];
-
-      const set = this.set || this.pickSet();
-      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
-      const jobs = [];
-      this.cards.forEach((card, i) => {
-        const d = Math.abs(i - center);
-        if (!inView && d > 1) return;
-        const bank = attachCardBank(card, set);
-        const startIdx = card.from - 1;
-        const endIdx = card.to - 1;
-        const anchorIdx = clamp(Math.round(card.curFrame) - 1, startIdx, endIdx);
-        if (inView) {
-          if (i === center) {
-            jobs.push({ bank, priority: 0, distance: 0, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-          } else if (d <= 2) {
-            jobs.push({ bank, priority: d === 1 ? 1.1 : 2.1, distance: d, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-          } else {
-            jobs.push({ bank, priority: 3.4, distance: d, anchor: startIdx, start: startIdx, end: startIdx, isReel: true });
-          }
-        } else {
-          jobs.push({ bank, priority: i === center ? 1.2 : 3.5, distance: dist + d * 100, anchor: startIdx, start: startIdx, end: Math.min(endIdx, startIdx + 24), isReel: true });
-        }
-      });
-      return jobs;
-    }
-
-    collectBankDistances(y, viewH, distMap) {
-      const secEnd = this.top + this.len + viewH;
-      const baseDist = (y + viewH >= this.top && y <= secEnd)
-        ? 0
-        : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
-      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
-      this.cards.forEach((c, i) => {
-        if (!c.bank) return;
-        const d = baseDist + Math.abs(i - center) * 200;
-        const prev = distMap.get(c.bank.key);
-        if (prev === undefined || d < prev) distMap.set(c.bank.key, d);
-      });
-    }
-
-    nearestCached(card, frameNum) {
-      if (!card.bank) return null;
-      const hit = card.bank.getBestDrawable(clamp(frameNum - 1, 0, card.count - 1));
-      return hit ? hit.img : null;
-    }
-
-    drawCard(card, frameFloat) {
-      card.curFrame = frameFloat;
-      const set = this.set || this.pickSet();
-      const bank = attachCardBank(card, set);
-      const targetIdx = clamp(Math.round(clamp(frameFloat, card.from, card.to)) - 1, 0, card.count - 1);
-      if (card.lastDrawnIdx === targetIdx && card.lastDrawnExact && !card.dirty) return;
-
-      const hit = bank.getBestDrawable(targetIdx);
-      if (!hit || !hit.img) return;
-      const img = hit.img;
-      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-      if (!iw || !ih) return;
-
-      if (card.lastDrawnIdx === hit.frameIdx && card.lastDrawnExact === hit.exact && !card.dirty) return;
-
-      const c = card.canvas;
-      const ctx = card.ctx;
-      const cw = c.width, ch = c.height;
-      if (!cw || !ch) return;
-      const s = Math.max(cw / iw, ch / ih);
-      const dw = iw * s, dh = ih * s;
-      const x = (cw - dw) / 2, y = (ch - dh) / 2;
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "low";
-      ctx.drawImage(img, x, y, dw, dh);
-      card.lastDrawnIdx = hit.frameIdx;
-      card.lastDrawnExact = hit.exact;
-      card.dirty = false;
-      if (!card.hasCanvas) {
-        card.hasCanvas = true;
-        card.el.classList.add("has-canvas");
-      }
-    }
-
-    setActiveClip(idx) {
-      if (idx === this.activeIdx || !this.cards[idx]) return;
-      const prevIdx = this.activeIdx;
-      this.activeIdx = idx;
-      const card = this.cards[idx];
-
-      if (prevIdx >= 0) {
-        playTactileTick(640, 0.016, 0.012);
-      }
-
-      this.cards.forEach((c, i) => c.el.classList.toggle("is-center", i === idx));
-      this.thumbs.forEach((th, i) => {
-        const active = i === idx;
-        th.classList.toggle("is-active", active);
-        th.setAttribute("aria-selected", String(active));
-      });
-
-      if (this.strip && this.thumbs[idx] && this.strip.scrollWidth > this.strip.clientWidth + 4) {
-        const th = this.thumbs[idx];
-        const targetLeft = th.offsetLeft - (this.strip.clientWidth - th.offsetWidth) * 0.5;
-        if (this.strip.scrollTo) {
-          this.strip.scrollTo({ left: Math.max(0, targetLeft), behavior: reduce ? "auto" : "smooth" });
-        } else {
-          this.strip.scrollLeft = Math.max(0, targetLeft);
-        }
-      }
-
-      if (this.idxEl) this.idxEl.textContent = pad(idx + 1);
-      if (this.topCatEl) this.topCatEl.textContent = card.cat.split("·")[0].trim();
-      if (this.topFpsEl) this.topFpsEl.textContent = `${card.fps} FPS`;
-
-      if (this.capSlots.length >= 2) {
-        const fillSlot = (slot) => {
-          if (slot.num) slot.num.textContent = pad(idx + 1);
-          if (slot.cat) slot.cat.textContent = card.cat;
-          if (slot.loc) slot.loc.textContent = card.loc;
-          if (slot.title) slot.title.innerHTML = card.title;
-          if (slot.desc) slot.desc.textContent = card.desc;
-        };
-
-        if (prevIdx < 0 || reduce) {
-          const curSlot = this.capSlots[this.capSlotIdx];
-          fillSlot(curSlot);
-          curSlot.el.classList.remove("is-leaving");
-          curSlot.el.classList.add("is-active");
-          curSlot.el.setAttribute("aria-hidden", "false");
-        } else {
-          const outSlot = this.capSlots[this.capSlotIdx];
-          const inIdx = 1 - this.capSlotIdx;
-          const inSlot = this.capSlots[inIdx];
-          this.capSlotIdx = inIdx;
-
-          // Prepara el slot entrante en estado inicial (sin transición) antes de activarlo
-          inSlot.el.style.transition = "none";
-          inSlot.el.classList.remove("is-active", "is-leaving");
-          fillSlot(inSlot);
-          void inSlot.el.offsetWidth;
-          inSlot.el.style.transition = "";
-
-          outSlot.el.classList.remove("is-active");
-          outSlot.el.classList.add("is-leaving");
-          outSlot.el.setAttribute("aria-hidden", "true");
-
-          inSlot.el.classList.add("is-active");
-          inSlot.el.setAttribute("aria-hidden", "false");
-        }
-      }
-
-      this.stage.style.setProperty("--reel-aura-s", idx % 2 === 0 ? "1.04" : "0.96");
-      if (prevIdx < 0 && this.deckWrap && this.stage) {
-        const sr = this.stage.getBoundingClientRect();
-        const dr = this.deckWrap.getBoundingClientRect();
-        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
-      }
-      this.loadNeighborhood(idx);
-    }
-
-    update(dt) {
-      const n = this.cards.length;
-      if (!n) return;
-
-      const y = scrollY();
-      const rawP = (y - this.top) / this.len;
-      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
-
-      if (viewportEntry > 0 && this.activeIdx < 0) {
-        this.setActiveClip(0);
-      }
-      if (y + vh < this.top - vh || y > this.top + this.len + vh) return;
-
-      if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < 1.05 && performance.now() > (this.seekingUntil || 0)) {
-        const firstCard = this.cards[0];
-        const hasFirst = !!this.nearestCached(firstCard, firstCard.from);
-        runHybridScrollEngine({
-          top: this.top,
-          len: this.len,
-          dt,
-          viewportEntry,
-          rawP,
-          baseDuration: this.baseDuration,
-          state: this,
-          hasFrames: hasFirst || this.activeIdx >= 0,
-          isHero: false,
-        });
-      }
-
-      const targetProg = clamp(rawP, 0, 1);
-      this.prog = targetProg;
-
-      const dtSec = Math.min(dt || 0.016, 0.05);
-      const isDirectSeek = this.isScrubbing || performance.now() <= (this.seekingUntil || 0);
-      if (reduce) {
-        this.progCur = targetProg;
-      } else {
-        const damp = 1 - Math.exp((isDirectSeek ? -16 : -22) * dtSec);
-        this.progCur += (targetProg - this.progCur) * damp;
-      }
-      if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
-
-      const introShare = 0.11;
-      const entryPart = smooth(range(viewportEntry, 0.12, 1)) * 0.42;
-      const settlePart = this.progCur > 0 ? clamp(this.progCur / introShare, 0, 1) * 0.58 : 0;
-      const introT = reduce ? (viewportEntry > 0.05 ? 1 : 0) : clamp(entryPart + settlePart, 0, 1);
-      const settleEase = reduce ? 1 : (1 - Math.pow(1 - clamp((introT - 0.08) / 0.92, 0, 1), 2.5));
-      const hudReveal = reduce ? 1 : smooth(range(introT, 0.54, 1.0));
-      const sideReveal = reduce ? 1 : smooth(range(introT, 0.50, 1.0));
-      const heroMaxFit = Math.min((vw * 0.88) / Math.max(1, this.cardW || 600), (vh * 0.78) / Math.max(1, this.cardH || 338));
-      const heroScale = clamp(heroMaxFit, 1.24, 1.78);
-
-      const carouselProg = clamp((this.progCur - introShare) / (1 - introShare), 0, 1);
-      const seg = carouselProg * n;
-      const segIdx = clamp(Math.floor(seg), 0, n - 1);
-      const u = clamp(seg - segIdx, 0, 1);
-
-      const dwellEnd = 0.55;
-      const microDrift = 0.14;
-      let carouselTarget = segIdx;
-      if (segIdx < n - 1) {
-        carouselTarget = u <= dwellEnd
-          ? segIdx + (u / dwellEnd) * microDrift
-          : segIdx + microDrift + smooth((u - dwellEnd) / (1 - dwellEnd)) * (1 - microDrift);
-      }
-      this.carouselCur = carouselTarget;
-
-      const nearestIdx = clamp(Math.round(this.carouselCur), 0, n - 1);
-      if (nearestIdx !== this.activeIdx) this.setActiveClip(nearestIdx);
-
-      this.stage.style.setProperty("--reel-entry", hudReveal.toFixed(3));
-      this.stage.style.setProperty("--reel-entry-y", "0px");
-      this.stage.style.setProperty("--reel-hud", hudReveal.toFixed(3));
-      this.stage.style.setProperty("--reel-hud-top-y", `${(-(1 - hudReveal) * 14).toFixed(1)}px`);
-      this.stage.style.setProperty("--reel-hud-bot-y", `${((1 - hudReveal) * 18).toFixed(1)}px`);
-      this.stage.style.setProperty("--reel-aura-op", (0.22 + 0.46 * smooth(range(introT, 0.08, 0.85))).toFixed(3));
-
-      const targetRx = (!reduce && finePointer) ? (-normMy * 1.4) : 0;
-      const targetRy = (!reduce && finePointer) ? (normMx * 1.9) : 0;
-      this.tiltRx += (targetRx - this.tiltRx) * 0.1;
-      this.tiltRy += (targetRy - this.tiltRy) * 0.1;
-
-      const totalSeconds = Math.round(carouselProg * this.baseDuration);
-      if (this.tcEl) this.tcEl.textContent = `${pad(Math.floor(totalSeconds / 60))}:${pad(totalSeconds % 60)}`;
-      if (this.scrubFill) this.scrubFill.style.width = `${(this.progCur * 100).toFixed(1)}%`;
-      if (this.scrub) this.scrub.setAttribute("aria-valuenow", String(Math.round(this.progCur * 100)));
-
-      this.cards.forEach((card, i) => {
-        const d = i - this.carouselCur;
-        const absD = Math.abs(d);
-        const st = card.el.style;
-
-        if (absD > 2.25) {
-          st.setProperty("--rc-op", "0");
-          st.setProperty("--rc-pe", "none");
-          return;
-        }
-
-        const bell = Math.exp(-d * d * 2.1);
-        let tx = d * this.cardStep * (1 - 0.04 * Math.min(absD, 2));
-        let ty = (1 - bell) * 5;
-        let scale = 0.80 + 0.20 * bell;
-        const baseRy = clamp(-d * 9.5, -16, 16);
-        let activeWeight = smooth(clamp(1 - absD * 1.25, 0, 1));
-        let op = clamp(1 - Math.max(0, absD - 0.15) * 0.45, 0, 1);
-        let shade = clamp((1 - bell) * 0.72, 0, 0.72);
-
-        if (introT < 1) {
-          if (i === 0) {
-            const introScale = 1 + (heroScale - 1) * (1 - settleEase);
-            scale *= introScale;
-            ty += (1 - settleEase) * 26;
-            op *= smooth(range(introT, 0.0, 0.52));
-            activeWeight *= smooth(range(introT, 0.56, 0.98));
-            shade = Math.max(shade, (1 - smooth(range(introT, 0.15, 0.72))) * 0.25);
-          } else {
-            op *= sideReveal;
-            tx += (1 - sideReveal) * (this.cardW || 560) * 0.22;
-          }
-        }
-
-        const rx = this.tiltRx * activeWeight;
-        const ry = baseRy + this.tiltRy * activeWeight;
-        const maxParallax = Math.max(4, (this.cardW || 300) * 0.032);
-        const parallaxX = clamp(-d * maxParallax, -16, 16);
-
-        st.setProperty("--rc-x", `${tx.toFixed(1)}px`);
-        st.setProperty("--rc-y", `${ty.toFixed(1)}px`);
-        st.setProperty("--rc-s", scale.toFixed(4));
-        st.setProperty("--rc-rx", `${rx.toFixed(2)}deg`);
-        st.setProperty("--rc-ry", `${ry.toFixed(2)}deg`);
-        st.setProperty("--rc-op", op.toFixed(3));
-        st.setProperty("--rc-shade", shade.toFixed(3));
-        st.setProperty("--rc-act", activeWeight.toFixed(3));
-        st.setProperty("--rc-px", `${parallaxX.toFixed(1)}px`);
-        st.setProperty("--rc-ims", (1.10 - activeWeight * 0.08).toFixed(4));
-        st.setProperty("--rc-pe", (absD < 1.35 && op > 0.25) ? "auto" : "none");
-        st.setProperty("--rc-z", String(Math.round(50 - absD * 10)));
-
-        const entryShare = 0.18;
-        const exitShare = 0.82;
-        const introDrift = 0.10;
-        let clipP = 0;
-        if (i < segIdx) {
-          clipP = 1;
-        } else if (i === segIdx) {
-          if (i === 0 && i === n - 1) {
-            clipP = this.progCur;
-          } else if (i === 0) {
-            if (this.progCur < introShare) {
-              clipP = clamp(this.progCur / introShare, 0, 1) * introDrift;
-            } else {
-              const mainP = u <= dwellEnd
-                ? (u / dwellEnd) * exitShare
-                : exitShare + ((u - dwellEnd) / (1 - dwellEnd)) * (1 - exitShare);
-              clipP = introDrift + mainP * (1 - introDrift);
-            }
-          } else if (i === n - 1) {
-            clipP = entryShare + u * (1 - entryShare);
-          } else {
-            clipP = u <= dwellEnd
-              ? entryShare + (u / dwellEnd) * (exitShare - entryShare)
-              : exitShare + ((u - dwellEnd) / (1 - dwellEnd)) * (1 - exitShare);
-          }
-        } else if (i === segIdx + 1 && u > dwellEnd) {
-          clipP = ((u - dwellEnd) / (1 - dwellEnd)) * entryShare;
-        }
-
-        const frameFloat = card.from + clipP * (card.span - 1);
-        if (absD < 1.85) {
-          this.drawCard(card, frameFloat);
-        }
-
-        if (Math.abs(clipP - card.lastProg) > 0.002) {
-          card.lastProg = clipP;
-          st.setProperty("--rc-prog", clipP.toFixed(3));
-          if (this.thumbs[i]) {
-            this.thumbs[i].style.setProperty("--th-p", (i === segIdx ? clipP : (i < segIdx ? 1 : 0)).toFixed(3));
-          }
-        }
-      });
-    }
-  }
-
-  const reels = $$(".reel:not(.tr-reel-layer)").map((el) => new ReelArchive(el));
 
   /* ---------------------------------------------------------
-     MOTOR UNIFICADO: PLANIFICACIÓN EN PLANTA -> ARCHIVO EN MOVIMIENTO
-     Escenario sticky único con disolución cartográfica, fusión de video
-     y retroceso fluido al carrusel 3D.
+     MOTOR UNIFICADO: PLANIFICACIÓN EN PLANTA -> TRABAJOS SELECCIONADOS
+     Secuencia de planta con trazado SVG, despertar fullscreen de Toma 1,
+     encuadre centrado en cuadrado, acople fluido en la 1ª tarjeta y
+     revelado escalonado de todo el portafolio.
      --------------------------------------------------------- */
-  const TRACE_PLAN_END_P = 0.315;
-  const BRIDGE_START_P = 0.29;
-  const TRACE_MEDIA_END_P = 0.365;
-  const BRIDGE_END_P = 0.415;
-  const REEL_WAKE_P = BRIDGE_START_P + 0.28 * (BRIDGE_END_P - BRIDGE_START_P);
+  const easeInOutQuart = (t) => (t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2);
 
-  class UnifiedTraceReel {
+  class TraceToRepertorio {
     constructor(el) {
       this.el = el;
-      this.stage = $(".trace-reel__stage", el);
+      this.stage = $(".trace-sec__stage", el);
       this.traceMediaWrap = $("[data-tr-trace-media]", el);
       this.traceCanvas = $(".seq__canvas", this.traceMediaWrap);
       this.tracePosterImg = $(".seq__poster img", this.traceMediaWrap);
       this.traceCtx = this.traceCanvas.getContext("2d", { alpha: false });
-      this.reelBgWrap = $("[data-tr-reel-bg]", el);
       this.traceOverlay = $("[data-tr-trace-overlay]", el);
       this.traceConsole = $(".trace__console", this.traceOverlay);
-      this.reelLayer = $("[data-tr-reel-layer]", el);
+
+      this.repEl = $("#repertorio");
+      this.leadCard = $("[data-rep-lead]", this.repEl);
+      this.leadScreen = $(".rep-card__screen", this.leadCard);
+      this.leadPosterImg = $(".rep-card__poster", this.leadScreen);
+
+      this.portalEl = $("[data-tr-portal]");
+      this.portalAura = $("[data-tr-portal-aura]", this.portalEl);
+      this.portalFrame = $("[data-tr-portal-frame]", this.portalEl);
+      this.portalCanvas = $("[data-tr-portal-canvas]", this.portalEl);
+      this.portalCtx = this.portalCanvas ? this.portalCanvas.getContext("2d", { alpha: false }) : null;
 
       // Config secuencia planta (casa-greenville)
       this.src = el.dataset.src;
       this.count = +el.dataset.count;
       this.version = el.dataset.version || "";
       this.fps = +el.dataset.fps || 24;
+
+      // Config secuencia puente (casona-lago -> Toma 1 / Casa del Lago)
+      this.portalSrc = el.dataset.portalSrc || "assets/seq/casona-lago";
+      this.portalCount = +(el.dataset.portalCount || 118);
+      this.portalVersion = el.dataset.portalVersion || "";
+      this.portalFps = +(el.dataset.portalFps || 24);
+
       this.isHybrid = el.dataset.mode !== "manual";
-      this.baseDuration = parseFloat(el.dataset.duration) || 29.5;
+      this.baseDuration = parseFloat(el.dataset.duration) || 17.5;
       this.autoPlayPaused = false;
       this.autoPlaySuspended = false;
-      this.loopPaused = false;
       this.prevRawP = undefined;
       this.lastTrackedY = undefined;
 
@@ -3162,29 +2484,58 @@
       this.lastTracePctVal = -1;
       this.traceDirty = true;
       this.hasTraceCanvas = false;
-      this.lastTraceBlur = -1;
+      this.traceBitmapsReleased = false;
+      this.traceBufferReady = false;
+
+      this.portalBank = null;
+      this.unsubPortalBank = null;
+      this.portalSet = null;
+      this.portalFrameCur = 0;
+      this.lastPortalDrawnIdx = -1;
+      this.lastPortalDrawnExact = false;
+      this.portalDirty = true;
+      this.hasPortalCanvas = false;
+      this.portalBitmapsReleased = false;
+      this.portalBufferReady = false;
+
       this.lastTraceGray = -1;
       this.traceCur = 0;
       this.lastTraceZone = -1;
       this.lastPreState = false;
-      this.lastOverlayKey = "";
+      this.lastPostState = false;
       this._ovVars = {};
       this._mediaVars = {};
-      this._reelVars = {};
-      this._bgVars = {};
+      this._portalVars = {};
+      this._frameVars = {};
+      this._auraVars = {};
       this._txtCache = {};
       this.isPortraitSvg = false;
       this.isOffscreen = false;
       this.traceOverlayHidden = false;
-      this.reelLayerHidden = false;
-      this.lastReelInteractive = false;
+      this.portalHidden = true;
       this.lastWpMask = -1;
       this.lastTraceZoneUi = -1;
-      this.traceBitmapsReleased = false;
-      this.lastReelPct = -1;
       this.needsVisualSync = true;
-      this.traceBufferReady = false;
-      this.firstCardBufferReady = false;
+      this.prog = 0;
+      this.progCur = 0;
+      this.isScrubbing = false;
+
+      // Estado del acople continuo en Card 1 + revelado de Trabajos Seleccionados
+      this.portalFade = 1;
+      this.repWake = false;
+      this.repColor = false;
+      this.repDocked = false;
+      this.repSettled = false;
+      this.leadSolid = false;
+      this.leadSolidFrames = 0;
+      this.leadPosterDecoded = false;
+      this.isPortraitLayout = false;
+      this.centerW = 560;
+      this.centerH = 315;
+      this.leadW = 400;
+      this.leadH = 225;
+      this.leadCenterX = 0;
+      this.leadRelCenterY = 400;
       this.bufferBadge = createBufferBadge(this.stage);
 
       // Referencias SVG & HUD de planta
@@ -3221,82 +2572,31 @@
         r: n.dataset.traceAct.split(",").map(Number),
       }));
 
-      this.tracePathLen = 1034;
-      if (this.tracePathCore && typeof this.tracePathCore.getTotalLength === "function") {
-        try {
-          const len = this.tracePathCore.getTotalLength();
-          if (len > 20) this.tracePathLen = len;
-        } catch (_) {}
-      }
-      if (this.tracePathCore) {
-        this.tracePathCore.style.strokeDasharray = `${this.tracePathLen}`;
-        this.tracePathCore.style.strokeDashoffset = `${this.tracePathLen}`;
-      }
-      if (this.tracePathGlow) {
-        this.tracePathGlow.style.strokeDasharray = `${this.tracePathLen}`;
-        this.tracePathGlow.style.strokeDashoffset = `${this.tracePathLen}`;
-      }
+      this.tracePathLen = this.initSvgPathLen(this.tracePathCore, this.tracePathGlow, 1034);
+      this.tracePathLenV = this.initSvgPathLen(this.tracePathCoreV, this.tracePathGlowV, 690);
 
-      this.tracePathLenV = 690;
-      if (this.tracePathCoreV && typeof this.tracePathCoreV.getTotalLength === "function") {
-        try {
-          const lenV = this.tracePathCoreV.getTotalLength();
-          if (lenV > 20) this.tracePathLenV = lenV;
-        } catch (_) {}
-      }
-      if (this.tracePathCoreV) {
-        this.tracePathCoreV.style.strokeDasharray = `${this.tracePathLenV}`;
-        this.tracePathCoreV.style.strokeDashoffset = `${this.tracePathLenV}`;
-      }
-      if (this.tracePathGlowV) {
-        this.tracePathGlowV.style.strokeDasharray = `${this.tracePathLenV}`;
-        this.tracePathGlowV.style.strokeDashoffset = `${this.tracePathLenV}`;
-      }
-
-      // Referencias Archivo en Movimiento
-      this.deckWrap = $(".reel__deck-wrap", this.reelLayer);
-      this.deck = $("[data-reel-deck]", this.reelLayer);
-      this.strip = $("[data-reel-strip]", this.reelLayer);
-      this.reelScrub = $(".reel__scrub", this.reelLayer);
-      this.reelScrubFill = $("[data-reel-scrub-fill]", this.reelLayer);
-      this.reelTcEl = $("[data-reel-tc]", this.reelLayer);
-      this.reelDuration = parseFloat(this.reelLayer.dataset.duration) || 39.0;
-
-      this.modeLblEl = $("[data-reel-mode-lbl]", this.reelLayer);
-      this.idxEl = $("[data-reel-idx]", this.reelLayer);
-      this.totalEl = $("[data-reel-total]", this.reelLayer);
-      this.topCatEl = $("[data-reel-top-cat]", this.reelLayer);
-      this.topFpsEl = $("[data-reel-top-fps]", this.reelLayer);
-
-      this.capSlots = $$("[data-reel-cap-slot]", this.reelLayer).map((slot) => ({
-        el: slot,
-        num: $(".reel__cap-num", slot),
-        cat: $(".reel__cap-cat", slot),
-        loc: $(".reel__cap-loc", slot),
-        title: $(".reel__cap-title", slot),
-        desc: $(".reel__cap-desc", slot),
-      }));
-      this.capSlotIdx = 0;
-
-      this.cards = [];
-      this.thumbs = [];
-      this.carouselCur = 0;
-      this.progCur = 0;
-      this.prog = 0;
-      this.activeIdx = -1;
-      this.tiltRx = 0;
-      this.tiltRy = 0;
-      this.reelSet = null;
-      this.openedPreload = false;
-      this.isScrubbing = false;
-      this.isHorizontalDragging = false;
-      this.suppressClickUntil = 0;
-      this.lastReelTcSec = -1;
-
-      this.initCards();
       this.bindControls();
       this.measure();
       AssetScheduler.registerSource(this);
+    }
+
+    initSvgPathLen(coreEl, glowEl, fallbackLen) {
+      let total = fallbackLen;
+      if (coreEl && typeof coreEl.getTotalLength === "function") {
+        try {
+          const measured = coreEl.getTotalLength();
+          if (measured > 20) total = measured;
+        } catch (_) {}
+      }
+      if (coreEl) {
+        coreEl.style.strokeDasharray = `${total}`;
+        coreEl.style.strokeDashoffset = `${total}`;
+      }
+      if (glowEl) {
+        glowEl.style.strokeDasharray = `${total}`;
+        glowEl.style.strokeDashoffset = `${total}`;
+      }
+      return total;
     }
 
     pickTraceSet() {
@@ -3304,317 +2604,23 @@
       return pickOptimalSet({ portraitAllowed: true, targetWidthPx });
     }
 
-    pickReelSet(idx = 0) {
-      if (idx === 0) {
-        return (NET_PROFILE.isConstrainedNet || NET_PROFILE.isLowMem) ? "sm" : "md";
-      }
-      return "sm";
-    }
-
-    initCards() {
-      const cardEls = $$(".reel-card", this.deck);
-      const total = cardEls.length;
-      if (this.totalEl) this.totalEl.textContent = pad(total);
-
-      cardEls.forEach((cardEl, idx) => {
-        const src = cardEl.dataset.src;
-        const count = Math.max(1, +(cardEl.dataset.count || 1));
-        const from = clamp(+(cardEl.dataset.from || 1), 1, count);
-        const to = clamp(+(cardEl.dataset.to || count), from, count);
-        const version = cardEl.dataset.version || "";
-        const fps = Math.max(12, +(cardEl.dataset.fps || 24));
-        const span = Math.max(1, to - from + 1);
-        const durSec = span / fps;
-        const vParam = version ? `?v=${version}` : "";
-        let aspect = 16 / 9;
-        if (cardEl.dataset.aspect) {
-          const parts = cardEl.dataset.aspect.split(/[/:]/).map(Number);
-          if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
-            aspect = parts[0] / parts[1];
-          }
-        }
-
-        cardEl.innerHTML = `
-          <div class="reel-card__frame">
-            <div class="reel-card__media">
-              <canvas class="reel-card__canvas" aria-hidden="true"></canvas>
-              <picture class="reel-card__poster">
-                <img src="${src}/poster.jpg${vParam}" alt="" loading="${idx === 0 ? "eager" : "lazy"}" decoding="${idx === 0 ? "sync" : "async"}">
-              </picture>
-            </div>
-            <div class="reel-card__vignette" aria-hidden="true"></div>
-            <div class="reel-card__shade" aria-hidden="true"></div>
-            <div class="reel-card__lead-veil" aria-hidden="true"></div>
-            <div class="reel-card__marks" aria-hidden="true">
-              <span class="seq__mark seq__mark--tl"></span>
-              <span class="seq__mark seq__mark--tr"></span>
-              <span class="seq__mark seq__mark--bl"></span>
-              <span class="seq__mark seq__mark--br"></span>
-            </div>
-            <div class="reel-card__hud" aria-hidden="true">
-              <span class="reel-card__chip reel-card__chip--idx">${pad(idx + 1)}</span>
-              <span class="reel-card__chip">${durSec.toFixed(1)}s · FPV</span>
-            </div>
-            <div class="reel-card__buffer" aria-hidden="true"><span class="seq-buffer__dot"></span><span class="reel-card__buf-txt">Cargando · 0%</span></div>
-            <span class="reel-card__prog" aria-hidden="true"><i></i></span>
-          </div>
-        `;
-
-        const canvas = $(".reel-card__canvas", cardEl);
-        const ctx = canvas.getContext("2d", { alpha: false });
-        const progBar = $(".reel-card__prog i", cardEl);
-        const bufEl = $(".reel-card__buffer", cardEl);
-        const bufTxt = $(".reel-card__buf-txt", cardEl);
-
-        const item = {
-          idx,
-          el: cardEl,
-          canvas,
-          ctx,
-          progBar,
-          bufEl,
-          bufTxt,
-          bufVisible: false,
-          bufWaitSince: 0,
-          lastBufPct: -1,
-          isLoopBuffered: false,
-          src,
-          count,
-          from,
-          to,
-          span,
-          version,
-          fps,
-          aspect,
-          cat: cardEl.dataset.cat || "Archivo FPV",
-          loc: cardEl.dataset.loc || "Buenos Aires",
-          title: cardEl.dataset.title || `Secuencia <em>${pad(idx + 1)}</em>`,
-          desc: cardEl.dataset.desc || "",
-          loadedSet: null,
-          lastDrawnImg: null,
-          dirty: true,
-          hasCanvas: false,
-          lastProg: -1,
-          curFrame: from,
-          loopSec: 0,
-          loopRate: 0,
-          _css: {},
-          lastThumbP: -1,
-          wasExpanded: false,
-        };
-
-        cardEl.addEventListener("click", (e) => {
-          if (performance.now() < this.suppressClickUntil) {
-            e.preventDefault();
-            return;
-          }
-          if (Math.abs(idx - this.carouselCur) >= 0.42) {
-            this.seekToClip(idx);
-          }
-        });
-        bindCursorTarget(cardEl);
-        this.cards.push(item);
-
-        if (this.strip) {
-          const thumbBtn = document.createElement("button");
-          thumbBtn.type = "button";
-          thumbBtn.className = "reel__thumb";
-          thumbBtn.setAttribute("role", "tab");
-          thumbBtn.setAttribute("aria-selected", idx === 0 ? "true" : "false");
-          thumbBtn.setAttribute("aria-label", `Ver secuencia ${pad(idx + 1)}`);
-          const thumbSrc = from > 1
-            ? `${src}/md/${pad(from, 4)}.webp${vParam}`
-            : `${src}/poster.jpg${vParam}`;
-          thumbBtn.innerHTML = `
-            <img src="${thumbSrc}" alt="" loading="lazy" decoding="async">
-            <span class="reel__thumb-no">${pad(idx + 1)}</span>
-            <span class="reel__thumb-bar" aria-hidden="true"></span>
-          `;
-          thumbBtn.addEventListener("click", () => this.seekToClip(idx));
-          bindCursorTarget(thumbBtn);
-          this.strip.appendChild(thumbBtn);
-          this.thumbs.push(thumbBtn);
-        }
-      });
+    pickPortalSet() {
+      return (NET_PROFILE.isConstrainedNet || NET_PROFILE.isLowMem) ? "sm" : "md";
     }
 
     bindControls() {
-      // Scrub de Planificación en Planta (0..TRACE_PLAN_END_P)
       if (this.traceScrub) {
         bindTimelineScrub(
           this.traceScrub,
-          (r, opts) => this.seekToUnifiedProgress(r * TRACE_PLAN_END_P, opts),
+          (r, opts) => this.seekToUnifiedProgress(r * this.planEndP, opts),
           (active) => { this.isScrubbing = active; }
         );
         this.traceScrub.addEventListener("keydown", (e) => {
-          const step = (e.shiftKey ? 0.1 : 0.04) * TRACE_PLAN_END_P;
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, 0, TRACE_PLAN_END_P)); }
-          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, 0, TRACE_PLAN_END_P)); }
+          const step = (e.shiftKey ? 0.1 : 0.04) * this.planEndP;
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, 0, this.planEndP)); }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, 0, this.planEndP)); }
         });
       }
-
-      // Controles de Archivo en Movimiento
-      $$("[data-reel-toggle]", this.reelLayer).forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.togglePlayPause();
-        });
-        bindCursorTarget(btn);
-      });
-
-      const prevBtn = $("[data-reel-prev]", this.reelLayer);
-      const nextBtn = $("[data-reel-next]", this.reelLayer);
-      if (prevBtn) {
-        prevBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const cur = Math.round(this.carouselCur);
-          const target = Math.max(0, cur - 1);
-          this.seekToClip(target);
-        });
-        bindCursorTarget(prevBtn);
-      }
-      if (nextBtn) {
-        nextBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const cur = Math.round(this.carouselCur);
-          const target = Math.min(this.cards.length - 1, cur + 1);
-          this.seekToClip(target);
-        });
-        bindCursorTarget(nextBtn);
-      }
-
-      if (this.reelScrub) {
-        bindTimelineScrub(
-          this.reelScrub,
-          (r, opts) => this.seekToUnifiedProgress(BRIDGE_END_P + r * (1 - BRIDGE_END_P), opts),
-          (active) => { this.isScrubbing = active; }
-        );
-        this.reelScrub.addEventListener("keydown", (e) => {
-          const step = (e.shiftKey ? 0.14 : 0.05) * (1 - BRIDGE_END_P);
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, BRIDGE_END_P, 1)); }
-          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, BRIDGE_END_P, 1)); }
-        });
-      }
-
-      if (this.deckWrap) {
-        let dragState = null;
-
-        const resetDrag = () => {
-          dragState = null;
-          this.isHorizontalDragging = false;
-          this.deckWrap.classList.remove("is-dragging");
-        };
-
-        this.deckWrap.addEventListener("pointerdown", (e) => {
-          if (!this.reelLayer.classList.contains("is-interactive")) return;
-          if (e.pointerType === "mouse" && e.button !== 0) return;
-          dragState = {
-            id: e.pointerId,
-            type: e.pointerType,
-            startX: e.clientX,
-            startY: e.clientY,
-            lastX: e.clientX,
-            lastT: performance.now(),
-            vx: 0,
-            startProg: clamp(this.prog, BRIDGE_END_P, 1),
-            mode: null,
-          };
-        });
-
-        this.deckWrap.addEventListener("pointermove", (e) => {
-          if (!dragState || e.pointerId !== dragState.id) return;
-          const dx = e.clientX - dragState.startX;
-          const dy = e.clientY - dragState.startY;
-
-          if (!dragState.mode) {
-            if (dragState.type === "touch" && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 1.15) {
-              dragState = null;
-              return;
-            }
-            if (Math.abs(dx) > 7 && Math.abs(dx) >= Math.abs(dy) * 1.05) {
-              dragState.mode = "h";
-              this.isHorizontalDragging = true;
-              this.deckWrap.classList.add("is-dragging");
-              try { this.deckWrap.setPointerCapture(e.pointerId); } catch (_) {}
-            } else {
-              return;
-            }
-          }
-
-          e.preventDefault();
-          const now = performance.now();
-          const dtMs = Math.max(4, now - dragState.lastT);
-          const instVx = (e.clientX - dragState.lastX) / (dtMs / 1000);
-          dragState.vx = dragState.vx * 0.55 + instVx * 0.45;
-          dragState.lastX = e.clientX;
-          dragState.lastT = now;
-
-          const nCards = Math.max(2, this.cards.length);
-          const progPerCard = (1 - BRIDGE_END_P) / (nCards - 1);
-          const stepPx = Math.max(160, this.cardStep || 360);
-          const targetP = clamp(dragState.startProg - (dx / stepPx) * progPerCard, BRIDGE_END_P, 1);
-          const targetY = this.top + targetP * this.len;
-          this.seekingUntil = now + 120;
-          scrollToTarget(targetY, { immediate: true });
-        }, { passive: false });
-
-        const endDrag = (e) => {
-          if (!dragState || e.pointerId !== dragState.id) return;
-          const wasH = dragState.mode === "h";
-          const vx = dragState.vx;
-          try { this.deckWrap.releasePointerCapture(e.pointerId); } catch (_) {}
-          resetDrag();
-          if (wasH) {
-            this.suppressClickUntil = performance.now() + 140;
-            if (Math.abs(vx) > 140) {
-              const nCards = Math.max(2, this.cards.length);
-              const progPerCard = (1 - BRIDGE_END_P) / (nCards - 1);
-              const stepPx = Math.max(160, this.cardStep || 360);
-              const inertiaP = clamp(this.prog - ((vx * 0.22) / stepPx) * progPerCard, BRIDGE_END_P, 1);
-              this.seekToUnifiedProgress(inertiaP);
-            }
-          }
-        };
-
-        this.deckWrap.addEventListener("pointerup", endDrag);
-        this.deckWrap.addEventListener("pointercancel", endDrag);
-        this.deckWrap.addEventListener("lostpointercapture", resetDrag);
-      }
-
-      if (this.reelLayer) {
-        this.reelLayer.addEventListener("wheel", (e) => {
-          if (!this.reelLayer.classList.contains("is-interactive")) return;
-          if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || Math.abs(e.deltaX) < 1) return;
-          const curP = (scrollY() - this.top) / this.len;
-          if (curP < BRIDGE_END_P - 0.015 || curP > 1.015) return;
-          const nCards = Math.max(2, this.cards.length);
-          const progPerCard = (1 - BRIDGE_END_P) / (nCards - 1);
-          const stepPx = Math.max(200, this.cardStep || 420);
-          const baseP = clamp(curP, BRIDGE_END_P, 1);
-          const nextP = clamp(baseP + (e.deltaX / stepPx) * progPerCard, BRIDGE_END_P, 1);
-          if (Math.abs(nextP - baseP) > 0.00005) {
-            e.preventDefault();
-            this.seekingUntil = performance.now() + 120;
-            scrollToTarget(this.top + nextP * this.len, { immediate: true });
-          }
-        }, { passive: false });
-      }
-    }
-
-    togglePlayPause() {
-      this.loopPaused = !this.loopPaused;
-      this.syncPauseUI();
-      playTactileTick(this.loopPaused ? 480 : 660, 0.02, 0.015);
-    }
-
-    syncPauseUI() {
-      this.reelLayer.classList.toggle("is-paused", this.loopPaused);
-      if (this.modeLblEl) {
-        this.modeLblEl.textContent = this.loopPaused ? "En pausa" : "Bucle · Activo";
-      }
-      $$("[data-reel-toggle]", this.reelLayer).forEach((btn) => {
-        btn.setAttribute("aria-pressed", String(!this.loopPaused));
-      });
     }
 
     seekToUnifiedProgress(p, opts = {}) {
@@ -3623,15 +2629,6 @@
       this.seekingUntil = performance.now() + (opts.immediate ? 120 : 780);
       if (!this.autoPlayPaused) this.autoPlaySuspended = false;
       scrollToTarget(targetY, { duration: 0.72, immediate: !!opts.immediate });
-    }
-
-    seekToClip(idx) {
-      const n = Math.max(1, this.cards.length);
-      const safeIdx = clamp(idx, 0, n - 1);
-      const clipPos = n > 1 ? safeIdx / (n - 1) : 0;
-      const targetP = clamp(BRIDGE_END_P + clipPos * (1 - BRIDGE_END_P), BRIDGE_END_P, 1);
-      this.seekToUnifiedProgress(targetP);
-      playTactileTick(620 + safeIdx * 24, 0.02, 0.014);
     }
 
     measure() {
@@ -3644,120 +2641,60 @@
         this.traceCanvas.height = th;
         this.traceDirty = true;
       }
+      if (this.portalCanvas && (!this.portalCanvas.width || !this.portalCanvas.height)) {
+        this.portalCanvas.width = 1024;
+        this.portalCanvas.height = 896;
+        this.portalDirty = true;
+      }
+
       this.isPortraitSvg = vw <= 900 || (vw / Math.max(1, vh) <= 1.0);
-      this.needsVisualSync = true;
-
+      const isPortraitLayout = (vw / Math.max(1, vh)) < 0.92 || vw <= 900;
+      this.isPortraitLayout = isPortraitLayout;
       this.top = this.el.offsetTop;
-      this.len = Math.max(1, this.el.offsetHeight - vh);
+      this.traceLen = Math.max(1, this.el.offsetHeight - vh);
+      this.repTop = this.repEl ? this.repEl.offsetTop : (this.top + this.el.offsetHeight);
+      this.len = Math.max(1, this.repTop - this.top);
+      this.traceSplitP = this.traceLen / this.len;
 
-      const portrait = vw / vh < 0.92 || vw <= 680;
-      let w, h, step;
-      if (portrait) {
-        w = clamp(Math.round(vw * 0.82), 264, 540);
-        h = Math.round(w * (9 / 16));
-        const maxH = Math.max(160, Math.min(vh * 0.40, vh - 290));
-        if (h > maxH) {
-          h = Math.round(maxH);
-          w = Math.round(h * (16 / 9));
+      this.planEndP = this.traceSplitP * 0.66;
+      this.bridgeStartP = this.traceSplitP * 0.59;
+      this.traceMediaEndP = this.traceSplitP * 0.78;
+      this.portalStartP = this.bridgeStartP + 0.14 * (this.traceSplitP - this.bridgeStartP);
+      this.shrinkStartP = this.bridgeStartP + 0.28 * (this.traceSplitP - this.bridgeStartP);
+      this.shrinkEndP = Math.max(this.shrinkStartP + 0.08, this.traceSplitP + 0.44 * (1 - this.traceSplitP));
+      this.dockStartP = this.shrinkEndP;
+      this.dockEndP = 1 - 0.008 * (1 - this.traceSplitP);
+
+      // Cuadro centrado siempre en formato horizontal 16:9
+      this.centerW = isPortraitLayout
+        ? clamp(Math.round(vw * 0.78), 268, 460)
+        : clamp(Math.round(Math.min(vw * 0.42, vh * 0.42 * (16 / 9))), 340, 620);
+      this.centerH = Math.round(this.centerW * (9 / 16));
+
+      if (this.repEl && this.leadScreen) {
+        const repRect = this.repEl.getBoundingClientRect();
+        const leadRect = this.leadScreen.getBoundingClientRect();
+        if (leadRect.width > 20 && leadRect.height > 20) {
+          this.leadW = leadRect.width;
+          this.leadH = leadRect.height;
+          this.leadCenterX = leadRect.left + leadRect.width * 0.5;
+          this.leadRelCenterY = (leadRect.top - repRect.top) + leadRect.height * 0.5;
         }
-        step = Math.round(w * 0.90);
-      } else {
-        w = clamp(Math.round(vw * 0.49), 380, 840);
-        h = Math.round(w * (9 / 16));
-        const maxH = Math.max(220, Math.min(vh * 0.46, vh - 310));
-        if (h > maxH) {
-          h = Math.round(maxH);
-          w = Math.round(h * (16 / 9));
-        }
-        step = Math.round(w * 0.84);
       }
 
-      this.cardW = w;
-      this.cardH = h;
-      this.cardStep = step;
-      this.stage.style.setProperty("--reel-w", `${w}px`);
-      this.stage.style.setProperty("--reel-h", `${h}px`);
-
-      const rDpr = Math.min(window.devicePixelRatio || 1, NET_PROFILE.maxReelDpr);
-      const cw = Math.round(w * rDpr);
-      const ch = Math.round(h * rDpr);
-      this.cardCw = cw;
-      this.cardCh = ch;
-
-      let deckH = h;
-      this.cards.forEach((c, idx) => {
-        const aspect = c.aspect || (16 / 9);
-        let cardW = w;
-        let cardH = h;
-        if (Math.abs(aspect - 16 / 9) > 0.01) {
-          if (portrait) {
-            cardW = clamp(Math.round(vw * 0.82), 264, 540);
-            cardH = Math.round(cardW / aspect);
-            const maxCardH = Math.max(180, Math.min(vh * 0.42, vh - 280));
-            if (cardH > maxCardH) {
-              cardH = Math.round(maxCardH);
-              cardW = Math.round(cardH * aspect);
-            }
-          } else {
-            cardW = clamp(Math.round(vw * 0.49), 380, 840);
-            cardH = Math.round(cardW / aspect);
-            const maxCardH = Math.max(220, Math.min(vh * 0.46, vh - 310));
-            if (cardH > maxCardH) {
-              cardH = Math.round(maxCardH);
-              cardW = Math.round(cardH * aspect);
-            }
-          }
-          c.el.style.setProperty("--rc-w", `${cardW}px`);
-          c.el.style.setProperty("--rc-h", `${cardH}px`);
-        } else {
-          c.el.style.removeProperty("--rc-w");
-          c.el.style.removeProperty("--rc-h");
-        }
-        c.w = cardW;
-        c.h = cardH;
-        c.cw = Math.round(cardW * rDpr);
-        c.ch = Math.round(cardH * rDpr);
-        if (cardH > deckH) deckH = cardH;
-
-        let targetCw = c.cw;
-        let targetCh = c.ch;
-        if (idx === 0) {
-          // Mantener la relación de aspecto nativa del clip (p. ej. 8:7) para evitar doble recorte en transición
-          const needW = Math.max(c.cw, Math.round(Math.max(vw, vh * aspect) * dpr));
-          targetCw = Math.min(1440, needW);
-          targetCh = Math.round(targetCw / aspect);
-        }
-        if (c.canvas.width !== targetCw || c.canvas.height !== targetCh) {
-          c.canvas.width = targetCw;
-          c.canvas.height = targetCh;
-          c.dirty = true;
-        }
-      });
-      this.stage.style.setProperty("--reel-h", `${deckH}px`);
-
-      if (this.deckWrap && this.stage) {
-        const sr = this.stage.getBoundingClientRect();
-        const dr = this.deckWrap.getBoundingClientRect();
-        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
-      }
+      this.needsVisualSync = true;
 
       const nextTraceSet = this.pickTraceSet();
       if (this.traceSet && nextTraceSet !== this.traceSet) {
         this.ensureTraceBank(nextTraceSet);
       }
+      const nextPortalSet = this.pickPortalSet();
+      if (this.portalSet && nextPortalSet !== this.portalSet) {
+        this.ensurePortalBank(nextPortalSet);
+      }
 
-      const nextReelSet = this.pickReelSet(0);
-      if (this.reelSet && nextReelSet !== this.reelSet) {
-        this.reelSet = nextReelSet;
-        this.cards.forEach((c) => { c.loadedSet = null; c.dirty = true; });
-        if (this.activeIdx >= 0) this.loadNeighborhood(this.activeIdx);
-      } else {
-        this.reelSet = nextReelSet;
-      }
-      this.lastOverlayKey = "";
-      if (this.traceDirty && this.traceBank) {
-        this.drawTrace(this.traceFrameCur);
-      }
+      if (this.traceDirty && this.traceBank) this.drawTrace(this.traceFrameCur);
+      if (this.portalDirty && this.portalBank) this.drawPortal(this.portalFrameCur);
     }
 
     ensureTraceBank(set = this.pickTraceSet()) {
@@ -3771,9 +2708,7 @@
       this.unsubTraceBank = this.traceBank.subscribe((frameIdx, isBitmap) => {
         if (!isBitmap) return;
         const curIdx = Math.round(this.traceFrameCur);
-        if (frameIdx === 0 && !this.hasTraceCanvas) {
-          this.drawTrace(0);
-        }
+        if (frameIdx === 0 && !this.hasTraceCanvas) this.drawTrace(0);
         if (Math.abs(frameIdx - curIdx) <= 2 || (frameIdx === curIdx && !this.lastTraceDrawnExact)) {
           this.traceDirty = true;
         }
@@ -3782,8 +2717,35 @@
       return this.traceBank;
     }
 
+    ensurePortalBank(set = this.pickPortalSet()) {
+      if (this.portalSet === set && this.portalBank) return this.portalBank;
+      if (this.unsubPortalBank) { this.unsubPortalBank(); this.unsubPortalBank = null; }
+      this.portalSet = set;
+      this.portalBank = getFrameBank(this.portalSrc, this.portalCount, this.portalVersion, set);
+      this.lastPortalDrawnIdx = -1;
+      this.lastPortalDrawnExact = false;
+      this.portalDirty = true;
+      this.unsubPortalBank = this.portalBank.subscribe((frameIdx, isBitmap) => {
+        if (!isBitmap) return;
+        const curIdx = Math.round(this.portalFrameCur);
+        if (frameIdx === 0 && !this.hasPortalCanvas) this.drawPortal(0);
+        if (Math.abs(frameIdx - curIdx) <= 2 || (frameIdx === curIdx && !this.lastPortalDrawnExact)) {
+          this.portalDirty = true;
+        }
+      });
+      AssetScheduler.schedulePump();
+      return this.portalBank;
+    }
+
     loadTrace(set = this.pickTraceSet()) {
       this.ensureTraceBank(set);
+      this.ensurePortalBank();
+      if (!this.leadPosterDecoded && this.leadPosterImg) {
+        this.leadPosterDecoded = true;
+        if (typeof this.leadPosterImg.decode === "function") {
+          this.leadPosterImg.decode().catch(() => {});
+        }
+      }
     }
 
     drawTrace(pos) {
@@ -3820,7 +2782,42 @@
       this.traceDirty = false;
     }
 
-    setTraceFilter(blurPx, grayVal = 0) {
+    drawPortal(pos) {
+      if (!this.portalBank || !this.portalCanvas || !this.portalCtx) return;
+      const f = Math.round(clamp(pos, 0, this.portalCount - 1));
+      if (this.lastPortalDrawnIdx === f && this.lastPortalDrawnExact && !this.portalDirty) return;
+
+      const hit = this.portalBank.getBestDrawable(f);
+      if (!hit || !hit.img) return;
+      const img = hit.img;
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      if (!iw || !ih) return;
+
+      const c = this.portalCanvas;
+      const wantW = Math.min(1440, iw);
+      const wantH = Math.round((wantW * ih) / iw);
+      if (c.width !== wantW || c.height !== wantH) {
+        c.width = wantW;
+        c.height = wantH;
+        this.portalDirty = true;
+      }
+
+      if (this.lastPortalDrawnIdx === hit.frameIdx && this.lastPortalDrawnExact === hit.exact && !this.portalDirty) return;
+
+      const ctx = this.portalCtx;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "low";
+      ctx.drawImage(img, 0, 0, wantW, wantH);
+      this.lastPortalDrawnIdx = hit.frameIdx;
+      this.lastPortalDrawnExact = hit.exact;
+      this.portalDirty = false;
+      if (!this.hasPortalCanvas && this.portalEl) {
+        this.hasPortalCanvas = true;
+        this.portalEl.classList.add("has-canvas");
+      }
+    }
+
+    setTraceFilter() {
       if (this.lastTraceGray !== 0) {
         this.lastTraceGray = 0;
         this.traceCanvas.style.filter = "none";
@@ -3828,36 +2825,19 @@
       }
     }
 
-    loadCard(card) {
-      if (!card) return;
-      attachCardBank(card, this.pickReelSet(card.idx));
-      AssetScheduler.schedulePump();
-    }
-
-    loadNeighborhood(centerIdx) {
-      if (!this.cards.length) return;
-      const order = [centerIdx, centerIdx + 1, centerIdx - 1, centerIdx + 2];
-      order.forEach((idx) => {
-        if (idx >= 0 && idx < this.cards.length) {
-          attachCardBank(this.cards[idx], this.pickReelSet(idx));
-        }
-      });
-      AssetScheduler.schedulePump();
-    }
-
     getLoadJobs(y, viewH) {
-      const secEnd = this.top + this.len + viewH;
+      const secEnd = this.repTop + viewH;
       const inView = y + viewH >= this.top - viewH * 0.25 && y <= secEnd + viewH * 0.25;
       const dist = inView ? 0 : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
       if (!inView && dist > viewH * 2.4 && NET_PROFILE.isSaveData) return [];
 
       const rawP = (y - this.top) / this.len;
       const jobs = [];
-      const needTrace = rawP < BRIDGE_END_P + 0.05;
-      const traceBank = needTrace ? (this.traceBank || this.ensureTraceBank()) : null;
-      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
+      const needTrace = rawP < this.traceSplitP + 0.05;
+      const needPortal = rawP <= 1.05;
 
-      if (traceBank && needTrace) {
+      if (needTrace) {
+        const traceBank = this.traceBank || this.ensureTraceBank();
         if (inView) {
           jobs.push({
             bank: traceBank,
@@ -3874,95 +2854,38 @@
           if (!NET_PROFILE.isSaveData) {
             jobs.push({ bank: traceBank, priority: 1.7, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
           }
-        } else if (dist <= viewH * 3.0) {
-          const preEnd = Math.min(this.count - 1, 36);
-          jobs.push({ bank: traceBank, priority: 1.5, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
-          if (!NET_PROFILE.isSaveData) {
-            jobs.push({ bank: traceBank, priority: 2.5, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
-          }
         } else if (!NET_PROFILE.isSaveData) {
           const preEnd = Math.min(this.count - 1, 36);
           const distWeight = Math.min(2.0, dist / Math.max(1, viewH * 6));
-          jobs.push({ bank: traceBank, priority: 2.7 + distWeight * 0.5, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
+          jobs.push({ bank: traceBank, priority: 2.2 + distWeight * 0.5, distance: dist, anchor: 0, start: 0, end: preEnd, isReel: false });
           if (!NET_PROFILE.isConstrainedNet) {
-            jobs.push({ bank: traceBank, priority: 3.3 + distWeight, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
+            jobs.push({ bank: traceBank, priority: 3.1 + distWeight, distance: dist, anchor: preEnd + 1, start: 0, end: this.count - 1, isReel: false });
           }
         }
       }
 
-      if (!inView) {
-        if (!NET_PROFILE.isSaveData && this.cards[0]) {
-          const c0 = this.cards[0];
-          const b0 = attachCardBank(c0, this.pickReelSet(0));
-          const prio = dist <= viewH * 1.6 ? 1.3 : 2.9 + Math.min(1.5, dist / Math.max(1, viewH * 6));
-          jobs.push({
-            bank: b0,
-            priority: prio,
-            distance: dist,
-            anchor: c0.from - 1,
-            start: c0.from - 1,
-            end: dist <= viewH * 1.6 ? c0.to - 1 : Math.min(c0.to - 1, c0.from - 1 + 36),
-            isReel: true,
-          });
-        }
-        return jobs;
+      if (needPortal && (!NET_PROFILE.isSaveData || inView)) {
+        const portalBank = this.portalBank || this.ensurePortalBank();
+        const anchor = clamp(Math.round(this.portalFrameCur), 0, this.portalCount - 1);
+        const prio = inView
+          ? (rawP >= this.bridgeStartP - 0.08 ? 0 : 0.45)
+          : (dist <= viewH * 1.6 ? 1.25 : 2.8 + Math.min(1.5, dist / Math.max(1, viewH * 6)));
+        jobs.push({
+          bank: portalBank,
+          priority: prio,
+          distance: inView ? 0 : dist,
+          anchor,
+          start: 0,
+          end: (inView || dist <= viewH * 1.6) ? this.portalCount - 1 : Math.min(this.portalCount - 1, 36),
+          isReel: false,
+        });
       }
 
-      if (rawP < BRIDGE_START_P - 0.04) {
-        // Mientras corre Planificación en Planta, precargar por completo la primera tarjeta del Reel y arrancar la 2da
-        if (this.cards[0]) {
-          const c0 = this.cards[0];
-          const b0 = attachCardBank(c0, this.pickReelSet(0));
-          jobs.push({
-            bank: b0,
-            priority: 0.45,
-            distance: 10,
-            anchor: c0.from - 1,
-            start: c0.from - 1,
-            end: c0.to - 1,
-            isReel: true,
-          });
-        }
-        if (this.cards[1] && !NET_PROFILE.isSaveData) {
-          const c1 = this.cards[1];
-          const b1 = attachCardBank(c1, this.pickReelSet(1));
-          jobs.push({
-            bank: b1,
-            priority: 1.1,
-            distance: 40,
-            anchor: c1.from - 1,
-            start: c1.from - 1,
-            end: Math.min(c1.to - 1, c1.from - 1 + 48),
-            isReel: true,
-          });
-        }
-        return jobs;
-      }
-
-      this.cards.forEach((card, i) => {
-        const d = Math.abs(i - center);
-        const bank = attachCardBank(card, this.pickReelSet(card.idx));
-        const startIdx = card.from - 1;
-        const endIdx = card.to - 1;
-        const anchorIdx = clamp(Math.round(card.curFrame) - 1, startIdx, endIdx);
-        if (i === center) {
-          jobs.push({ bank, priority: 0, distance: 0, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-        } else if (d === 1) {
-          jobs.push({ bank, priority: 0.7, distance: 1, anchor: anchorIdx, start: startIdx, end: endIdx, isReel: true });
-        } else if (d === 2) {
-          jobs.push({ bank, priority: 1.5, distance: 2, anchor: startIdx, start: startIdx, end: Math.min(endIdx, startIdx + 36), isReel: true });
-          if (!NET_PROFILE.isSaveData) {
-            jobs.push({ bank, priority: 2.3, distance: 2, anchor: startIdx, start: startIdx, end: endIdx, isReel: true });
-          }
-        } else if (!NET_PROFILE.isSaveData && !NET_PROFILE.isConstrainedNet) {
-          jobs.push({ bank, priority: 3.1 + d * 0.12, distance: d, anchor: startIdx, start: startIdx, end: endIdx, isReel: true });
-        }
-      });
       return jobs;
     }
 
     collectBankDistances(y, viewH, distMap) {
-      const secEnd = this.top + this.len + viewH;
+      const secEnd = this.repTop + viewH;
       const baseDist = (y + viewH >= this.top && y <= secEnd)
         ? 0
         : (y + viewH < this.top ? this.top - (y + viewH) : y - secEnd);
@@ -3970,140 +2893,10 @@
         const prev = distMap.get(this.traceBank.key);
         if (prev === undefined || baseDist < prev) distMap.set(this.traceBank.key, baseDist);
       }
-      const center = this.activeIdx >= 0 ? this.activeIdx : 0;
-      this.cards.forEach((c, i) => {
-        if (!c.bank) return;
-        const d = baseDist + Math.abs(i - center) * 200;
-        const prev = distMap.get(c.bank.key);
-        if (prev === undefined || d < prev) distMap.set(c.bank.key, d);
-      });
-    }
-
-    drawCard(card, frameFloat, isExpanded = false) {
-      card.curFrame = frameFloat;
-      const bank = attachCardBank(card, this.pickReelSet(card.idx));
-      const targetIdx = clamp(Math.round(clamp(frameFloat, card.from, card.to)) - 1, 0, card.count - 1);
-      if (card.lastDrawnIdx === targetIdx && card.lastDrawnExact && !card.dirty) return;
-
-      const hit = bank.getBestDrawable(targetIdx);
-      if (!hit || !hit.img) return;
-      const img = hit.img;
-      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-      if (!iw || !ih) return;
-
-      const c = card.canvas;
-      const ctx = card.ctx;
-      if (card.idx === 0 && card.wasExpanded !== isExpanded) {
-        card.wasExpanded = isExpanded;
-        let wantW = card.cw || this.cardCw || 600;
-        let wantH = card.ch || this.cardCh || 338;
-        if (isExpanded) {
-          const imgAspect = iw / ih;
-          const needW = Math.max(wantW, Math.round(Math.max(vw, vh * imgAspect) * NET_PROFILE.maxCanvasDpr));
-          wantW = Math.min(iw, needW);
-          wantH = Math.min(ih, Math.round(wantW / imgAspect));
-        }
-        if (wantW && wantH && (c.width !== wantW || c.height !== wantH)) {
-          c.width = wantW;
-          c.height = wantH;
-          card.dirty = true;
-        }
+      if (this.portalBank) {
+        const prev = distMap.get(this.portalBank.key);
+        if (prev === undefined || baseDist < prev) distMap.set(this.portalBank.key, baseDist);
       }
-
-      if (card.lastDrawnIdx === hit.frameIdx && card.lastDrawnExact === hit.exact && !card.dirty) return;
-
-      const cw = c.width, ch = c.height;
-      if (!cw || !ch) return;
-      const s = Math.max(cw / iw, ch / ih);
-      const dw = iw * s, dh = ih * s;
-      const x = (cw - dw) / 2, y = (ch - dh) / 2;
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "low";
-      ctx.drawImage(img, x, y, dw, dh);
-      card.lastDrawnIdx = hit.frameIdx;
-      card.lastDrawnExact = hit.exact;
-      card.dirty = false;
-      if (!card.hasCanvas) {
-        card.hasCanvas = true;
-        card.el.classList.add("has-canvas");
-      }
-    }
-
-    setActiveClip(idx) {
-      if (idx === this.activeIdx || !this.cards[idx]) return;
-      const prevIdx = this.activeIdx;
-      this.activeIdx = idx;
-      const card = this.cards[idx];
-
-      if (prevIdx >= 0) {
-        playTactileTick(640, 0.016, 0.012);
-      }
-
-      this.cards.forEach((c, i) => c.el.classList.toggle("is-center", i === idx));
-      this.thumbs.forEach((th, i) => {
-        const active = i === idx;
-        th.classList.toggle("is-active", active);
-        th.setAttribute("aria-selected", String(active));
-      });
-
-      if (this.strip && this.thumbs[idx] && this.strip.scrollWidth > this.strip.clientWidth + 4) {
-        const th = this.thumbs[idx];
-        const targetLeft = th.offsetLeft - (this.strip.clientWidth - th.offsetWidth) * 0.5;
-        if (this.strip.scrollTo) {
-          this.strip.scrollTo({ left: Math.max(0, targetLeft), behavior: reduce ? "auto" : "smooth" });
-        } else {
-          this.strip.scrollLeft = Math.max(0, targetLeft);
-        }
-      }
-
-      if (this.idxEl) this.idxEl.textContent = pad(idx + 1);
-      if (this.topCatEl) this.topCatEl.textContent = card.cat.split("·")[0].trim();
-      if (this.topFpsEl) this.topFpsEl.textContent = `${card.fps} FPS`;
-
-      if (this.capSlots.length >= 2) {
-        const fillSlot = (slot) => {
-          if (slot.num) slot.num.textContent = pad(idx + 1);
-          if (slot.cat) slot.cat.textContent = card.cat;
-          if (slot.loc) slot.loc.textContent = card.loc;
-          if (slot.title) slot.title.innerHTML = card.title;
-          if (slot.desc) slot.desc.textContent = card.desc;
-        };
-
-        if (prevIdx < 0 || reduce) {
-          const curSlot = this.capSlots[this.capSlotIdx];
-          fillSlot(curSlot);
-          curSlot.el.classList.remove("is-leaving");
-          curSlot.el.classList.add("is-active");
-          curSlot.el.setAttribute("aria-hidden", "false");
-        } else {
-          const outSlot = this.capSlots[this.capSlotIdx];
-          const inIdx = 1 - this.capSlotIdx;
-          const inSlot = this.capSlots[inIdx];
-          this.capSlotIdx = inIdx;
-
-          inSlot.el.style.transition = "none";
-          inSlot.el.classList.remove("is-active", "is-leaving");
-          fillSlot(inSlot);
-          void inSlot.el.offsetWidth;
-          inSlot.el.style.transition = "";
-
-          outSlot.el.classList.remove("is-active");
-          outSlot.el.classList.add("is-leaving");
-          outSlot.el.setAttribute("aria-hidden", "true");
-
-          inSlot.el.classList.add("is-active");
-          inSlot.el.setAttribute("aria-hidden", "false");
-        }
-      }
-
-      this.stage.style.setProperty("--reel-aura-s", idx % 2 === 0 ? "1.04" : "0.96");
-      if (prevIdx < 0 && this.deckWrap && this.stage) {
-        const sr = this.stage.getBoundingClientRect();
-        const dr = this.deckWrap.getBoundingClientRect();
-        this.deckCenterOffsetY = (sr.top + sr.height * 0.5) - (dr.top + dr.height * 0.5);
-      }
-      this.loadNeighborhood(idx);
     }
 
     updateTraceOverlay(traceTarget, bridgeT, rawEntryP, dt) {
@@ -4116,10 +2909,10 @@
       if (Math.abs(traceTarget - this.traceCur) < 0.001) this.traceCur = traceTarget;
       const tp = clamp(this.traceCur, 0, 1);
 
-      const exitHud = reduce ? (bridgeT > 0.1 ? 1 : 0) : smooth(range(bridgeT, 0.00, 0.26));
-      const exitSvgFade = reduce ? (bridgeT > 0.2 ? 1 : 0) : smooth(range(bridgeT, 0.08, 0.34));
-      const svgWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.044, 0.080));
-      const hudWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.056, 0.098));
+      const exitHud = reduce ? (bridgeT > 0.1 ? 1 : 0) : smooth(range(bridgeT, 0.00, 0.34));
+      const exitSvgFade = reduce ? (bridgeT > 0.2 ? 1 : 0) : smooth(range(bridgeT, 0.08, 0.44));
+      const svgWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.044, 0.088));
+      const hudWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.056, 0.105));
       const hudOp = hudWake * (1 - exitHud);
       const hudEnterY = !reduce ? (1 - hudWake) * 10 : 0;
 
@@ -4130,9 +2923,8 @@
       setCssVar(ov, ovc, "--trace-svg-op", ((1 - exitSvgFade) * svgWake).toFixed(3));
 
       const traceVisible = rawEntryP >= 0 && ((1 - exitSvgFade) * svgWake > 0.005 || hudOp > 0.005);
-      const visStr = traceVisible ? "visible" : "hidden";
-      setVisCached(this.traceOverlay, visStr);
-      this.traceOverlayHidden = !traceVisible && bridgeT >= 0.34;
+      setVisCached(this.traceOverlay, traceVisible ? "visible" : "hidden");
+      this.traceOverlayHidden = !traceVisible && bridgeT >= 0.44;
       if (this.traceConsole) {
         const peStr = hudOp > 0.15 ? "auto" : "none";
         if (this.traceConsole._pe !== peStr) {
@@ -4141,7 +2933,7 @@
         }
       }
 
-      const pathExitOp = (1 - smooth(range(bridgeT, 0.06, 0.30))).toFixed(3);
+      const pathExitOp = (1 - smooth(range(bridgeT, 0.06, 0.38))).toFixed(3);
       let yawReading = 78;
 
       if (!this.isPortraitSvg) {
@@ -4204,15 +2996,14 @@
         }
       }
 
-      // Desdibujado arquitectónico inverso en la transición de salida (Beat 1: se limpia antes de abrir Nordelta)
-      const retract3 = 1 - smooth(range(bridgeT, 0.00, 0.20));
-      const retract2 = 1 - smooth(range(bridgeT, 0.04, 0.25));
-      const retract1 = 1 - smooth(range(bridgeT, 0.08, 0.30));
-      const retractGrid = 1 - smooth(range(bridgeT, 0.02, 0.28));
-      const retractPlan = 1 - smooth(range(bridgeT, 0.10, 0.34));
+      const retract3 = 1 - smooth(range(bridgeT, 0.00, 0.24));
+      const retract2 = 1 - smooth(range(bridgeT, 0.04, 0.30));
+      const retract1 = 1 - smooth(range(bridgeT, 0.08, 0.36));
+      const retractGrid = 1 - smooth(range(bridgeT, 0.02, 0.34));
+      const retractPlan = 1 - smooth(range(bridgeT, 0.10, 0.42));
 
       const darkenBase = reduce ? 1 : smooth(range(tp, 0.11, 0.26));
-      const darkenBridge = smooth(range(bridgeT, 0.02, 0.36)) * 0.34;
+      const darkenBridge = smooth(range(bridgeT, 0.02, 0.42)) * 0.34;
       setCssVar(this.traceMediaWrap.style, mwc, "--trace-darken-op", clamp(darkenBase + darkenBridge, 0, 1).toFixed(3));
       setCssVar(this.traceMediaWrap.style, mwc, "--trace-base-veil-op", (0.38 + 0.62 * darkenBase).toFixed(3));
 
@@ -4236,14 +3027,14 @@
         if (wakeWave > 0 && wakeWave < 1) {
           activeWake.setAttribute("r", (10 + smooth(wakeWave) * (this.isPortraitSvg ? 150 : 195)).toFixed(1));
           activeWake.setAttribute("stroke-opacity", (Math.sin(wakeWave * Math.PI) * 0.56).toFixed(3));
+          activeWake._op0 = false;
         } else if (activeWake._op0 !== true) {
           activeWake._op0 = true;
           activeWake.setAttribute("stroke-opacity", "0");
         }
-        if (wakeWave > 0 && wakeWave < 1) activeWake._op0 = false;
       }
 
-      const introFocus = reduce ? 0 : (1 - smooth(range(rawEntryP, 0.042, 0.098)));
+      const introFocus = reduce ? 0 : (1 - smooth(range(rawEntryP, 0.042, 0.10)));
       let camX = 0, camY = 0, camScale = 1;
       if (this.isPortraitSvg || vw <= 768) {
         camY = (0.35 - tp * 0.70) * 16 + introFocus * 12;
@@ -4330,35 +3121,79 @@
       }
     }
 
-    update(dt, isScrolling = true) {
-      const nCards = this.cards.length;
-      if (!nCards) return;
+    setRepertorioReveal(wake, color, leadSolid, docked, settled) {
+      if (!this.repEl) return;
+      if (this.repWake !== wake) {
+        this.repWake = wake;
+        this.repEl.classList.toggle("is-rep-wake", wake);
+      }
+      if (this.repColor !== color) {
+        this.repColor = color;
+        this.repEl.classList.toggle("is-rep-color", color);
+      }
+      if (this.leadSolid !== leadSolid) {
+        this.leadSolid = leadSolid;
+        this.repEl.classList.toggle("is-rep-lead-solid", leadSolid);
+      }
+      if (this.repDocked !== docked) {
+        this.repDocked = docked;
+        this.repEl.classList.toggle("is-rep-docked", docked);
+      }
+      if (this.repSettled !== settled) {
+        this.repSettled = settled;
+        this.repEl.classList.toggle("is-rep-settled", settled);
+      }
+    }
 
+    hidePortal() {
+      if (!this.portalEl || this.portalHidden) return;
+      this.portalHidden = true;
+      setCssVar(this.portalEl.style, this._portalVars, "--tp-op", "0");
+      setVisCached(this.portalEl, "hidden");
+    }
+
+    update(dt, isScrolling = true) {
       const y = scrollY();
       const rawP = (y - this.top) / this.len;
       const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
 
       if (viewportEntry > 0 && !this.traceSet) this.loadTrace();
-      if (viewportEntry > 0 && this.activeIdx < 0) this.setActiveClip(0);
-      if (y + vh < this.top - vh || y > this.top + this.len + vh) {
+
+      if (y + vh < this.top - vh || y > this.repTop + vh * 1.4) {
         syncBufferBadge(this.bufferBadge, false, 100);
+        this.hidePortal();
+        if (y > this.repTop) {
+          this.portalFade = 0;
+          this.prog = 1;
+          this.progCur = 1;
+          this.portalFrameCur = this.portalCount - 1;
+          this.setRepertorioReveal(true, true, true, true, true);
+        } else {
+          this.portalFade = 1;
+          this.setRepertorioReveal(false, false, false, false, false);
+        }
         if (!this.isOffscreen) {
           this.isOffscreen = true;
           this.el.classList.add("is-offscreen");
         }
         return;
       }
+
       if (this.isOffscreen) {
         this.isOffscreen = false;
         this.el.classList.remove("is-offscreen");
         this.needsVisualSync = true;
         this.traceDirty = true;
-        this.cards.forEach((c) => { c.dirty = true; });
+        this.portalDirty = true;
         AssetScheduler.schedulePump();
       }
 
+      // Estado previo a entrar a #trazado
       if (viewportEntry <= 0 || rawP < 0) {
         syncBufferBadge(this.bufferBadge, false, 100);
+        this.hidePortal();
+        this.portalFade = 1;
+        this.setRepertorioReveal(false, false, false, false, false);
         if (rawP < -0.005 || viewportEntry < 0.95) {
           this.autoPlaySuspended = false;
           this.subpixelAcc = 0;
@@ -4367,13 +3202,14 @@
         }
         if (!this.lastPreState || this.traceDirty) {
           this.lastPreState = true;
+          this.lastPostState = false;
           this.needsVisualSync = true;
           this.traceOverlayHidden = false;
-          this.reelLayerHidden = true;
           this.prog = 0;
           this.progCur = 0;
           this.traceCur = 0;
           this.traceFrameCur = 0;
+          this.portalFrameCur = 0;
           const mws = this.traceMediaWrap.style;
           const mwc = this._mediaVars;
           setCssVar(mws, mwc, "--tr-trace-media-op", "0");
@@ -4383,13 +3219,7 @@
           setCssVar(mws, mwc, "--trace-entry-veil-op", "1");
           setCssVar(mws, mwc, "--trace-entry-veil-s", "1");
           setVisCached(this.traceMediaWrap, "hidden");
-          this.setTraceFilter(0, 0.55);
-          setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", "0");
-          setVisCached(this.reelLayer, "hidden");
-          if (this.lastReelInteractive) {
-            this.lastReelInteractive = false;
-            this.reelLayer.classList.remove("is-interactive");
-          }
+          this.setTraceFilter();
           this.updateTraceOverlay(0, 0, -0.05, 0.016);
           if (viewportEntry > 0) {
             this.drawTrace(0);
@@ -4400,93 +3230,118 @@
         return;
       }
 
-      const wasPre = this.lastPreState;
-      this.lastPreState = false;
-      if (rawP >= 1.08) {
-        this.progCur = 1;
+      // Si el usuario ya pasó bastante más abajo de #repertorio
+      if (y > this.repTop + vh * 1.15) {
+        syncBufferBadge(this.bufferBadge, false, 100);
+        this.hidePortal();
+        this.portalFade = 0;
+        this.leadSolidFrames = 0;
+        this.setRepertorioReveal(true, true, true, true, true);
+        if (!this.lastPostState) {
+          this.lastPostState = true;
+          this.lastPreState = false;
+          this.prog = 1;
+          this.progCur = 1;
+          this.portalFrameCur = this.portalCount - 1;
+          setVisCached(this.traceMediaWrap, "hidden");
+          setCssVar(this.traceMediaWrap.style, this._mediaVars, "--tr-trace-media-op", "0");
+          setVisCached(this.traceOverlay, "hidden");
+          if (!this.traceBitmapsReleased && this.traceBank) {
+            this.traceBitmapsReleased = true;
+            this.traceBank.releaseBitmaps();
+          }
+          if (!this.portalBitmapsReleased && this.portalBank) {
+            this.portalBitmapsReleased = true;
+            this.portalBank.releaseBitmaps();
+          }
+        }
+        this.prevRawP = rawP;
+        return;
       }
 
-      if (this.prevRawP !== undefined && this.prevRawP >= BRIDGE_END_P && rawP < BRIDGE_END_P) {
+      const wasPre = this.lastPreState;
+      this.lastPreState = false;
+      this.lastPostState = false;
+
+      if (this.prevRawP !== undefined && this.prevRawP >= 1.0 && rawP < 1.0) {
         this.autoPlaySuspended = true;
       }
       this.prevRawP = rawP;
 
-      if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < BRIDGE_END_P && performance.now() > (this.seekingUntil || 0)) {
+      // Motor híbrido continuo hasta que #repertorio queda perfectamente en top: 0
+      if (this.isHybrid && viewportEntry > 0 && rawP >= 0 && rawP < 1.0 && performance.now() > (this.seekingUntil || 0)) {
         const curTraceIdx = clamp(Math.round(this.traceFrameCur), 0, this.count - 1);
         const traceBank = this.traceBank || this.ensureTraceBank();
         this.traceBufferReady = this.traceBufferReady
           ? traceBank.hasReadyBuffer(curTraceIdx, 6, 3)
-          : traceBank.hasReadyBuffer(curTraceIdx, 36, 12);
+          : traceBank.hasReadyBuffer(curTraceIdx, 32, 10);
 
-        const firstCard = this.cards[0];
-        const c0Bank = firstCard ? attachCardBank(firstCard, this.pickReelSet(0)) : null;
-        if (c0Bank) {
-          this.firstCardBufferReady = this.firstCardBufferReady
-            ? c0Bank.hasReadyBuffer(firstCard.from - 1, 4, 2)
-            : c0Bank.hasReadyBuffer(firstCard.from - 1, 14, 4);
-        } else {
-          this.firstCardBufferReady = false;
-        }
+        const portalBank = this.portalBank || this.ensurePortalBank();
+        const curPortalIdx = clamp(Math.round(this.portalFrameCur), 0, this.portalCount - 1);
+        this.portalBufferReady = this.portalBufferReady
+          ? portalBank.hasReadyBuffer(curPortalIdx, 4, 2)
+          : portalBank.hasReadyBuffer(curPortalIdx, 18, 6);
 
-        const readyToAdvance = this.traceBufferReady;
+        const inPortalPhase = rawP >= this.bridgeStartP;
+        const readyToAdvance = inPortalPhase ? this.portalBufferReady : this.traceBufferReady;
+        const activeBank = inPortalPhase ? portalBank : traceBank;
+        const activeIdx = inPortalPhase ? curPortalIdx : curTraceIdx;
+        const activeNeed = inPortalPhase ? 18 : 32;
 
-        const blobsMissing = !traceBank.hasContiguousBlobs(curTraceIdx, 36);
+        const blobsMissing = !activeBank.hasContiguousBlobs(activeIdx, activeNeed);
         const isWaitingBuf = !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
-        const waitPct = isWaitingBuf ? traceBank.getBufferPercent(curTraceIdx, 36) : 100;
+        const waitPct = isWaitingBuf ? activeBank.getBufferPercent(activeIdx, activeNeed) : 100;
         syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
 
-        const traceEndLen = Math.max(1, this.len * BRIDGE_END_P);
-        const traceRawP = rawP / BRIDGE_END_P;
+        const bridgeBlend = smooth(range(rawP, this.bridgeStartP - 0.04, this.bridgeStartP + 0.04));
+        const endDecel = smooth(range(rawP, 0.78, 0.985));
+        const smoothSpeedScale = 0.98 + bridgeBlend * 0.24 - endDecel * 0.36;
 
-        runHybridScrollEngine({
-          top: this.top,
-          len: traceEndLen,
-          dt,
-          viewportEntry,
-          rawP: traceRawP,
-          baseDuration: this.baseDuration * BRIDGE_END_P,
-          speedScale: rawP < REEL_WAKE_P ? 0.85 : 0.96,
-          peekPx: 0,
-          minSpeed: 0.65,
-          state: this,
-          hasFrames: readyToAdvance,
-          isHero: false,
-        });
+        const lenisLead = (lenis && !isVerticalScroller()) ? ((lenis.targetScroll || 0) - y) : 0;
+        const userPushingPastEnd = rawP >= 0.965 && lenisLead > 4;
+        if (!userPushingPastEnd) {
+          runHybridScrollEngine({
+            top: this.top,
+            len: this.len,
+            dt,
+            viewportEntry,
+            rawP,
+            baseDuration: this.baseDuration,
+            speedScale: smoothSpeedScale,
+            peekPx: 0,
+            minSpeed: 0.42,
+            state: this,
+            hasFrames: readyToAdvance,
+            isHero: false,
+          });
+        }
       } else {
         syncBufferBadge(this.bufferBadge, false, 100);
-        if (rawP >= BRIDGE_END_P) {
-          this.lastTrackedY = y;
-          this.subpixelAcc = 0;
-        }
       }
 
       const targetProg = clamp(rawP, 0, 1);
       this.prog = targetProg;
 
       const dtSec = Math.min(dt || 0.016, 0.05);
-      const isDirectSeek = this.isScrubbing || this.isHorizontalDragging || performance.now() <= (this.seekingUntil || 0);
+      const isDirectSeek = this.isScrubbing || performance.now() <= (this.seekingUntil || 0);
+      const useDirectProg = reduce || isDirectSeek || (!!lenis && !isVerticalScroller()) || isUserTouching;
       const prevProgCur = this.progCur;
-      if (reduce) {
+      if (useDirectProg) {
         this.progCur = targetProg;
       } else {
-        const dampRate = this.isHorizontalDragging ? -30 : (isDirectSeek ? -16 : -22);
-        const damp = 1 - Math.exp(dampRate * dtSec);
+        const damp = 1 - Math.exp(-32 * dtSec);
         this.progCur += (targetProg - this.progCur) * damp;
+        if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
       }
-      if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
       const progMoved = Math.abs(this.progCur - prevProgCur) > 0.0001 || wasPre || this.needsVisualSync;
 
-      // 1) Progreso del plano SVG y del video de planta
-      const tracePlanProg = clamp(this.progCur / TRACE_PLAN_END_P, 0, 1);
-      const traceVideoProg = clamp(this.progCur / TRACE_MEDIA_END_P, 0, 1);
+      const tracePlanProg = clamp(this.progCur / this.planEndP, 0, 1);
+      const traceVideoProg = clamp(this.progCur / this.traceMediaEndP, 0, 1);
+      const bridgeWakeT = reduce
+        ? (this.progCur >= this.bridgeStartP ? 1 : 0)
+        : clamp((this.progCur - this.bridgeStartP) / Math.max(0.001, this.traceSplitP - this.bridgeStartP), 0, 1);
 
-      // 2) Puente de fusión unificada (0 -> 1 entre BRIDGE_START_P y BRIDGE_END_P)
-      const bridgeT = reduce
-        ? (this.progCur >= BRIDGE_START_P ? 1 : 0)
-        : clamp((this.progCur - BRIDGE_START_P) / (BRIDGE_END_P - BRIDGE_START_P), 0, 1);
-
-      // Sólo actualizar la capa de planta mientras no haya salido completamente de escena
-      if (bridgeT < 0.62) {
+      if (bridgeWakeT < 0.64) {
         if (this.traceBitmapsReleased) {
           this.traceBitmapsReleased = false;
           this.traceDirty = true;
@@ -4498,11 +3353,10 @@
         this.traceFrameCur += (targetTraceF - this.traceFrameCur) * tk;
         if (Math.abs(targetTraceF - this.traceFrameCur) < 0.002) this.traceFrameCur = targetTraceF;
 
-        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.065));
-        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.085));
-        const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeT, 0.22, 0.56)));
-        const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeT, 0.0, 0.56) * 0.045;
-        const traceMediaGray = (reduce ? 0 : (1 - traceEntryWake) * 0.55) + smooth(range(bridgeT, 0.10, 0.48)) * 0.5;
+        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.06));
+        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.08));
+        const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeWakeT, 0.16, 0.48)));
+        const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeWakeT, 0.0, 0.48) * 0.045;
 
         const mws = this.traceMediaWrap.style;
         const mwc = this._mediaVars;
@@ -4510,9 +3364,8 @@
         setCssVar(mws, mwc, "--img-scale", traceMediaScale.toFixed(4));
         setCssVar(mws, mwc, "--trace-entry-veil-op", (1 - veilOpen).toFixed(3));
         setCssVar(mws, mwc, "--trace-entry-veil-s", (1 + veilOpen * 0.55).toFixed(3));
-        const tmVis = traceMediaFade <= 0.005 ? "hidden" : "visible";
-        setVisCached(this.traceMediaWrap, tmVis);
-        this.setTraceFilter(0, traceMediaGray);
+        setVisCached(this.traceMediaWrap, traceMediaFade <= 0.005 ? "hidden" : "visible");
+        this.setTraceFilter();
 
         if (traceMediaFade > 0.005 && (Math.abs(this.traceFrameCur - this.lastTraceFrameDrawn) > 0.002 || this.traceDirty)) {
           this.drawTrace(this.traceFrameCur);
@@ -4543,275 +3396,175 @@
         }
       }
 
-      if (bridgeT < 0.42 || !this.traceOverlayHidden || progMoved) {
-        if (bridgeT < 0.99 || !this.traceOverlayHidden) {
-          this.updateTraceOverlay(tracePlanProg, bridgeT, rawP, dtSec);
+      if (bridgeWakeT < 0.50 || !this.traceOverlayHidden || progMoved) {
+        if (bridgeWakeT < 0.99 || !this.traceOverlayHidden) {
+          this.updateTraceOverlay(tracePlanProg, bridgeWakeT, rawP, dtSec);
         }
       }
 
-      // 3) Archivo en Movimiento: saltar completamente si el carrusel aún está oculto
-      if (bridgeT <= 0.20) {
-        if (!this.reelLayerHidden) {
-          this.reelLayerHidden = true;
-          setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", "0");
-          setVisCached(this.reelLayer, "hidden");
-          if (this.lastReelInteractive) {
-            this.lastReelInteractive = false;
-            this.reelLayer.classList.remove("is-interactive");
-            setCssVar(this.reelLayer.style, this._reelVars, "--tr-reel-pe", "none");
-          }
-        }
+      // Acople continuo 100% ligado al scroll ("al dedo") hacia Card 1
+      if (reduce) {
+        this.hidePortal();
+        const on = y >= this.repTop - vh * 0.5;
+        this.setRepertorioReveal(on, on, on, on, true);
         this.needsVisualSync = false;
         return;
       }
-      this.reelLayerHidden = false;
 
-      const backdropReveal = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.50, 0.92));
-      const videoDissolve = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.24, 0.46));
-      const leadVeilOp = reduce ? 0 : (1 - smooth(range(bridgeT, 0.40, 0.86))) * 0.92;
-      const mediaWake = reduce ? 1 : smooth(range(bridgeT, 0.26, 0.64));
-      const pbRaw = range(bridgeT, 0.48, 1.00);
-      const pullbackEase = reduce ? 1 : (pbRaw < 0.5 ? 4 * pbRaw * pbRaw * pbRaw : 1 - Math.pow(-2 * pbRaw + 2, 3) / 2);
-      const chromeReveal = reduce ? 1 : smooth(range(bridgeT, 0.68, 0.98));
-      const sideReveal = reduce ? 1 : smooth(range(bridgeT, 0.68, 1.00));
-      const hudReveal = reduce ? (bridgeT > 0 ? 1 : 0) : smooth(range(bridgeT, 0.74, 1.00));
+      const shrinkRaw = range(this.progCur, this.shrinkStartP, this.shrinkEndP);
+      const dockRaw = range(this.progCur, this.dockStartP, this.dockEndP);
+      const shrinkT = smooth(shrinkRaw);
+      const dockGeoT = smooth(dockRaw);
 
-      setCssVar(this.reelBgWrap.style, this._bgVars, "--tr-reel-bg-op", backdropReveal.toFixed(3));
-      setVisCached(this.reelLayer, "visible");
-      const isInteractive = bridgeT >= 0.78;
-      if (isInteractive !== this.lastReelInteractive) {
-        this.lastReelInteractive = isInteractive;
-        this.reelLayer.classList.toggle("is-interactive", isInteractive);
-        setCssVar(this.reelLayer.style, this._reelVars, "--tr-reel-pe", isInteractive ? "auto" : "none");
+      // Cero parpadeo ida/vuelta: al salir hacia arriba el portal enciende sólido ANTES de soltar Card 1
+      const escapingUp = dockRaw < 0.995;
+      if (escapingUp) {
+        this.portalFade = 1;
+        this.leadSolidFrames = 0;
+      } else if (this.leadSolidFrames >= 2) {
+        this.portalFade = Math.max(0, this.portalFade - dtSec / 0.16);
       }
 
-      const carouselProg = clamp((this.progCur - BRIDGE_END_P) / (1 - BRIDGE_END_P), 0, 1);
-      this.carouselCur = nCards > 1 ? carouselProg * (nCards - 1) : 0;
+      const portalReady = this.hasPortalCanvas && this.portalFade >= 0.99;
+      const isWake = shrinkT >= 0.30;
+      const isColor = dockRaw >= (this.isPortraitLayout ? 0.44 : 0.36);
+      const isLeadSolid = dockRaw >= 0.990 || (escapingUp && !portalReady);
+      if (dockRaw >= 0.992 && isLeadSolid) this.leadSolidFrames++;
+      const isDocked = dockRaw >= 0.994;
+      const isSettled = dockRaw >= 0.996 && this.portalFade <= 0.05;
+      this.setRepertorioReveal(isWake, isColor, isLeadSolid, isDocked, isSettled);
 
-      const nearestIdx = clamp(Math.round(this.carouselCur), 0, nCards - 1);
-      if (nearestIdx !== this.activeIdx) this.setActiveClip(nearestIdx);
-
-      const rl = this.reelLayer.style;
-      const rlc = this._reelVars;
-      setCssVar(rl, rlc, "--reel-hud", hudReveal.toFixed(3));
-      setCssVar(rl, rlc, "--reel-hud-top-y", `${(-(1 - hudReveal) * 14).toFixed(1)}px`);
-      setCssVar(rl, rlc, "--reel-hud-bot-y", `${((1 - hudReveal) * 18).toFixed(1)}px`);
-      setCssVar(this.reelBgWrap.style, this._bgVars, "--reel-aura-op", (0.65 * backdropReveal).toFixed(3));
-
-      const reelPct = Math.round(carouselProg * 1000) / 10;
-      if (reelPct !== this.lastReelPct) {
-        this.lastReelPct = reelPct;
-        if (this.reelScrubFill) this.reelScrubFill.style.width = `${reelPct.toFixed(1)}%`;
-        if (this.reelScrub) this.reelScrub.setAttribute("aria-valuenow", String(Math.round(reelPct)));
+      const portalActive = bridgeWakeT > 0.10 && !(dockRaw >= 0.996 && this.portalFade <= 0.005);
+      if (!portalActive) {
+        this.hidePortal();
+        this.needsVisualSync = false;
+        return;
       }
 
-      const needLayoutCss = progMoved || this.needsVisualSync;
+      if (this.portalBitmapsReleased) {
+        this.portalBitmapsReleased = false;
+        this.portalDirty = true;
+        this.lastPortalDrawnIdx = -1;
+        AssetScheduler.schedulePump();
+      }
 
-      for (let i = 0; i < nCards; i++) {
-        const card = this.cards[i];
-        const d = i - this.carouselCur;
-        const absD = Math.abs(d);
-        const st = card.el.style;
-        const cc = card._css;
-
-        if (absD > 2.25) {
-          if (!card.isHiddenOut) {
-            card.isHiddenOut = true;
-            setCssVar(st, cc, "--rc-op", "0");
-            setCssVar(st, cc, "--rc-pe", "none");
-            card.loopRate = 0;
-            if (this.thumbs[i] && card.lastThumbP !== 0) {
-              card.lastThumbP = 0;
-              this.thumbs[i].style.setProperty("--th-p", "0");
-            }
-          }
-          continue;
+      if (this.portalHidden) {
+        this.portalHidden = false;
+        if (escapingUp) {
+          // Fuerza el cuadro 118 pintado antes de mostrar el portal al volver hacia arriba
+          this.drawPortal(this.portalFrameCur);
         }
-        card.isHiddenOut = false;
+        setVisCached(this.portalEl, "visible");
+      }
 
-        if (needLayoutCss) {
-          const bell = Math.exp(-d * d * 2.1);
-          let tx = d * this.cardStep * (1 - 0.04 * Math.min(absD, 2));
-          let ty = (1 - bell) * 5;
-          let scale = 0.80 + 0.20 * bell;
-          const baseRy = clamp(-d * 9.5, -16, 16);
-          let activeWeight = smooth(clamp(1 - absD * 1.25, 0, 1));
-          let op = clamp(1 - Math.max(0, absD - 0.15) * 0.38, 0, 1);
-          let shade = clamp((1 - bell) * 0.56, 0, 0.58);
+      // Toma 1 (casona-lago): sigue 1:1 al scroll y asienta en el frame 118 justo antes del relevo en Card 1
+      const portalEndP = this.dockStartP + 0.85 * (this.dockEndP - this.dockStartP);
+      const portalPlayT = clamp((this.progCur - this.portalStartP) / Math.max(0.001, portalEndP - this.portalStartP), 0, 1);
+      const targetPortalF = portalPlayT * (this.portalCount - 1);
+      const pk = 1 - Math.exp(-38 * dtSec);
+      this.portalFrameCur += (targetPortalF - this.portalFrameCur) * pk;
+      if (Math.abs(targetPortalF - this.portalFrameCur) < 0.002 || (portalPlayT >= 0.995 && Math.abs(targetPortalF - this.portalFrameCur) < 0.35)) {
+        this.portalFrameCur = targetPortalF;
+      }
 
-          let rcChrome = 1;
-          let rcRadius = 5;
-          let rcBorderOp = i === nearestIdx ? 0.28 : 0.16;
-          let rcBgOp = 1;
-          let rcLeadVeil = 0;
-          let innerScale = 1.10 - activeWeight * 0.08;
-          let tiltFactor = activeWeight;
-
-          if (bridgeT < 1) {
-            if (i === 0) {
-              const targetW = card.w || this.cardW;
-              const targetH = card.h || this.cardH;
-              const curW = targetW + (vw - targetW) * (1 - pullbackEase);
-              const curH = targetH + (vh - targetH) * (1 - pullbackEase);
-              setCssVar(st, cc, "--rc-w", `${curW.toFixed(1)}px`);
-              setCssVar(st, cc, "--rc-h", `${curH.toFixed(1)}px`);
-              ty += (this.deckCenterOffsetY || 0) * (1 - pullbackEase);
-              scale = 1;
-              op *= videoDissolve;
-              activeWeight *= chromeReveal;
-              tiltFactor = chromeReveal;
-              shade = 0;
-              rcChrome = chromeReveal;
-              rcRadius = chromeReveal * 5;
-              rcBorderOp = chromeReveal * 0.28;
-              rcBgOp = chromeReveal;
-              rcLeadVeil = leadVeilOp;
-              innerScale = 1.02 + (1 - mediaWake) * 0.03;
-            } else {
-              op *= sideReveal;
-              tx += (1 - sideReveal) * (this.cardW || 560) * 0.24;
-            }
-          } else if (i === 0 && !card.settledSize) {
-            card.settledSize = true;
-            if (card.w && card.h && (card.w !== this.cardW || card.h !== this.cardH)) {
-              setCssVar(st, cc, "--rc-w", `${card.w}px`);
-              setCssVar(st, cc, "--rc-h", `${card.h}px`);
-            } else {
-              delete cc["--rc-w"];
-              delete cc["--rc-h"];
-              st.removeProperty("--rc-w");
-              st.removeProperty("--rc-h");
-            }
-          }
-          if (bridgeT < 1 && i === 0) card.settledSize = false;
-
-          const maxParallax = Math.max(4, (this.cardW || 300) * 0.032);
-          const parallaxX = clamp(-d * maxParallax, -16, 16);
-
-          setCssVar(st, cc, "--rc-x", `${tx.toFixed(1)}px`);
-          setCssVar(st, cc, "--rc-y", `${ty.toFixed(1)}px`);
-          setCssVar(st, cc, "--rc-s", scale.toFixed(4));
-          setCssVar(st, cc, "--rc-rx", "0deg");
-          setCssVar(st, cc, "--rc-ry", `${baseRy.toFixed(2)}deg`);
-          setCssVar(st, cc, "--rc-op", op.toFixed(3));
-          setCssVar(st, cc, "--rc-shade", shade.toFixed(3));
-          setCssVar(st, cc, "--rc-lead-veil", rcLeadVeil.toFixed(3));
-          setCssVar(st, cc, "--rc-act", activeWeight.toFixed(3));
-          setCssVar(st, cc, "--rc-chrome", rcChrome.toFixed(3));
-          setCssVar(st, cc, "--rc-radius", `${rcRadius.toFixed(2)}px`);
-          setCssVar(st, cc, "--rc-border-op", rcBorderOp.toFixed(3));
-          setCssVar(st, cc, "--rc-bg-op", rcBgOp.toFixed(3));
-          setCssVar(st, cc, "--rc-px", `${parallaxX.toFixed(1)}px`);
-          setCssVar(st, cc, "--rc-ims", innerScale.toFixed(4));
-          setCssVar(st, cc, "--rc-pe", (isInteractive && absD < 1.35 && op > 0.25) ? "auto" : "none");
-          setCssVar(st, cc, "--rc-z", String(Math.round(50 - absD * 10)));
-        }
-
-        const clipDur = Math.max(0.1, card.span / card.fps);
-        let clipP = 0;
-
-        if (i === 0 && bridgeT < 1) {
-          clipP = clamp((bridgeT - 0.20) / 0.80, 0, 1);
-          card.loopSec = clipP * clipDur;
-          card.loopRate = 1;
-          if (card.bufEl && card.bufVisible) {
-            card.bufVisible = false;
-            card.bufWaitSince = 0;
-            card.bufEl.classList.remove("is-visible");
-          }
-        } else {
-          const isCenterCard = i === nearestIdx && bridgeT >= 1 && !this.loopPaused && !reduce;
-          const cardBank = attachCardBank(card, this.pickReelSet(card.idx));
-          const loopIdx = clamp(Math.round(card.curFrame) - 1, card.from - 1, card.to - 1);
-          if (isCenterCard && cardBank) {
-            const startNeed = Math.min(28, card.span - 1);
-            const startDec = Math.min(10, startNeed + 1);
-            card.isLoopBuffered = card.isLoopBuffered
-              ? cardBank.hasReadyBuffer(loopIdx, 5, 2)
-              : cardBank.hasReadyBuffer(loopIdx, startNeed, startDec);
-          } else if (!isCenterCard) {
-            card.isLoopBuffered = false;
-          }
-
-          if (card.bufEl) {
-            const waitingCard = isCenterCard && !card.isLoopBuffered && (!cardBank || !cardBank.hasContiguousBlobs(loopIdx, 28));
-            if (!waitingCard) {
-              card.bufWaitSince = 0;
-              if (card.bufVisible) {
-                card.bufVisible = false;
-                card.bufEl.classList.remove("is-visible");
-              }
-            } else {
-              const nowT = performance.now();
-              if (!card.bufWaitSince) card.bufWaitSince = nowT;
-              if (nowT - card.bufWaitSince >= 180) {
-                if (!card.bufVisible) {
-                  card.bufVisible = true;
-                  card.bufEl.classList.add("is-visible");
-                }
-                const pct = Math.max(0, Math.min(99, Math.round(cardBank.getBufferPercent(loopIdx, 28))));
-                if (card.bufTxt && pct !== card.lastBufPct) {
-                  card.lastBufPct = pct;
-                  card.bufTxt.textContent = `Cargando · ${pct}%`;
-                }
-              }
-            }
-          }
-
-          const targetRate = isCenterCard && card.isLoopBuffered ? 1 : 0;
-          const rateK = Math.min(1, dtSec * (targetRate ? 14 : 10));
-          card.loopRate += (targetRate - card.loopRate) * rateK;
-          if (Math.abs(targetRate - card.loopRate) < 0.005) card.loopRate = targetRate;
-
-          if (card.loopRate > 0.001) {
-            card.loopSec = (card.loopSec + dtSec * card.loopRate) % clipDur;
-          }
-          clipP = clamp((card.loopSec % clipDur) / clipDur, 0, 1);
-        }
-
-        const frameFloat = card.from + clipP * (card.span - 1);
-        if (absD < 1.85 && (i > 0 || viewportEntry > 0)) {
-          const prevInt = Math.round(card.curFrame);
-          const nextInt = Math.round(frameFloat);
-          if (nextInt !== prevInt || card.dirty || !card.hasCanvas) {
-            this.drawCard(card, frameFloat, i === 0 && bridgeT < 1);
-            if (nextInt !== prevInt && Math.abs(nextInt - (card.lastPumpInt ?? -999)) >= 4) {
-              card.lastPumpInt = nextInt;
-              AssetScheduler.schedulePump();
-            }
-          } else {
-            card.curFrame = frameFloat;
-          }
-        }
-
-        if (Math.abs(clipP - card.lastProg) > 0.008) {
-          card.lastProg = clipP;
-          setCssVar(st, cc, "--rc-prog", clipP.toFixed(3));
-        }
-        if (this.thumbs[i]) {
-          const tpVal = i === nearestIdx ? Math.round(clipP * 125) / 125 : 0;
-          if (tpVal !== card.lastThumbP) {
-            card.lastThumbP = tpVal;
-            this.thumbs[i].style.setProperty("--th-p", tpVal.toFixed(3));
-          }
+      if (Math.abs(this.portalFrameCur - this.lastPortalDrawnIdx) > 0.002 || this.portalDirty) {
+        this.drawPortal(this.portalFrameCur);
+        const pf = Math.round(this.portalFrameCur);
+        if (Math.abs(pf - (this.lastPortalPumpFrame ?? -999)) >= 4) {
+          this.lastPortalPumpFrame = pf;
+          AssetScheduler.schedulePump();
         }
       }
+
+      const wakeOp = smooth(range(bridgeWakeT, 0.12, 0.36));
+      const tpOp = wakeOp * this.portalFade;
+      const tpVeil = (1 - smooth(range(bridgeWakeT, 0.16, 0.54))) * 0.86;
+
+      // 1) Fullscreen exacto al nacer (0.5*vh) -> Cuadro horizontal 16:9 centrado
+      const stage1W = vw + (this.centerW - vw) * shrinkT;
+      const stage1H = vh + (this.centerH - vh) * shrinkT;
+      const stage1Cx = vw * 0.5;
+      const stage1Cy = vh * (0.5 - shrinkT * (this.isPortraitLayout ? 0.06 : 0.03));
+
+      // 2) Cuadro horizontal centrado -> 1ª Tarjeta (100% compositor GPU scale + bloqueo al scroll real sin techo en 0)
+      const finalCx = this.leadCenterX || (vw * 0.5);
+      const finalCy = this.leadRelCenterY || (vh * 0.45);
+      const actualScrollRemain = this.repTop - y;
+      const endCx = finalCx;
+
+      const followT = smooth(range(dockRaw, 0.18, 0.90));
+      const arcLift = -Math.sin(dockGeoT * Math.PI) * Math.round(vh * 0.052);
+      const dockImgEase = smooth(range(dockRaw, 0, 0.90));
+
+      const curW = dockRaw > 0
+        ? (this.centerW + (this.leadW - this.centerW) * dockGeoT)
+        : stage1W;
+      const curH = dockRaw > 0
+        ? (this.centerH + (this.leadH - this.centerH) * dockGeoT)
+        : stage1H;
+      const curCx = stage1Cx + (endCx - stage1Cx) * dockGeoT;
+      const curCy = dockRaw > 0
+        ? (stage1Cy + (finalCy - stage1Cy) * dockGeoT + actualScrollRemain * followT + arcLift)
+        : stage1Cy;
+
+      let frameW, frameH, scaleX, scaleY;
+      if (dockRaw > 0 && this.leadW > 20 && this.leadH > 20) {
+        frameW = this.leadW;
+        frameH = this.leadH;
+        scaleX = curW / frameW;
+        scaleY = curH / frameH;
+      } else {
+        frameW = curW;
+        frameH = curH;
+        scaleX = 1;
+        scaleY = 1;
+      }
+      const curX = curCx - frameW * 0.5;
+      const curY = curCy - frameH * 0.5;
+
+      const rScaleComp = Math.max(0.5, scaleX);
+      const rTop = (shrinkT * 10) / rScaleComp;
+      const rBot = (shrinkT * 10 * (1 - dockGeoT)) / rScaleComp;
+      const borderOp = shrinkT * 0.22 * (1 - smooth(range(dockRaw, 0.28, 0.86)));
+      const shadowOp = shrinkT * 0.68 * (1 - smooth(range(dockRaw, 0.35, 0.90)));
+      const marksOp = smooth(range(shrinkT, 0.32, 0.90)) * (1 - smooth(range(dockRaw, 0.10, 0.58)));
+      const auraOp = smooth(range(shrinkT, 0.22, 0.86)) * (1 - smooth(range(dockRaw, 0.12, 0.76)));
+      const cardShadeOp = smooth(range(dockRaw, 0.32, 0.88));
+      const imgScale = 1.035 - shrinkT * 0.025 - dockImgEase * 0.010 + (1 - wakeOp) * 0.02;
+
+      const ps = this.portalEl.style;
+      const pc = this._portalVars;
+      const fs = this.portalFrame.style;
+      const fc = this._frameVars;
+      const as = this.portalAura.style;
+      const ac = this._auraVars;
+
+      setCssVar(ps, pc, "--tp-op", tpOp.toFixed(3));
+      setCssVar(fs, fc, "--tp-x", `${curX.toFixed(2)}px`);
+      setCssVar(fs, fc, "--tp-y", `${curY.toFixed(2)}px`);
+      setCssVar(fs, fc, "--tp-w", `${frameW.toFixed(2)}px`);
+      setCssVar(fs, fc, "--tp-h", `${frameH.toFixed(2)}px`);
+      setCssVar(fs, fc, "--tp-sx", scaleX.toFixed(4));
+      setCssVar(fs, fc, "--tp-sy", scaleY.toFixed(4));
+      setCssVar(fs, fc, "--tp-tl", `${rTop.toFixed(1)}px`);
+      setCssVar(fs, fc, "--tp-tr", `${rTop.toFixed(1)}px`);
+      setCssVar(fs, fc, "--tp-br", `${rBot.toFixed(1)}px`);
+      setCssVar(fs, fc, "--tp-bl", `${rBot.toFixed(1)}px`);
+      setCssVar(fs, fc, "--tp-border", borderOp.toFixed(3));
+      setCssVar(fs, fc, "--tp-shadow", shadowOp.toFixed(3));
+      setCssVar(fs, fc, "--tp-marks", marksOp.toFixed(3));
+      setCssVar(fs, fc, "--tp-veil", tpVeil.toFixed(3));
+      setCssVar(fs, fc, "--tp-card-shade", cardShadeOp.toFixed(3));
+      setCssVar(fs, fc, "--tp-vig", (1 - cardShadeOp).toFixed(3));
+      setCssVar(fs, fc, "--tp-ims", imgScale.toFixed(4));
+      setCssVar(as, ac, "--tp-aura-op", auraOp.toFixed(3));
+      setCssVar(as, ac, "--tp-aura-s", (0.90 + shrinkT * 0.14 - dockGeoT * 0.08).toFixed(3));
+
       this.needsVisualSync = false;
-
-      const activeCard = this.cards[nearestIdx];
-      if (this.reelTcEl && activeCard) {
-        const activeDur = Math.max(1, activeCard.span / activeCard.fps);
-        const curSec = Math.floor(activeCard.loopSec % activeDur);
-        if (curSec !== this.lastReelTcSec) {
-          this.lastReelTcSec = curSec;
-          this.reelTcEl.textContent = `${pad(Math.floor(curSec / 60))}:${pad(curSec % 60)}`;
-        }
-      }
     }
   }
 
-  const traceReels = $$(".trace-reel").map((el) => new UnifiedTraceReel(el));
-
+  const traceReels = $$(".trace-sec").map((el) => new TraceToRepertorio(el));
   /* ---------------------------------------------------------
      PRELOADER GLOBAL POR STREAMING (.fseq) + PRE-DECODIFICACIÓN GPU
      Carga todas las secuencias en memoria con progreso real por bytes
@@ -4887,22 +3640,14 @@
     if (sequences[1]) addBankTo(startupItems, sequences[1].ensureBank(), 0);
 
     // Fase 2 (Cascada en segundo plano apenas abre la pantalla):
-    // 1° Planta + clip puente, 2° secuencias principales siguientes, 3° resto del carrusel
+    // 1° Planta + clip puente a Trabajos Seleccionados, 2° secuencias principales siguientes
     if (traceReels[0]) {
       const tr = traceReels[0];
       addBankTo(backgroundItems, tr.ensureTraceBank(), 0);
-      if (tr.cards[0]) addBankTo(backgroundItems, attachCardBank(tr.cards[0], tr.pickReelSet(0)), tr.cards[0].from - 1);
-      if (tr.cards[1]) addBankTo(backgroundItems, attachCardBank(tr.cards[1], tr.pickReelSet(1)), tr.cards[1].from - 1);
+      addBankTo(backgroundItems, tr.ensurePortalBank(), 0);
     }
     if (sequences[2]) addBankTo(backgroundItems, sequences[2].ensureBank(), 0);
     if (sequences[3]) addBankTo(backgroundItems, sequences[3].ensureBank(), 0);
-    if (!NET_PROFILE.isSaveData && traceReels[0]) {
-      const tr = traceReels[0];
-      for (let i = 2; i < tr.cards.length; i++) {
-        const c = tr.cards[i];
-        addBankTo(backgroundItems, attachCardBank(c, tr.pickReelSet(c.idx)), c.from - 1);
-      }
-    }
 
     if (!startupItems.length) {
       loadTarget = 1;
@@ -5041,23 +3786,9 @@
     });
   }, { root: getObsRoot(), rootMargin: "0px 0px 10% 0px", threshold: 0.01 });
 
-  const cardRevealIO = new IntersectionObserver((entries) => {
-    entries.forEach((en) => {
-      if (!en.isIntersecting) return;
-      en.target.classList.add("is-in");
-      cardRevealIO.unobserve(en.target);
-    });
-  }, { root: getObsRoot(), rootMargin: "0px 0px -6% 0px", threshold: 0.08 });
-
   $$("[data-reveal], [data-lines]").forEach((el) => {
     const sib = el.parentElement ? $$(":scope > [data-reveal]", el.parentElement) : [];
     const idx = sib.indexOf(el);
-    if (el.classList.contains("rep-card")) {
-      const colStep = vw > 1120 ? (idx % 3) : (vw > 680 ? (idx % 2) : 0);
-      el.style.setProperty("--d", `${colStep * 0.09}s`);
-      cardRevealIO.observe(el);
-      return;
-    }
     if (idx > 0) el.style.setProperty("--d", `${Math.min(idx, 5) * 0.07}s`);
     revealIO.observe(el);
   });
@@ -5112,10 +3843,13 @@
     });
     if (href === "#trazado" && traceReels.length) {
       const tr = traceReels[0];
-      target = tr.top + Math.round(tr.len * 0.088);
-    } else if (href === "#archivo" && traceReels.length) {
+      target = tr.top + Math.round(tr.traceLen * 0.10);
+    } else if (href === "#repertorio" && traceReels.length) {
       const tr = traceReels[0];
-      target = tr.top + Math.round(tr.len * 0.425);
+      target = tr.repTop;
+      tr.portalFade = 0;
+      tr.hidePortal();
+      tr.setRepertorioReveal(true, true, true, true, true);
     }
     const wasOpen = body.classList.contains("index-open");
     if (wasOpen) {
@@ -5356,7 +4090,6 @@
 
   function measureSeqs() {
     sequences.forEach((s) => { s.measure(); s.dirty = true; });
-    reels.forEach((r) => r.measure());
     traceReels.forEach((tr) => { tr.measure(); tr.traceDirty = true; });
   }
 
@@ -5397,6 +4130,7 @@
   function loop(now) {
     rafId = 0;
     if (document.hidden) return;
+    hybridFrameId++;
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (lenis && !isVerticalScroller()) lenis.raf(now);
@@ -5552,7 +4286,6 @@
     }
 
     for (let i = 0; i < sequences.length; i++) sequences[i].update(dt, isScrolling);
-    for (let i = 0; i < reels.length; i++) reels[i].update(dt, isScrolling);
     for (let i = 0; i < traceReels.length; i++) traceReels[i].update(dt, isScrolling);
 
     lastY = y;
