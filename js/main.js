@@ -4873,33 +4873,39 @@
   const getObsRoot = () => (scrollContainer && isVerticalScroller()) ? scrollContainer : null;
 
   (function startGlobalPreload() {
-    const items = [];
+    const startupItems = [];
+    const backgroundItems = [];
     const seenKeys = new Set();
-    const addBank = (bank, startIdx = 0) => {
+
+    const addBankTo = (list, bank, startIdx = 0) => {
       if (!bank || seenKeys.has(bank.key)) return;
       seenKeys.add(bank.key);
-      items.push({ bank, startIdx });
+      list.push({ bank, startIdx });
     };
 
-    if (sequences[0]) addBank(sequences[0].ensureBank(), 0);
-    if (sequences[1]) addBank(sequences[1].ensureBank(), 0);
-    if (traceReels[0]) {
-      addBank(traceReels[0].ensureTraceBank(), 0);
-      const tr = traceReels[0];
-      if (tr.cards[0]) addBank(attachCardBank(tr.cards[0], tr.pickReelSet(0)), tr.cards[0].from - 1);
-    }
-    if (sequences[2]) addBank(sequences[2].ensureBank(), 0);
-    if (sequences[3]) addBank(sequences[3].ensureBank(), 0);
+    // Fase 1 (Preloader rápido): solo las primeras secuencias de entrada (~39 MB, sin las 8 tarjetas del reel)
+    if (sequences[0]) addBankTo(startupItems, sequences[0].ensureBank(), 0);
+    if (sequences[1]) addBankTo(startupItems, sequences[1].ensureBank(), 0);
 
+    // Fase 2 (Cascada en segundo plano apenas abre la pantalla):
+    // 1° Planta + clip puente, 2° secuencias principales siguientes, 3° resto del carrusel
+    if (traceReels[0]) {
+      const tr = traceReels[0];
+      addBankTo(backgroundItems, tr.ensureTraceBank(), 0);
+      if (tr.cards[0]) addBankTo(backgroundItems, attachCardBank(tr.cards[0], tr.pickReelSet(0)), tr.cards[0].from - 1);
+      if (tr.cards[1]) addBankTo(backgroundItems, attachCardBank(tr.cards[1], tr.pickReelSet(1)), tr.cards[1].from - 1);
+    }
+    if (sequences[2]) addBankTo(backgroundItems, sequences[2].ensureBank(), 0);
+    if (sequences[3]) addBankTo(backgroundItems, sequences[3].ensureBank(), 0);
     if (!NET_PROFILE.isSaveData && traceReels[0]) {
       const tr = traceReels[0];
-      for (let i = 1; i < tr.cards.length; i++) {
+      for (let i = 2; i < tr.cards.length; i++) {
         const c = tr.cards[i];
-        addBank(attachCardBank(c, tr.pickReelSet(c.idx)), c.from - 1);
+        addBankTo(backgroundItems, attachCardBank(c, tr.pickReelSet(c.idx)), c.from - 1);
       }
     }
 
-    if (!items.length) {
+    if (!startupItems.length) {
       loadTarget = 1;
       return;
     }
@@ -4911,13 +4917,29 @@
     function queueInitialDecodes(bank, startIdx) {
       const end = Math.min(bank.count - 1, startIdx + INITIAL_DECODE_PER_BANK - 1);
       for (let f = startIdx; f <= end; f++) {
-        if (bank.blobs[f]) AssetScheduler.enqueueDecode(bank, f, bank === items[0].bank, 0);
+        if (bank.blobs[f]) AssetScheduler.enqueueDecode(bank, f, bank === startupItems[0].bank, 0);
       }
       if (NET_PROFILE.keyframeStride) {
         for (let f = 0; f < bank.count; f += NET_PROFILE.keyframeStride) {
           if (bank.blobs[f]) AssetScheduler.enqueueDecode(bank, f, false, 0.8);
         }
       }
+    }
+
+    function startBackgroundCascade() {
+      if (NET_PROFILE.isSaveData || !backgroundItems.length) return;
+      let bgIdx = 0;
+      const bgWorkers = Math.min(2, backgroundItems.length);
+      async function runBgWorker() {
+        while (bgIdx < backgroundItems.length) {
+          const i = bgIdx++;
+          const { bank, startIdx } = backgroundItems[i];
+          if (bank.bundleDone || bank.bundleActive || bank.bundleFailed) continue;
+          const ok = await AssetScheduler.loadBundleForBank(bank, { priority: "auto" });
+          if (ok) queueInitialDecodes(bank, startIdx);
+        }
+      }
+      for (let w = 0; w < bgWorkers; w++) runBgWorker();
     }
 
     function computeGlobalProgress() {
@@ -4928,8 +4950,8 @@
       let totalInit = 0;
       let doneCount = 0;
 
-      for (let i = 0; i < items.length; i++) {
-        const { bank, startIdx } = items[i];
+      for (let i = 0; i < startupItems.length; i++) {
+        const { bank, startIdx } = startupItems[i];
         const bTotal = Math.max(1, bank.bundleBytesTotal || bank.bundleExpectedBytes);
         expectedBytes += bTotal;
 
@@ -4957,26 +4979,28 @@
       loadTarget = Math.max(loadTarget, nextTarget);
 
       if (byteFrac < 0.995) {
-        const loadedMB = (loadedBytes / (1024 * 1024)).toFixed(0);
-        const totalMB = (expectedBytes / (1024 * 1024)).toFixed(0);
-        setLoaderStatus(`· ${loadedMB} / ${totalMB} MB`);
+        setLoaderStatus("· Cargando secuencias");
       } else if (decFrac < 1) {
-        setLoaderStatus("· Optimizando secuencias");
+        setLoaderStatus("· Preparando proyección");
       }
 
-      if (doneCount >= items.length) {
+      if (doneCount >= startupItems.length) {
         if (!allStreamsDone) {
           allStreamsDone = true;
-          for (let i = 0; i < items.length; i++) {
-            queueInitialDecodes(items[i].bank, items[i].startIdx);
+          for (let i = 0; i < startupItems.length; i++) {
+            queueInitialDecodes(startupItems[i].bank, startupItems[i].startIdx);
           }
           finishGraceTimer = setTimeout(() => {
-            if (!ready) loadTarget = 1;
-          }, 2400);
+            if (!ready) {
+              loadTarget = 1;
+              startBackgroundCascade();
+            }
+          }, 1800);
         }
         if (decodedInit >= totalInit) {
           clearTimeout(finishGraceTimer);
           loadTarget = 1;
+          startBackgroundCascade();
         }
       }
     }
@@ -4985,13 +5009,13 @@
     window.__onBankDecode = () => computeGlobalProgress();
 
     let nextIdx = 0;
-    const workerCount = Math.min(NET_PROFILE.bundleConcurrency, items.length);
-    async function runWorker(workerId) {
-      while (nextIdx < items.length && !ready) {
+    const workerCount = Math.min(NET_PROFILE.bundleConcurrency, startupItems.length);
+    async function runWorker() {
+      while (nextIdx < startupItems.length && !ready) {
         const idx = nextIdx++;
-        const { bank, startIdx } = items[idx];
+        const { bank, startIdx } = startupItems[idx];
         const ok = await AssetScheduler.loadBundleForBank(bank, {
-          priority: idx <= 1 ? "high" : "auto",
+          priority: "high",
           onProgress: () => computeGlobalProgress(),
         });
         if (ok) {
@@ -5002,7 +5026,7 @@
     }
 
     for (let w = 0; w < workerCount; w++) {
-      runWorker(w);
+      runWorker();
     }
     computeGlobalProgress();
   })();
