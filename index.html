@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..500;1,6..96,400..500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="preload" as="image" href="assets/seq/estrenar/poster.jpg?v=1795677196" media="(min-aspect-ratio: 9/10)">
   <link rel="preload" as="image" href="assets/seq/estrenar/poster-pt.jpg?v=1795677196" media="(max-aspect-ratio: 9/10)">
-  <link rel="stylesheet" href="css/styles.css?v=2026112710">
+  <link rel="stylesheet" href="css/styles.css?v=2026112715">
 </head>
 <body class="is-loading">
 
@@ -375,6 +375,28 @@
         </footer>
 
         <div class="cinema__stage-blackout" aria-hidden="true"></div>
+
+        <!-- Cierre cinematográfico -->
+        <div class="seq__outro-card" data-seq-outro>
+          <div class="seq__outro-inner">
+            <button class="cine-cta" type="button" data-magnetic="0.22" data-video-trigger="https://www.youtube.com/watch?v=e2QwapgAQf4" data-video-title="Plano Secuencia en Vivienda — Film Completo" aria-label="Ver video completo">
+              <span class="cine-cta__sheen" aria-hidden="true"></span>
+              <span class="cine-cta__iris" aria-hidden="true">
+                <svg class="cine-cta__ring" viewBox="0 0 36 36" fill="none">
+                  <circle cx="18" cy="18" r="16.5" stroke="currentColor" stroke-opacity="0.34" stroke-width="1"/>
+                </svg>
+                <svg class="cine-cta__play" viewBox="0 0 24 24"><polygon points="9,6 19,12 9,18"/></svg>
+              </span>
+              <span class="cine-cta__label">
+                <span class="cine-cta__title">Ver video completo</span>
+                <span class="cine-cta__meta">YouTube · 4K</span>
+              </span>
+              <span class="cine-cta__arrow" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10h11M11 5.5l4.5 4.5-4.5 4.5"/></svg>
+              </span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -429,18 +451,29 @@
               <svg class="trace__svg trace__svg--h" viewBox="0 0 1240 460" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <radialGradient id="traceConeGrad" cx="0%" cy="50%" r="100%" fx="0%" fy="50%">
-                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.34"/>
-                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.12"/>
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.26"/>
+                    <stop offset="35%" stop-color="#d9be9d" stop-opacity="0.11"/>
+                    <stop offset="75%" stop-color="#c89d6c" stop-opacity="0.03"/>
                     <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
                   </radialGradient>
+                  <linearGradient id="traceConeEdgeGrad" x1="4" y1="0" x2="106" y2="0" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.36"/>
+                    <stop offset="55%" stop-color="#d9be9d" stop-opacity="0.16"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="tracePreTrailGrad" x1="340" y1="-320" x2="88" y2="316" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.45"/>
+                    <stop offset="45%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
+                  </linearGradient>
                   <linearGradient id="traceTrailGrad" x1="80" y1="230" x2="1080" y2="230" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.35"/>
-                    <stop offset="35%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.32"/>
+                    <stop offset="40%" stop-color="#e5dac9" stop-opacity="0.86"/>
                     <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
                   </linearGradient>
                   <radialGradient id="tracePointAura" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.65"/>
-                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.24"/>
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.48"/>
+                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.18"/>
                     <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
                   </radialGradient>
                   <pattern id="traceWallHatch" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
@@ -600,18 +633,27 @@
                 </g>
 
                 <g class="trace__flight">
+                  <path id="tracePrePathGhost" class="trace__pre-ghost"
+                        d="M 340 -320 C 310 -40, 18 316, 88 316"
+                        stroke="#ece8e1" stroke-opacity="0.10" stroke-width="0.65" stroke-dasharray="2 7" stroke-linecap="round"/>
+                  <path id="tracePrePathGlow" class="trace__pre-glow"
+                        d="M 340 -320 C 310 -40, 18 316, 88 316"
+                        stroke="#c89d6c" stroke-opacity="0.30" stroke-width="3.2" stroke-linecap="round"/>
+                  <path id="tracePrePathCore" class="trace__pre-core"
+                        d="M 340 -320 C 310 -40, 18 316, 88 316"
+                        stroke="url(#tracePreTrailGrad)" stroke-width="1.25" stroke-linecap="round"/>
                   <path id="tracePathGhost" class="trace__path-ghost"
                         d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
-                        stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.85" stroke-dasharray="2 6" stroke-linecap="round"/>
+                        stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.75" stroke-dasharray="2 6" stroke-linecap="round"/>
                   <path id="tracePathGlow" class="trace__path-glow"
                         d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
-                        stroke="#c89d6c" stroke-opacity="0.42" stroke-width="4.5" stroke-linecap="round"/>
+                        stroke="#c89d6c" stroke-opacity="0.28" stroke-width="3.2" stroke-linecap="round"/>
                   <path id="tracePathCore" class="trace__path-core"
                         d="M 88 316 C 158 316, 212 230, 294 230 L 492 230 C 562 230, 584 166, 666 170 C 748 174, 774 264, 852 256 C 924 248, 976 224, 1062 224"
-                        stroke="url(#traceTrailGrad)" stroke-width="1.45" stroke-linecap="round"/>
+                        stroke="url(#traceTrailGrad)" stroke-width="1.25" stroke-linecap="round"/>
 
                   <g class="trace__waypoints">
-                    <g class="trace__wp is-reached" data-trace-wp="0" transform="translate(88, 316)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="0" y="28" text-anchor="middle" class="trace__svg-wp">00 · ORIGEN</text></g>
+                    <g class="trace__wp trace__wp--origin" data-trace-wp="0" transform="translate(88, 316)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="0" y="28" text-anchor="middle" class="trace__svg-wp">00 · ORIGEN</text></g>
                     <g class="trace__wp" data-trace-wp="1" transform="translate(330, 230)"><circle class="trace__wp-ring" r="5.5" stroke="#c89d6c" stroke-width="0.75"/><circle class="trace__wp-dot" r="2" fill="#c89d6c"/><text x="-46" y="-14" text-anchor="middle" class="trace__svg-wp">UMBRAL +1.70m</text></g>
                     <g class="trace__wp" data-trace-wp="2" transform="translate(492, 230)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/></g>
                     <g class="trace__wp" data-trace-wp="3" transform="translate(666, 170)"><circle class="trace__wp-ring" r="5.5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="0" y="76" text-anchor="middle" class="trace__svg-wp">ESTAR · 18°</text></g>
@@ -620,15 +662,18 @@
                   </g>
 
                   <g class="trace__drone" data-trace-drone transform="translate(88, 316)">
+                    <circle class="trace__drone-pulse" r="14" stroke="#c89d6c" stroke-opacity="0.28" stroke-width="0.5"/>
+                    <circle r="10" fill="url(#tracePointAura)"/>
                     <g data-trace-drone-rot>
-                      <path d="M 0 0 L 96 -33 A 102 102 0 0 1 96 33 Z" fill="url(#traceConeGrad)"/>
-                      <line x1="0" y1="0" x2="90" y2="-31" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
-                      <line x1="0" y1="0" x2="90" y2="31" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <path d="M 0 0 L 106 -34 A 112 112 0 0 1 106 34 Z" fill="url(#traceConeGrad)"/>
+                      <line x1="2" y1="-0.6" x2="102" y2="-32.5" stroke="url(#traceConeEdgeGrad)" stroke-width="0.55"/>
+                      <line x1="2" y1="0.6" x2="102" y2="32.5" stroke="url(#traceConeEdgeGrad)" stroke-width="0.55"/>
+                      <path d="M 38.5 -12 A 40 40 0 0 1 38.5 12" stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.45" stroke-dasharray="2 3"/>
+                      <path d="M 7.8 -2.8 L 11.4 0 L 7.8 2.8" stroke="#d19b6e" stroke-opacity="0.82" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
-                    <circle class="trace__drone-pulse" r="19" stroke="#ece8e1" stroke-opacity="0.22" stroke-width="0.55"/>
-                    <circle class="trace__drone-ring" r="11" stroke="#ece8e1" stroke-opacity="0.72" stroke-width="0.75"/>
-                    <circle r="7.5" fill="url(#tracePointAura)"/>
-                    <circle class="trace__drone-core" r="3" fill="#ece8e1"/>
+                    <circle r="12.5" stroke="#ece8e1" stroke-opacity="0.24" stroke-width="0.45" stroke-dasharray="1.5 3.5"/>
+                    <circle class="trace__drone-ring" r="6.8" stroke="#ece8e1" stroke-opacity="0.76" stroke-width="0.65"/>
+                    <circle class="trace__drone-core" r="2.2" fill="#ece8e1"/>
                   </g>
                 </g>
               </svg>
@@ -637,18 +682,29 @@
               <svg class="trace__svg trace__svg--v" viewBox="0 0 460 760" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <radialGradient id="traceConeGradV" cx="50%" cy="0%" r="100%" fx="50%" fy="0%">
-                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.34"/>
-                    <stop offset="50%" stop-color="#c89d6c" stop-opacity="0.12"/>
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.26"/>
+                    <stop offset="35%" stop-color="#d9be9d" stop-opacity="0.11"/>
+                    <stop offset="75%" stop-color="#c89d6c" stop-opacity="0.03"/>
                     <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
                   </radialGradient>
+                  <linearGradient id="traceConeEdgeGradV" x1="0" y1="5" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.36"/>
+                    <stop offset="55%" stop-color="#d9be9d" stop-opacity="0.16"/>
+                    <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="tracePreTrailGradV" x1="225" y1="-480" x2="175" y2="55" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.45"/>
+                    <stop offset="45%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
+                  </linearGradient>
                   <linearGradient id="traceTrailGradV" x1="230" y1="55" x2="230" y2="690" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.35"/>
-                    <stop offset="35%" stop-color="#e5dac9" stop-opacity="0.88"/>
+                    <stop offset="0%" stop-color="#c89d6c" stop-opacity="0.32"/>
+                    <stop offset="40%" stop-color="#e5dac9" stop-opacity="0.86"/>
                     <stop offset="100%" stop-color="#ece8e1" stop-opacity="1"/>
                   </linearGradient>
                   <radialGradient id="tracePointAuraV" cx="50%" cy="50%" r="50%">
-                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.65"/>
-                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.24"/>
+                    <stop offset="0%" stop-color="#ece8e1" stop-opacity="0.48"/>
+                    <stop offset="45%" stop-color="#c89d6c" stop-opacity="0.18"/>
                     <stop offset="100%" stop-color="#c89d6c" stop-opacity="0"/>
                   </radialGradient>
                   <pattern id="traceWallHatchV" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
@@ -721,18 +777,27 @@
                 </g>
 
                 <g class="trace__flight">
+                  <path id="tracePrePathGhostV" class="trace__pre-ghost"
+                        d="M 225 -480 C 215 -210, 175 -30, 175 55"
+                        stroke="#ece8e1" stroke-opacity="0.10" stroke-width="0.65" stroke-dasharray="2 7" stroke-linecap="round"/>
+                  <path id="tracePrePathGlowV" class="trace__pre-glow"
+                        d="M 225 -480 C 215 -210, 175 -30, 175 55"
+                        stroke="#c89d6c" stroke-opacity="0.30" stroke-width="3.2" stroke-linecap="round"/>
+                  <path id="tracePrePathCoreV" class="trace__pre-core"
+                        d="M 225 -480 C 215 -210, 175 -30, 175 55"
+                        stroke="url(#tracePreTrailGradV)" stroke-width="1.25" stroke-linecap="round"/>
                   <path id="tracePathGhostV" class="trace__path-ghost"
                         d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
-                        stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.85" stroke-dasharray="2 6" stroke-linecap="round"/>
+                        stroke="#ece8e1" stroke-opacity="0.16" stroke-width="0.75" stroke-dasharray="2 6" stroke-linecap="round"/>
                   <path id="tracePathGlowV" class="trace__path-glow"
                         d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
-                        stroke="#c89d6c" stroke-opacity="0.42" stroke-width="4.5" stroke-linecap="round"/>
+                        stroke="#c89d6c" stroke-opacity="0.28" stroke-width="3.2" stroke-linecap="round"/>
                   <path id="tracePathCoreV" class="trace__path-core"
                         d="M 175 55 C 175 105, 230 115, 230 170 L 230 315 C 230 365, 155 385, 155 440 C 155 495, 230 520, 230 570 L 230 690"
-                        stroke="url(#traceTrailGradV)" stroke-width="1.45" stroke-linecap="round"/>
+                        stroke="url(#traceTrailGradV)" stroke-width="1.25" stroke-linecap="round"/>
 
                   <g class="trace__waypoints">
-                    <g class="trace__wp is-reached" data-trace-wp-v="0" transform="translate(175, 55)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="-12" y="4" text-anchor="end" class="trace__svg-wp">ORIGEN</text></g>
+                    <g class="trace__wp trace__wp--origin" data-trace-wp-v="0" transform="translate(175, 55)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="-12" y="4" text-anchor="end" class="trace__svg-wp">ORIGEN</text></g>
                     <g class="trace__wp" data-trace-wp-v="1" transform="translate(230, 170)"><circle class="trace__wp-ring" r="5.5" stroke="#c89d6c" stroke-width="0.75"/><circle class="trace__wp-dot" r="2" fill="#c89d6c"/><text x="14" y="4" text-anchor="start" class="trace__svg-wp">UMBRAL</text></g>
                     <g class="trace__wp" data-trace-wp-v="2" transform="translate(230, 315)"><circle class="trace__wp-ring" r="5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/></g>
                     <g class="trace__wp" data-trace-wp-v="3" transform="translate(155, 440)"><circle class="trace__wp-ring" r="5.5" stroke="#ece8e1" stroke-width="0.65"/><circle class="trace__wp-dot" r="1.8" fill="#ece8e1"/><text x="-12" y="4" text-anchor="end" class="trace__svg-wp">ESTAR</text></g>
@@ -741,15 +806,18 @@
                   </g>
 
                   <g class="trace__drone" data-trace-drone-v transform="translate(175, 55)">
+                    <circle class="trace__drone-pulse trace__drone-pulse--v" r="16" stroke="#c89d6c" stroke-opacity="0.28" stroke-width="0.55"/>
+                    <circle r="11.5" fill="url(#tracePointAuraV)"/>
                     <g data-trace-drone-rot-v>
-                      <path d="M 0 0 L -30 84 A 90 90 0 0 0 30 84 Z" fill="url(#traceConeGradV)"/>
-                      <line x1="0" y1="0" x2="-28" y2="80" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
-                      <line x1="0" y1="0" x2="28" y2="80" stroke="#ece8e1" stroke-opacity="0.36" stroke-width="0.55"/>
+                      <path d="M 0 0 L -32 98 A 104 104 0 0 0 32 98 Z" fill="url(#traceConeGradV)"/>
+                      <line x1="-0.7" y1="2" x2="-30.5" y2="94" stroke="url(#traceConeEdgeGradV)" stroke-width="0.6"/>
+                      <line x1="0.7" y1="2" x2="30.5" y2="94" stroke="url(#traceConeEdgeGradV)" stroke-width="0.6"/>
+                      <path d="M -11.2 38.5 A 36 36 0 0 0 11.2 38.5" stroke="#ece8e1" stroke-opacity="0.18" stroke-width="0.5" stroke-dasharray="2 3"/>
+                      <path d="M -3.1 8.8 L 0 12.6 L 3.1 8.8" stroke="#d19b6e" stroke-opacity="0.82" stroke-width="0.75" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
-                    <circle class="trace__drone-pulse" r="17" stroke="#ece8e1" stroke-opacity="0.22" stroke-width="0.55"/>
-                    <circle class="trace__drone-ring" r="10" stroke="#ece8e1" stroke-opacity="0.72" stroke-width="0.75"/>
-                    <circle r="7" fill="url(#tracePointAuraV)"/>
-                    <circle class="trace__drone-core" r="2.8" fill="#ece8e1"/>
+                    <circle r="14.5" stroke="#ece8e1" stroke-opacity="0.24" stroke-width="0.5" stroke-dasharray="1.6 3.8"/>
+                    <circle class="trace__drone-ring" r="7.8" stroke="#ece8e1" stroke-opacity="0.76" stroke-width="0.7"/>
+                    <circle class="trace__drone-core" r="2.5" fill="#ece8e1"/>
                   </g>
                 </g>
               </svg>
@@ -837,16 +905,16 @@
           </header>
 
           <div class="repertorio__grid">
-            <a class="rep-card rep-card--lead" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-lead data-cursor="YouTube ↗" aria-label="Casa del Lago — Ver en YouTube">
+            <a class="rep-card rep-card--lead" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-lead data-video-trigger data-video-title="Casa del Lago" data-cursor="Ver film" aria-label="Casa del Lago — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/seq/casona-lago/md/0118.webp?v=1795677209" alt="Casa del Lago — Vista aérea de piscina y fachada" loading="eager" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">01</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -856,16 +924,16 @@
               </footer>
             </a>
 
-            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="1" data-cursor="YouTube ↗" aria-label="Recorrido Residencial — Ver en YouTube">
+            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="1" data-video-trigger data-video-title="Recorrido Residencial" data-cursor="Ver film" aria-label="Recorrido Residencial — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/stills/casa-hudson/0350.webp" alt="Recorrido residencial interior y jardín" loading="lazy" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">02</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -875,16 +943,16 @@
               </footer>
             </a>
 
-            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="2" data-cursor="YouTube ↗" aria-label="Espacio Comercial — Ver en YouTube">
+            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="2" data-video-trigger data-video-title="Espacio Comercial" data-cursor="Ver film" aria-label="Espacio Comercial — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/stills/anacleto/0457.webp" alt="Vuelo interior con iluminación arquitectónica" loading="lazy" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">03</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -894,16 +962,16 @@
               </footer>
             </a>
 
-            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="3" data-cursor="YouTube ↗" aria-label="Vivienda Minimalista — Ver en YouTube">
+            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="3" data-video-trigger data-video-title="Vivienda Minimalista" data-cursor="Ver film" aria-label="Vivienda Minimalista — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/stills/residencia-los-robles/0265.webp" alt="Vivienda contemporánea — Galería y piscina" loading="lazy" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">04</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -913,16 +981,16 @@
               </footer>
             </a>
 
-            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="4" data-cursor="YouTube ↗" aria-label="Villa Epecuén — Ver en YouTube">
+            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="4" data-video-trigger data-video-title="Villa Epecuén" data-cursor="Ver film" aria-label="Villa Epecuén — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/stills/epecuen/0090.webp" alt="Villa Epecuén — Vuelo FPV entre ruinas" loading="lazy" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">05</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -932,16 +1000,16 @@
               </footer>
             </a>
 
-            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="5" data-cursor="YouTube ↗" aria-label="Espacio Vonharv — Ver en YouTube">
+            <a class="rep-card" href="https://www.youtube.com/watch?v=e2QwapgAQf4" target="_blank" rel="noopener noreferrer" data-rep-card="5" data-video-trigger data-video-title="Espacio Vonharv" data-cursor="Ver film" aria-label="Espacio Vonharv — Ver en YouTube">
               <div class="rep-card__screen">
                 <img class="rep-card__poster" src="assets/stills/vonharv/0080.webp" alt="Espacio Vonharv — Cobertura de evento corporativo" loading="lazy" decoding="async">
                 <div class="rep-card__hud-top">
                   <span class="rep-card__num-badge">06</span>
-                  <span class="rep-card__yt-badge">YouTube 4K ↗</span>
+                  <span class="rep-card__yt-badge">YouTube 4K</span>
                 </div>
                 <span class="rep-card__play-btn" aria-hidden="true">
                   <span class="rep-card__play-ring"></span>
-                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,6 19,12 9,18"/></svg>
+                  <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8.5,5.5 19.5,12 8.5,18.5"/></svg>
                 </span>
               </div>
               <footer class="rep-card__info">
@@ -1210,6 +1278,6 @@
   </div>
 
   <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js" defer></script>
-  <script src="js/main.js?v=2026112710" defer></script>
+  <script src="js/main.js?v=2026112715" defer></script>
 </body>
 </html>

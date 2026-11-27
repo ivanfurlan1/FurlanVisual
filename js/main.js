@@ -1388,6 +1388,9 @@
         return;
       }
       this.autoPlayPaused = !this.autoPlayPaused;
+      if (this.isCinema && typeof traceReels !== "undefined" && traceReels.length && scrollY() >= traceReels[0].top) {
+        traceReels[0].autoPlayPaused = this.autoPlayPaused;
+      }
       playTactileTick(this.autoPlayPaused ? 480 : 660, 0.02, 0.015);
     }
 
@@ -1892,8 +1895,8 @@
       if (!this.set && viewportEntry > 0) this.load();
       if (y + vh < this.top - vh || y > this.top + this.len + vh) {
         if (this.isCinema) {
-          const nextTraceTop = (typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
-          const passed = y >= nextTraceTop;
+          const cinemaEndY = this.top + this.len;
+          const passed = y >= cinemaEndY;
           if (passed !== this.lastCinemaPassed) {
             this.lastCinemaPassed = passed;
             this.el.classList.toggle("is-cinema-passed", passed);
@@ -1933,13 +1936,12 @@
             }
           }
           if (this.isKinetic) {
-            const isMob = vw <= 900 || (vw / vh < 0.95);
             const preShift = -(this.kMaxShift || 0);
-            setCssVar(st, sv, "--kseq-clip-x", isMob ? "22%" : "26%");
-            setCssVar(st, sv, "--kseq-clip-y", "6%");
+            setCssVar(st, sv, "--kseq-clip-x", "49.4%");
+            setCssVar(st, sv, "--kseq-clip-y", "8%");
             setCssVar(st, sv, "--kseq-ty", `${preShift.toFixed(1)}px`);
             setCssVar(st, sv, "--kseq-curtain-y", `${(preShift * 0.94).toFixed(1)}px`);
-            setCssVar(st, sv, "--kseq-scale", "0.955");
+            setCssVar(st, sv, "--kseq-scale", "0.94");
             setCssVar(st, sv, "--kseq-hud-op", "0");
             setCssVar(st, sv, "--kseq-inner-hud", "0");
             setCssVar(st, sv, "--outro-card-op", "0");
@@ -1962,11 +1964,11 @@
             const ev = this._elVars;
             setCssVar(cs, ev, "--cinema-line", "0");
             setCssVar(cs, ev, "--cinema-line-op", "0");
-            setCssVar(cs, ev, "--cinema-clip-x", isMob ? "4%" : "6%");
-            setCssVar(cs, ev, "--cinema-clip-y", isMob ? "26%" : "32%");
+            setCssVar(cs, ev, "--cinema-clip-x", isMob ? "8%" : "10%");
+            setCssVar(cs, ev, "--cinema-clip-y", "48.2%");
             setCssVar(cs, ev, "--cinema-ty", `${preShift.toFixed(1)}px`);
             setCssVar(cs, ev, "--cinema-scale", "1.035");
-            setCssVar(cs, ev, "--cinema-beam-op", "0");
+            setCssVar(cs, ev, "--cinema-beam-op", "0.35");
             setCssVar(cs, ev, "--cinema-beam-s", "0.35");
             setCssVar(cs, ev, "--cinema-prelude-op", "0");
             setCssVar(cs, ev, "--cinema-prelude-y", `${(preShift * 0.86).toFixed(1)}px`);
@@ -1976,6 +1978,12 @@
             setCssVar(cs, ev, "--cinema-border", "0.08");
             setCssVar(cs, ev, "--cinema-shadow", "0.4");
             setCssVar(cs, ev, "--cinema-blackout", "0");
+            setCssVar(cs, ev, "--cinema-frame-op", "1");
+            if (this.outroCard) {
+              setCssVar(st, sv, "--outro-card-op", "0");
+              setCssVar(st, sv, "--outro-card-vis", "hidden");
+              setCssVar(st, sv, "--outro-card-pe", "none");
+            }
             if (this.lastCinemaPassed) {
               this.lastCinemaPassed = false;
               this.el.classList.remove("is-cinema-passed");
@@ -2054,6 +2062,7 @@
             setCssVar(cs, ev, "--cinema-border", "0");
             setCssVar(cs, ev, "--cinema-shadow", "0");
             setCssVar(cs, ev, "--cinema-blackout", "1");
+            setCssVar(cs, ev, "--cinema-frame-op", "0");
             if (!this.lastCinemaPassed) {
               this.lastCinemaPassed = true;
               this.el.classList.add("is-cinema-passed");
@@ -2065,14 +2074,20 @@
             setCssVar(st, sv, "--frame-scale", "1");
           }
           if (this.outroCard) {
-            setCssVar(st, sv, "--cover-opacity", "0.36");
-            setCssVar(st, sv, "--frame-opacity", "1");
-            setCssVar(st, sv, "--chrome-opacity", "1");
-            setCssVar(st, sv, "--chrome-vis", "visible");
-            setCssVar(st, sv, "--outro-card-op", "1");
-            setCssVar(st, sv, "--outro-card-vis", "visible");
-            setCssVar(st, sv, "--outro-card-ty", "0px");
-            setCssVar(st, sv, "--outro-card-pe", "auto");
+            if (this.isCinema) {
+              setCssVar(st, sv, "--outro-card-op", "0");
+              setCssVar(st, sv, "--outro-card-vis", "hidden");
+              setCssVar(st, sv, "--outro-card-pe", "none");
+            } else {
+              setCssVar(st, sv, "--cover-opacity", "0.36");
+              setCssVar(st, sv, "--frame-opacity", "1");
+              setCssVar(st, sv, "--chrome-opacity", "1");
+              setCssVar(st, sv, "--chrome-vis", "visible");
+              setCssVar(st, sv, "--outro-card-op", "1");
+              setCssVar(st, sv, "--outro-card-vis", "visible");
+              setCssVar(st, sv, "--outro-card-ty", "0px");
+              setCssVar(st, sv, "--outro-card-pe", "auto");
+            }
           }
           if (this.scrubFill && this.lastPctVal !== 100) {
             this.lastPctVal = 100;
@@ -2128,10 +2143,19 @@
           if (rawP <= 0.0) prog = 0;
           else if (rawP <= 1.0) prog = rawP * pinMaxProg;
           else prog = pinMaxProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinMaxProg);
+        } else if (this.isCinema) {
+          const pPlayStart = -Math.min(0.5, (vh * 0.8) / this.len);
+          const preShare = 0.055;
+          const cinemaPlayEndP = 0.875;
+
+          if (rawP < pPlayStart) prog = 0;
+          else if (rawP < 0.0) prog = preShare * Math.pow(clamp((rawP - pPlayStart) / (-pPlayStart)), 1.35);
+          else if (rawP < cinemaPlayEndP) prog = preShare + (rawP / cinemaPlayEndP) * (1.0 - preShare);
+          else prog = 1.0;
         } else {
           const pPlayStart = -Math.min(0.5, (vh * 0.8) / this.len);
           const preShare = 0.055;
-          const pinEndProg = this.isCinema ? 1.0 : 0.95;
+          const pinEndProg = 0.95;
 
           if (rawP < pPlayStart) prog = 0;
           else if (rawP < 0.0) prog = preShare * Math.pow(clamp((rawP - pPlayStart) / (-pPlayStart)), 1.35);
@@ -2198,8 +2222,8 @@
         // Paralaje temprano + apertura gradual que arranca un poco después y continúa tras centrarse
         const kOpenProg = clamp((y - (this.top - vh * 0.62)) / Math.max(1, vh * 0.62 + this.len * 0.30), 0, 1);
         const openT = reduce ? 1 : smooth(kOpenProg);
-        setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * (isMob ? 22 : 26)).toFixed(2)}%`);
-        setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 6).toFixed(2)}%`);
+        setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * 49.4).toFixed(2)}%`);
+        setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 8).toFixed(2)}%`);
 
         const wakeT = smooth(range(viewportEntry, 0.06, 0.72));
         const kOutro = smooth(range(prog, 0.88, 1.0));
@@ -2237,7 +2261,7 @@
         const entryShiftY = reduce ? 0 : -(1 - entryEase) * (this.kMaxShift ?? (vh * (isMob ? 0.26 : 0.18)));
         setCssVar(st, sv, "--kseq-ty", `${entryShiftY.toFixed(1)}px`);
         setCssVar(st, sv, "--kseq-curtain-y", `${(entryShiftY * 0.94).toFixed(1)}px`);
-        setCssVar(st, sv, "--kseq-scale", (0.955 + openT * 0.045).toFixed(4));
+        setCssVar(st, sv, "--kseq-scale", (0.94 + openT * 0.06).toFixed(4));
 
         const hudOp = smooth(range(kOpenProg, 0.62, 1.0)) * (1 - smooth(range(p, 0.88, 0.96)));
         setCssVar(st, sv, "--kseq-hud-op", hudOp.toFixed(3));
@@ -2266,8 +2290,8 @@
         const cs = this.el.style;
         const ev = this._elVars;
         const isMob = vw <= 900 || (vw / vh < 0.95);
-        const nextTraceTop = (typeof traceReels !== "undefined" && traceReels.length) ? traceReels[0].top : (this.top + this.len);
-        const passed = y >= nextTraceTop;
+        const cinemaEndY = this.top + this.len;
+        const passed = y >= cinemaEndY;
         if (passed !== this.lastCinemaPassed) {
           this.lastCinemaPassed = passed;
           this.el.classList.toggle("is-cinema-passed", passed);
@@ -2285,10 +2309,10 @@
         const entryTy = reduce ? 0 : -(1 - entryEase) * (this.cinemaMaxShift ?? (vh * (isMob ? 0.26 : 0.18)));
         setCssVar(cs, ev, "--cinema-ty", `${entryTy.toFixed(1)}px`);
 
-        setCssVar(cs, ev, "--cinema-clip-x", `${((1 - openT) * (isMob ? 4 : 6)).toFixed(2)}%`);
-        setCssVar(cs, ev, "--cinema-clip-y", `${((1 - openT) * (isMob ? 26 : 32)).toFixed(2)}%`);
+        setCssVar(cs, ev, "--cinema-clip-x", `${((1 - openT) * (isMob ? 8 : 10)).toFixed(2)}%`);
+        setCssVar(cs, ev, "--cinema-clip-y", `${((1 - openT) * 48.2).toFixed(2)}%`);
 
-        const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.75 * (1 - openT * 0.8);
+        const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.92 * (1 - openT * 0.75);
         setCssVar(cs, ev, "--cinema-beam-op", beamOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-beam-s", (0.35 + openT * 0.65).toFixed(3));
 
@@ -2306,12 +2330,15 @@
         }
 
         const wakeT = reduce ? 1 : smooth(range(cinemaOpenProg, 0.08, 0.55));
-        const cinemaDarken = smooth(range(p, 0.910, 0.985));
-        const blackoutT = reduce ? (p >= 0.98 ? 1 : 0) : smooth(range(p, 0.930, 0.996));
+        const cinemaDarken = smooth(range(p, 0.770, 0.865));
+        const blackoutT = reduce ? (p >= 0.870 ? 1 : 0) : smooth(range(p, 0.785, 0.875));
+        const outroCardIn = reduce ? (p >= 0.870 ? 1 : 0) : smooth(range(p, 0.862, 0.888));
+        const outroCardOut = reduce ? (p >= 0.996 ? 1 : 0) : smooth(range(p, 0.978, 0.996));
+        const frameKeep = 1 - outroCardOut;
 
         this.setVisualFilter(0, (1 - wakeT) * 0.28);
         const openScale = reduce ? 1 : (1 + (1 - openT) * 0.035);
-        const endScale = reduce ? 1 : (1 - blackoutT * 0.018);
+        const endScale = reduce ? 1 : (1 - outroCardOut * 0.018);
         setCssVar(cs, ev, "--cinema-scale", (openScale * endScale).toFixed(4));
 
         const hudIn = reduce ? 1 : smooth(range(cinemaOpenProg, 0.66, 1.0));
@@ -2320,15 +2347,24 @@
         setCssVar(cs, ev, "--cinema-hud-top-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         setCssVar(cs, ev, "--cinema-hud-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
 
-        const marksOp = openT * (1 - cinemaDarken) * 0.85;
+        const marksOp = openT * frameKeep * (0.85 - cinemaDarken * 0.35);
         const ambientOp = openT * (1 - cinemaDarken) * 0.58;
         setCssVar(cs, ev, "--cinema-marks-op", marksOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-ambient", ambientOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-amb-s", (0.96 + openT * 0.04).toFixed(3));
-        setCssVar(cs, ev, "--cinema-border", (openT * (1 - cinemaDarken) * 0.14).toFixed(3));
+        setCssVar(cs, ev, "--cinema-border", (openT * frameKeep * (0.14 + cinemaDarken * 0.04)).toFixed(3));
         setCssVar(cs, ev, "--cinema-shadow", (openT * (1 - cinemaDarken)).toFixed(3));
         setCssVar(cs, ev, "--cinema-veil", (0.22 + cinemaDarken * 0.25).toFixed(3));
         setCssVar(cs, ev, "--cinema-blackout", blackoutT.toFixed(3));
+        setCssVar(cs, ev, "--cinema-frame-op", frameKeep.toFixed(3));
+
+        if (this.outroCard) {
+          const outroCardT = outroCardIn * (1 - outroCardOut);
+          setCssVar(st, sv, "--outro-card-op", outroCardT.toFixed(3));
+          setCssVar(st, sv, "--outro-card-vis", outroCardT > 0.01 ? "visible" : "hidden");
+          setCssVar(st, sv, "--outro-card-ty", `${((1 - outroCardIn) * 14).toFixed(1)}px`);
+          setCssVar(st, sv, "--outro-card-pe", outroCardT > 0.2 ? "auto" : "none");
+        }
         return;
       }
 
@@ -2512,7 +2548,9 @@
 
       this.lastTraceGray = -1;
       this.traceCur = 0;
+      this.traceUnifiedCur = 0;
       this.lastTraceZone = -1;
+      this._stageVars = {};
       this.lastPreState = false;
       this.lastPostState = false;
       this._ovVars = {};
@@ -2551,6 +2589,8 @@
       this.bufferBadge = createBufferBadge(this.stage);
 
       // Referencias SVG & HUD de planta
+      this.tracePrePathCore = $("#tracePrePathCore", this.traceOverlay);
+      this.tracePrePathGlow = $("#tracePrePathGlow", this.traceOverlay);
       this.tracePathCore = $("#tracePathCore", this.traceOverlay);
       this.tracePathGlow = $("#tracePathGlow", this.traceOverlay);
       this.traceDrone = $("[data-trace-drone]", this.traceOverlay);
@@ -2558,6 +2598,8 @@
       this.traceDroneTxt = $("[data-trace-drone-txt]", this.traceOverlay);
       this.traceWakeRing = $("[data-trace-wake]", this.traceOverlay);
 
+      this.tracePrePathCoreV = $("#tracePrePathCoreV", this.traceOverlay);
+      this.tracePrePathGlowV = $("#tracePrePathGlowV", this.traceOverlay);
       this.tracePathCoreV = $("#tracePathCoreV", this.traceOverlay);
       this.tracePathGlowV = $("#tracePathGlowV", this.traceOverlay);
       this.traceDroneV = $("[data-trace-drone-v]", this.traceOverlay);
@@ -2584,6 +2626,8 @@
         r: n.dataset.traceAct.split(",").map(Number),
       }));
 
+      this.tracePrePathLen = this.initSvgPathLen(this.tracePrePathCore, this.tracePrePathGlow, 395, true);
+      this.tracePrePathLenV = this.initSvgPathLen(this.tracePrePathCoreV, this.tracePrePathGlowV, 145, true);
       this.tracePathLen = this.initSvgPathLen(this.tracePathCore, this.tracePathGlow, 1034);
       this.tracePathLenV = this.initSvgPathLen(this.tracePathCoreV, this.tracePathGlowV, 690);
 
@@ -2592,7 +2636,7 @@
       AssetScheduler.registerSource(this);
     }
 
-    initSvgPathLen(coreEl, glowEl, fallbackLen) {
+    initSvgPathLen(coreEl, glowEl, fallbackLen, doubleGap = false) {
       let total = fallbackLen;
       if (coreEl && typeof coreEl.getTotalLength === "function") {
         try {
@@ -2600,12 +2644,13 @@
           if (measured > 20) total = measured;
         } catch (_) {}
       }
+      const dashStr = doubleGap ? `${total} ${total}` : `${total}`;
       if (coreEl) {
-        coreEl.style.strokeDasharray = `${total}`;
+        coreEl.style.strokeDasharray = dashStr;
         coreEl.style.strokeDashoffset = `${total}`;
       }
       if (glowEl) {
-        glowEl.style.strokeDasharray = `${total}`;
+        glowEl.style.strokeDasharray = dashStr;
         glowEl.style.strokeDashoffset = `${total}`;
       }
       return total;
@@ -2624,12 +2669,17 @@
       if (this.traceScrub) {
         bindTimelineScrub(
           this.traceScrub,
-          (r, opts) => this.seekToUnifiedProgress(r * this.planEndP, opts),
+          (r, opts) => {
+            const startP = this.preEndP || 0;
+            const targetP = r <= 0.01 ? 0 : (startP + r * Math.max(0.01, this.planEndP - startP));
+            this.seekToUnifiedProgress(targetP, opts);
+          },
           (active) => { this.isScrubbing = active; }
         );
         this.traceScrub.addEventListener("keydown", (e) => {
-          const step = (e.shiftKey ? 0.1 : 0.04) * this.planEndP;
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog + step, 0, this.planEndP)); }
+          const startP = this.preEndP || 0;
+          const step = (e.shiftKey ? 0.1 : 0.04) * Math.max(0.05, this.planEndP - startP);
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); this.seekToUnifiedProgress(clamp(Math.max(this.prog, startP) + step, 0, this.planEndP)); }
           if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); this.seekToUnifiedProgress(clamp(this.prog - step, 0, this.planEndP)); }
         });
       }
@@ -2668,9 +2718,16 @@
       this.len = Math.max(1, this.repTop - this.top);
       this.traceSplitP = this.traceLen / this.len;
 
-      this.planEndP = this.traceSplitP * 0.66;
-      this.bridgeStartP = this.traceSplitP * 0.59;
-      this.traceMediaEndP = this.traceSplitP * 0.78;
+      const cinemaEl = $("#propiedad");
+      const cinemaEndY = cinemaEl ? (cinemaEl.offsetTop + cinemaEl.offsetHeight - vh) : this.top;
+      const overlapPx = Math.max(0, cinemaEndY - this.top);
+      this.overlapEndP = clamp(overlapPx / this.len, 0, 0.30);
+      const tracePostSpan = Math.max(0.05, this.traceSplitP - this.overlapEndP);
+
+      this.planEndP = this.overlapEndP + tracePostSpan * 0.66;
+      this.preEndP = this.overlapEndP + tracePostSpan * 0.055;
+      this.bridgeStartP = this.overlapEndP + tracePostSpan * 0.59;
+      this.traceMediaEndP = this.overlapEndP + tracePostSpan * 0.78;
       this.portalStartP = this.bridgeStartP + 0.14 * (this.traceSplitP - this.bridgeStartP);
       this.shrinkStartP = this.bridgeStartP + 0.28 * (this.traceSplitP - this.bridgeStartP);
       this.shrinkEndP = Math.max(this.shrinkStartP + 0.08, this.traceSplitP + 0.44 * (1 - this.traceSplitP));
@@ -2911,30 +2968,46 @@
       }
     }
 
-    updateTraceOverlay(traceTarget, bridgeT, rawEntryP, dt) {
+    updateTraceOverlay(unifiedTarget, bridgeT, rawEntryP, dt) {
       const ov = this.traceOverlay.style;
       const ovc = this._ovVars;
       const mwc = this._mediaVars;
+      const sc = this._stageVars;
       const tc = this._txtCache;
+      const overlapEndP = this.overlapEndP ?? 0.078;
+      const preEndP = this.preEndP || (overlapEndP + 0.032);
+      const preRatio = clamp(preEndP / Math.max(0.001, this.planEndP || 0.42), 0.08, 0.38);
       const k = reduce ? 1 : (dt ? Math.min(1, 1 - Math.exp(-13 * dt)) : 0.22);
-      this.traceCur += (traceTarget - this.traceCur) * k;
-      if (Math.abs(traceTarget - this.traceCur) < 0.001) this.traceCur = traceTarget;
-      const tp = clamp(this.traceCur, 0, 1);
+      this.traceUnifiedCur += (unifiedTarget - this.traceUnifiedCur) * k;
+      if (Math.abs(unifiedTarget - this.traceUnifiedCur) < 0.001) this.traceUnifiedCur = unifiedTarget;
+      const utp = clamp(this.traceUnifiedCur, 0, 1);
+      const preTp = clamp(utp / preRatio, 0, 1);
+      const tp = clamp((utp - preRatio) / Math.max(0.001, 1 - preRatio), 0, 1);
+      this.traceCur = tp;
+
+      const bgOp = reduce
+        ? (rawEntryP >= 0 ? 1 : 0)
+        : (overlapEndP > 0 ? smooth(range(rawEntryP, overlapEndP * 0.85, overlapEndP * 0.98)) : (rawEntryP >= 0 ? 1 : 0));
+      setCssVar(this.stage.style, sc, "--trace-bg-op", bgOp.toFixed(3));
 
       const exitHud = reduce ? (bridgeT > 0.1 ? 1 : 0) : smooth(range(bridgeT, 0.00, 0.34));
       const exitSvgFade = reduce ? (bridgeT > 0.2 ? 1 : 0) : smooth(range(bridgeT, 0.08, 0.44));
-      const svgWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.044, 0.088));
-      const hudWake = reduce ? (rawEntryP >= 0 ? 1 : 0) : smooth(range(rawEntryP, 0.056, 0.105));
+      const preWake = rawEntryP >= 0 ? 1 : 0;
+      const droneScale = 1;
+      const hudWake = reduce
+        ? (rawEntryP >= 0 ? 1 : 0)
+        : smooth(range(rawEntryP, overlapEndP + 0.014, overlapEndP + 0.068));
       const hudOp = hudWake * (1 - exitHud);
       const hudEnterY = !reduce ? (1 - hudWake) * 10 : 0;
+      const svgOp = (1 - exitSvgFade) * preWake;
 
       setCssVar(ov, ovc, "--trace-entry-y", "0.0px");
       setCssVar(ov, ovc, "--trace-hud-op", hudOp.toFixed(3));
       setCssVar(ov, ovc, "--trace-hud-top-y", `${((-exitHud * 14) - hudEnterY).toFixed(1)}px`);
       setCssVar(ov, ovc, "--trace-hud-bot-y", `${((exitHud * 14) + hudEnterY).toFixed(1)}px`);
-      setCssVar(ov, ovc, "--trace-svg-op", ((1 - exitSvgFade) * svgWake).toFixed(3));
+      setCssVar(ov, ovc, "--trace-svg-op", svgOp.toFixed(3));
 
-      const traceVisible = rawEntryP >= 0 && ((1 - exitSvgFade) * svgWake > 0.005 || hudOp > 0.005);
+      const traceVisible = rawEntryP >= 0 && (svgOp > 0.005 || hudOp > 0.005);
       setVisCached(this.traceOverlay, traceVisible ? "visible" : "hidden");
       this.traceOverlayHidden = !traceVisible && bridgeT >= 0.44;
       if (this.traceConsole) {
@@ -2945,10 +3018,25 @@
         }
       }
 
-      const pathExitOp = (1 - smooth(range(bridgeT, 0.06, 0.38))).toFixed(3);
+      const exitFade = 1 - smooth(range(bridgeT, 0.06, 0.38));
+      const preRetract = reduce ? 1 : smooth(range(tp, 0.04, 0.34));
+      const prePathExitOp = (preWake * (1 - smooth(range(tp, 0.24, 0.38))) * exitFade).toFixed(3);
+      const pathExitOp = ((tp > 0.001 || preTp >= 0.99 ? 1 : 0) * exitFade).toFixed(3);
       let yawReading = 78;
 
       if (!this.isPortraitSvg) {
+        const preTotalLen = this.tracePrePathLen || 395;
+        const preCurLen = preTp * preTotalLen;
+        const preDashOffset = (preTp < 1 ? preTotalLen * (1 - preTp) : -preTotalLen * preRetract).toFixed(1);
+        if (this.tracePrePathCore) {
+          if (this.tracePrePathCore._dash !== preDashOffset) { this.tracePrePathCore._dash = preDashOffset; this.tracePrePathCore.style.strokeDashoffset = preDashOffset; }
+          if (this.tracePrePathCore._op !== prePathExitOp) { this.tracePrePathCore._op = prePathExitOp; this.tracePrePathCore.style.opacity = prePathExitOp; }
+        }
+        if (this.tracePrePathGlow) {
+          if (this.tracePrePathGlow._dash !== preDashOffset) { this.tracePrePathGlow._dash = preDashOffset; this.tracePrePathGlow.style.strokeDashoffset = preDashOffset; }
+          if (this.tracePrePathGlow._op !== prePathExitOp) { this.tracePrePathGlow._op = prePathExitOp; this.tracePrePathGlow.style.opacity = prePathExitOp; }
+        }
+
         const totalLen = this.tracePathLen || 1034;
         const curLen = tp * totalLen;
         const dashOffset = (totalLen - curLen).toFixed(1);
@@ -2960,17 +3048,22 @@
           if (this.tracePathGlow._dash !== dashOffset) { this.tracePathGlow._dash = dashOffset; this.tracePathGlow.style.strokeDashoffset = dashOffset; }
           if (this.tracePathGlow._op !== pathExitOp) { this.tracePathGlow._op = pathExitOp; this.tracePathGlow.style.opacity = pathExitOp; }
         }
-        if (this.tracePathCore && this.traceDrone) {
+
+        const usePre = utp < preRatio && this.tracePrePathCore;
+        const activePath = usePre ? this.tracePrePathCore : this.tracePathCore;
+        const activeLen = usePre ? preTotalLen : totalLen;
+        const activeCur = usePre ? preCurLen : curLen;
+        if (activePath && this.traceDrone) {
           try {
-            const pt = this.tracePathCore.getPointAtLength(curLen);
-            const p1 = this.tracePathCore.getPointAtLength(Math.max(0, curLen - 6));
-            const p2 = this.tracePathCore.getPointAtLength(Math.min(totalLen, curLen + 6));
+            const pt = activePath.getPointAtLength(activeCur);
+            const p1 = activePath.getPointAtLength(Math.max(0, activeCur - 6));
+            const p2 = activePath.getPointAtLength(Math.min(activeLen, activeCur + 6));
             const tangentDeg = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
-            const patioLook = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -24;
-            const naveLook = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
+            const patioLook = usePre ? 0 : Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -24;
+            const naveLook = usePre ? 0 : Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
             const coneDeg = tangentDeg + patioLook + naveLook;
             yawReading = Math.round((90 + coneDeg + 360) % 360);
-            const trStr = `translate(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`;
+            const trStr = `translate(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}) scale(${droneScale.toFixed(3)})`;
             if (this.traceDrone._tr !== trStr) { this.traceDrone._tr = trStr; this.traceDrone.setAttribute("transform", trStr); }
             if (this.traceDroneRot) {
               const rotStr = `rotate(${coneDeg.toFixed(1)})`;
@@ -2979,6 +3072,18 @@
           } catch (_) {}
         }
       } else if (this.tracePathCoreV) {
+        const preTotalLenV = this.tracePrePathLenV || 145;
+        const preCurLenV = preTp * preTotalLenV;
+        const preDashOffsetV = (preTp < 1 ? preTotalLenV * (1 - preTp) : -preTotalLenV * preRetract).toFixed(1);
+        if (this.tracePrePathCoreV) {
+          if (this.tracePrePathCoreV._dash !== preDashOffsetV) { this.tracePrePathCoreV._dash = preDashOffsetV; this.tracePrePathCoreV.style.strokeDashoffset = preDashOffsetV; }
+          if (this.tracePrePathCoreV._op !== prePathExitOp) { this.tracePrePathCoreV._op = prePathExitOp; this.tracePrePathCoreV.style.opacity = prePathExitOp; }
+        }
+        if (this.tracePrePathGlowV) {
+          if (this.tracePrePathGlowV._dash !== preDashOffsetV) { this.tracePrePathGlowV._dash = preDashOffsetV; this.tracePrePathGlowV.style.strokeDashoffset = preDashOffsetV; }
+          if (this.tracePrePathGlowV._op !== prePathExitOp) { this.tracePrePathGlowV._op = prePathExitOp; this.tracePrePathGlowV.style.opacity = prePathExitOp; }
+        }
+
         const totalLenV = this.tracePathLenV || 690;
         const curLenV = tp * totalLenV;
         const dashOffsetV = (totalLenV - curLenV).toFixed(1);
@@ -2988,17 +3093,22 @@
           if (this.tracePathGlowV._dash !== dashOffsetV) { this.tracePathGlowV._dash = dashOffsetV; this.tracePathGlowV.style.strokeDashoffset = dashOffsetV; }
           if (this.tracePathGlowV._op !== pathExitOp) { this.tracePathGlowV._op = pathExitOp; this.tracePathGlowV.style.opacity = pathExitOp; }
         }
-        if (this.traceDroneV) {
+
+        const usePreV = utp < preRatio && this.tracePrePathCoreV;
+        const activePathV = usePreV ? this.tracePrePathCoreV : this.tracePathCoreV;
+        const activeLenV = usePreV ? preTotalLenV : totalLenV;
+        const activeCurV = usePreV ? preCurLenV : curLenV;
+        if (activePathV && this.traceDroneV) {
           try {
-            const ptV = this.tracePathCoreV.getPointAtLength(curLenV);
-            const p1V = this.tracePathCoreV.getPointAtLength(Math.max(0, curLenV - 6));
-            const p2V = this.tracePathCoreV.getPointAtLength(Math.min(totalLenV, curLenV + 6));
+            const ptV = activePathV.getPointAtLength(activeCurV);
+            const p1V = activePathV.getPointAtLength(Math.max(0, activeCurV - 6));
+            const p2V = activePathV.getPointAtLength(Math.min(activeLenV, activeCurV + 6));
             const tangentDegV = Math.atan2(p2V.y - p1V.y, p2V.x - p1V.x) * (180 / Math.PI);
-            const patioLookV = Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -20;
-            const naveLookV = Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
+            const patioLookV = usePreV ? 0 : Math.sin(range(tp, 0.22, 0.44) * Math.PI) * -20;
+            const naveLookV = usePreV ? 0 : Math.sin(range(tp, 0.46, 0.76) * Math.PI) * 16;
             const coneDegV = (tangentDegV - 90) + patioLookV + naveLookV;
             yawReading = Math.round((tangentDegV + patioLookV + naveLookV + 360) % 360);
-            const trStrV = `translate(${ptV.x.toFixed(1)}, ${ptV.y.toFixed(1)})`;
+            const trStrV = `translate(${ptV.x.toFixed(1)}, ${ptV.y.toFixed(1)}) scale(${droneScale.toFixed(3)})`;
             if (this.traceDroneV._tr !== trStrV) { this.traceDroneV._tr = trStrV; this.traceDroneV.setAttribute("transform", trStrV); }
             if (this.traceDroneRotV) {
               const rotStrV = `rotate(${coneDegV.toFixed(1)})`;
@@ -3014,24 +3124,32 @@
       const retractGrid = 1 - smooth(range(bridgeT, 0.02, 0.34));
       const retractPlan = 1 - smooth(range(bridgeT, 0.10, 0.42));
 
-      const darkenBase = reduce ? 1 : smooth(range(tp, 0.11, 0.26));
+      const darkenBase = reduce ? 1 : smooth(range(tp, 0.08, 0.24));
       const darkenBridge = smooth(range(bridgeT, 0.02, 0.42)) * 0.34;
       setCssVar(this.traceMediaWrap.style, mwc, "--trace-darken-op", clamp(darkenBase + darkenBridge, 0, 1).toFixed(3));
       setCssVar(this.traceMediaWrap.style, mwc, "--trace-base-veil-op", (0.38 + 0.62 * darkenBase).toFixed(3));
 
-      const extOp = (reduce ? 1 : smooth(range(tp, 0.15, 0.25))) * retractGrid;
-      const flightOp = (reduce ? 1 : smooth(range(tp, 0.14, 0.23))) * (1 - exitSvgFade);
+      const extOp = (reduce ? 1 : smooth(range(rawEntryP, overlapEndP + 0.008, preEndP + 0.045))) * retractGrid;
+      const gridOp = (reduce ? 1 : smooth(range(rawEntryP, overlapEndP + 0.016, preEndP + 0.058))) * retractGrid;
+      const flightOp = preWake * (1 - exitSvgFade);
+      const preGhostOp = (reduce ? 0 : smooth(range(rawEntryP, overlapEndP * 0.55, overlapEndP * 0.98)) * (1 - smooth(range(tp, 0.02, 0.24)))) * 0.30 * (1 - exitSvgFade);
+      const originOp = (reduce ? 1 : smooth(range(preTp, 0.72, 0.98))) * retractGrid;
+      const wpOp = (reduce ? 1 : smooth(range(tp, 0.02, 0.20))) * retractGrid;
+
       setCssVar(ov, ovc, "--trace-ext-op", extOp.toFixed(3));
       setCssVar(ov, ovc, "--trace-flight-op", flightOp.toFixed(3));
-      setCssVar(ov, ovc, "--trace-grid-op", ((reduce ? 1 : smooth(range(tp, 0.145, 0.26))) * retractGrid).toFixed(3));
-      setCssVar(ov, ovc, "--trace-plan-op", ((reduce ? 1 : smooth(range(tp, 0.155, 0.245))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-1", ((reduce ? 1 : smooth(range(tp, 0.155, 0.29))) * retract1).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-2", ((reduce ? 1 : smooth(range(tp, 0.205, 0.35))) * retract2).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-3", ((reduce ? 1 : smooth(range(tp, 0.255, 0.40))) * retract3).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec1-op", ((reduce ? 1 : smooth(range(tp, 0.155, 0.25))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec2-op", ((reduce ? 1 : smooth(range(tp, 0.205, 0.31))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec3-op", ((reduce ? 1 : smooth(range(tp, 0.255, 0.36))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-ghost-op", (((reduce ? 0.42 : 0.12 + 0.32 * smooth(range(tp, 0.16, 0.30)))) * (1 - smooth(range(tp, 0.92, 0.99))) * retractGrid).toFixed(3));
+      setCssVar(ov, ovc, "--trace-pre-ghost-op", preGhostOp.toFixed(3));
+      setCssVar(ov, ovc, "--trace-origin-op", originOp.toFixed(3));
+      setCssVar(ov, ovc, "--trace-wp-op", wpOp.toFixed(3));
+      setCssVar(ov, ovc, "--trace-grid-op", gridOp.toFixed(3));
+      setCssVar(ov, ovc, "--trace-plan-op", ((reduce ? 1 : smooth(range(tp, 0.01, 0.14))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-1", ((reduce ? 1 : smooth(range(tp, 0.01, 0.22))) * retract1).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-2", ((reduce ? 1 : smooth(range(tp, 0.10, 0.30))) * retract2).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-3", ((reduce ? 1 : smooth(range(tp, 0.18, 0.38))) * retract3).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec1-op", ((reduce ? 1 : smooth(range(tp, 0.01, 0.14))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec2-op", ((reduce ? 1 : smooth(range(tp, 0.08, 0.23))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec3-op", ((reduce ? 1 : smooth(range(tp, 0.16, 0.32))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-ghost-op", ((reduce ? 0.42 : 0.42 * smooth(range(tp, 0.03, 0.22))) * (1 - smooth(range(tp, 0.92, 0.99))) * retractGrid).toFixed(3));
 
       const wakeWave = range(tp, 0.16, 0.32);
       const activeWake = this.isPortraitSvg ? this.traceWakeRingV : this.traceWakeRing;
@@ -3046,15 +3164,15 @@
         }
       }
 
-      const introFocus = reduce ? 0 : (1 - smooth(range(rawEntryP, 0.042, 0.10)));
+      const preCamFocus = reduce ? 0 : (1 - smooth(range(rawEntryP, overlapEndP * 0.65, preEndP + 0.055)));
       let camX = 0, camY = 0, camScale = 1;
       if (this.isPortraitSvg || vw <= 768) {
-        camY = (0.35 - tp * 0.70) * 16 + introFocus * 12;
-        camScale = 1 + introFocus * 0.065 + exitSvgFade * 0.10;
+        camY = (0.35 - tp * 0.70) * 16 + preCamFocus * 12;
+        camScale = 1 + preCamFocus * 0.05 + exitSvgFade * 0.10;
       } else {
-        camScale = 1 + introFocus * 0.085 + exitSvgFade * 0.13;
-        camX = introFocus * 36;
-        camY = introFocus * 10;
+        camScale = 1 + preCamFocus * 0.08 + exitSvgFade * 0.13;
+        camX = preCamFocus * Math.min(vw * 0.055, 76);
+        camY = preCamFocus * 16;
       }
       setCssVar(ov, ovc, "--trace-cam-x", `${camX.toFixed(1)}px`);
       setCssVar(ov, ovc, "--trace-cam-y", `${camY.toFixed(1)}px`);
@@ -3077,13 +3195,14 @@
       }
 
       if (zoneIdx !== this.lastTraceZone) {
-        if (this.lastTraceZone !== -1 && rawEntryP > 0.02 && bridgeT < 0.15) playTactileTick(620 + zoneIdx * 55, 0.025, 0.018);
+        if (this.lastTraceZone !== -1 && rawEntryP > preEndP * 0.75 && bridgeT < 0.15) playTactileTick(620 + zoneIdx * 55, 0.025, 0.018);
         this.lastTraceZone = zoneIdx;
       }
 
       const wpThresholds = [0.0, 0.25, 0.41, 0.59, 0.79, 0.96];
       let wpMask = 0;
-      for (let idx = 0; idx < wpThresholds.length; idx++) {
+      if (preTp >= 0.80) wpMask |= 1;
+      for (let idx = 1; idx < wpThresholds.length; idx++) {
         if (tp >= wpThresholds[idx]) wpMask |= (1 << idx);
       }
       if (wpMask !== this.lastWpMask) {
@@ -3178,6 +3297,7 @@
           this.portalFade = 0;
           this.prog = 1;
           this.progCur = 1;
+          this.traceUnifiedCur = 1;
           this.portalFrameCur = this.portalCount - 1;
           this.setRepertorioReveal(true, true, true, true, true);
         } else {
@@ -3220,10 +3340,12 @@
           this.prog = 0;
           this.progCur = 0;
           this.traceCur = 0;
+          this.traceUnifiedCur = 0;
           this.traceFrameCur = 0;
           this.portalFrameCur = 0;
           const mws = this.traceMediaWrap.style;
           const mwc = this._mediaVars;
+          setCssVar(this.stage.style, this._stageVars, "--trace-bg-op", "0");
           setCssVar(mws, mwc, "--tr-trace-media-op", "0");
           setCssVar(mws, mwc, "--img-scale", "1.075");
           setCssVar(mws, mwc, "--trace-base-veil-op", "0.38");
@@ -3254,8 +3376,10 @@
           this.lastPreState = false;
           this.prog = 1;
           this.progCur = 1;
+          this.traceUnifiedCur = 1;
           this.portalFrameCur = this.portalCount - 1;
           setVisCached(this.traceMediaWrap, "hidden");
+          setCssVar(this.stage.style, this._stageVars, "--trace-bg-op", "1");
           setCssVar(this.traceMediaWrap.style, this._mediaVars, "--tr-trace-media-op", "0");
           setVisCached(this.traceOverlay, "hidden");
           if (!this.traceBitmapsReleased && this.traceBank) {
@@ -3294,20 +3418,23 @@
           ? portalBank.hasReadyBuffer(curPortalIdx, 4, 2)
           : portalBank.hasReadyBuffer(curPortalIdx, 18, 6);
 
+        const overlapEndP = this.overlapEndP ?? 0.078;
+        const inCinemaOverlap = rawP < overlapEndP;
         const inPortalPhase = rawP >= this.bridgeStartP;
-        const readyToAdvance = inPortalPhase ? this.portalBufferReady : this.traceBufferReady;
+        const readyToAdvance = inCinemaOverlap ? true : (inPortalPhase ? this.portalBufferReady : this.traceBufferReady);
         const activeBank = inPortalPhase ? portalBank : traceBank;
         const activeIdx = inPortalPhase ? curPortalIdx : curTraceIdx;
         const activeNeed = inPortalPhase ? 18 : 32;
 
         const blobsMissing = !activeBank.hasContiguousBlobs(activeIdx, activeNeed);
-        const isWaitingBuf = !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
+        const isWaitingBuf = !inCinemaOverlap && !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
         const waitPct = isWaitingBuf ? activeBank.getBufferPercent(activeIdx, activeNeed) : 100;
         syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
 
+        const overlapEase = smooth(range(rawP, overlapEndP * 0.85, overlapEndP + 0.04));
         const bridgeBlend = smooth(range(rawP, this.bridgeStartP - 0.04, this.bridgeStartP + 0.04));
         const endDecel = smooth(range(rawP, 0.78, 0.985));
-        const smoothSpeedScale = 0.98 + bridgeBlend * 0.24 - endDecel * 0.36;
+        const smoothSpeedScale = (0.58 + overlapEase * 0.40) + bridgeBlend * 0.24 - endDecel * 0.36;
 
         const lenisLead = (lenis && !isVerticalScroller()) ? ((lenis.targetScroll || 0) - y) : 0;
         const userPushingPastEnd = rawP >= 0.965 && lenisLead > 4;
@@ -3347,8 +3474,12 @@
       }
       const progMoved = Math.abs(this.progCur - prevProgCur) > 0.0001 || wasPre || this.needsVisualSync;
 
-      const tracePlanProg = clamp(this.progCur / this.planEndP, 0, 1);
-      const traceVideoProg = clamp(this.progCur / this.traceMediaEndP, 0, 1);
+      const overlapEndP = this.overlapEndP ?? 0.078;
+      const preEndP = this.preEndP || (overlapEndP + 0.032);
+      const unifiedPlanProg = clamp(this.progCur / this.planEndP, 0, 1);
+      const tracePlanProg = clamp((this.progCur - preEndP) / Math.max(0.001, this.planEndP - preEndP), 0, 1);
+      const videoWakeStartP = overlapEndP;
+      const traceVideoProg = clamp((this.progCur - videoWakeStartP) / Math.max(0.001, this.traceMediaEndP - videoWakeStartP), 0, 1);
       const bridgeWakeT = reduce
         ? (this.progCur >= this.bridgeStartP ? 1 : 0)
         : clamp((this.progCur - this.bridgeStartP) / Math.max(0.001, this.traceSplitP - this.bridgeStartP), 0, 1);
@@ -3365,8 +3496,8 @@
         this.traceFrameCur += (targetTraceF - this.traceFrameCur) * tk;
         if (Math.abs(targetTraceF - this.traceFrameCur) < 0.002) this.traceFrameCur = targetTraceF;
 
-        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.06));
-        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.08));
+        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP, videoWakeStartP + 0.056));
+        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP + 0.004, videoWakeStartP + 0.076));
         const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeWakeT, 0.16, 0.48)));
         const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeWakeT, 0.0, 0.48) * 0.045;
 
@@ -3392,12 +3523,12 @@
               AssetScheduler.schedulePump();
             }
           }
-          const pctVal = Math.round(tracePlanProg * 1000) / 10;
-          if (pctVal !== this.lastTracePctVal) {
-            this.lastTracePctVal = pctVal;
-            if (this.traceScrubFill) this.traceScrubFill.style.width = `${pctVal}%`;
-            if (this.traceScrub) this.traceScrub.setAttribute("aria-valuenow", String(Math.round(pctVal)));
-          }
+        }
+        const pctVal = Math.round(tracePlanProg * 1000) / 10;
+        if (pctVal !== this.lastTracePctVal) {
+          this.lastTracePctVal = pctVal;
+          if (this.traceScrubFill) this.traceScrubFill.style.width = `${pctVal}%`;
+          if (this.traceScrub) this.traceScrub.setAttribute("aria-valuenow", String(Math.round(pctVal)));
         }
       } else {
         setVisCached(this.traceMediaWrap, "hidden");
@@ -3410,7 +3541,7 @@
 
       if (bridgeWakeT < 0.50 || !this.traceOverlayHidden || progMoved) {
         if (bridgeWakeT < 0.99 || !this.traceOverlayHidden) {
-          this.updateTraceOverlay(tracePlanProg, bridgeWakeT, rawP, dtSec);
+          this.updateTraceOverlay(unifiedPlanProg, bridgeWakeT, rawP, dtSec);
         }
       }
 
@@ -3855,7 +3986,7 @@
     });
     if (href === "#trazado" && traceReels.length) {
       const tr = traceReels[0];
-      target = tr.top + Math.round(tr.traceLen * 0.10);
+      target = tr.top + Math.round(tr.len * ((tr.overlapEndP ?? 0.078) + 0.065));
     } else if (href === "#repertorio" && traceReels.length) {
       const tr = traceReels[0];
       target = tr.repTop;
@@ -3998,16 +4129,85 @@
   const vmodalFrame = $("[data-vmodal-frame]", vmodal);
   const vmodalTitle = $("[data-vmodal-title]", vmodal);
   const vmodalExt = $("[data-vmodal-ext]", vmodal);
+  let ytApiLoading = false;
+  let ytApiReadyCallbacks = [];
+  let ytPlayer = null;
+
+  function loadYouTubeApi(cb) {
+    if (window.YT && typeof window.YT.Player === "function") {
+      cb();
+      return;
+    }
+    ytApiReadyCallbacks.push(cb);
+    if (ytApiLoading) return;
+    ytApiLoading = true;
+    const prevReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prevReady === "function") prevReady();
+      const cbs = ytApiReadyCallbacks.slice();
+      ytApiReadyCallbacks = [];
+      cbs.forEach((fn) => fn());
+    };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    tag.async = true;
+    document.head.appendChild(tag);
+  }
+
+  function forceMaxYouTubeQuality(player) {
+    if (!player) return;
+    try {
+      if (typeof player.setPlaybackQualityRange === "function") {
+        player.setPlaybackQualityRange("hd1080", "highres");
+      }
+      if (typeof player.setPlaybackQuality === "function") {
+        player.setPlaybackQuality("highres");
+      }
+    } catch (_) {}
+  }
 
   function getYouTubeEmbedUrl(rawUrl) {
     if (!rawUrl) return "";
     const match = rawUrl.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
     const videoId = match && match[2].length === 11 ? match[2] : "";
-    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1` : rawUrl;
+    if (!videoId) return rawUrl;
+    const params = new URLSearchParams({
+      autoplay: "1",
+      rel: "0",
+      modestbranding: "1",
+      playsinline: "1",
+      enablejsapi: "1",
+      vq: "hd2160",
+      hd: "1",
+    });
+    if (window.location.protocol.startsWith("http")) {
+      params.set("origin", window.location.origin);
+    }
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+  }
+
+  function attachYouTubeQualityController() {
+    if (!vmodalFrame) return;
+    loadYouTubeApi(() => {
+      if (!vmodal || !vmodal.classList.contains("is-open") || !vmodalFrame.src) return;
+      try {
+        ytPlayer = new window.YT.Player(vmodalFrame, {
+          events: {
+            onReady: (e) => forceMaxYouTubeQuality(e.target),
+            onStateChange: (e) => {
+              if (e.data === window.YT.PlayerState.BUFFERING || e.data === window.YT.PlayerState.PLAYING) {
+                forceMaxYouTubeQuality(e.target);
+              }
+            },
+          },
+        });
+      } catch (_) {}
+    });
   }
 
   function openVideoModal(url, title = "Film cinematográfico") {
     if (!vmodal || !vmodalFrame) return;
+    ytPlayer = null;
     if (vmodalTitle) vmodalTitle.textContent = title;
     if (vmodalExt) vmodalExt.href = url || "https://www.youtube.com";
     vmodalFrame.src = getYouTubeEmbedUrl(url);
@@ -4015,12 +4215,14 @@
     vmodal.setAttribute("aria-hidden", "false");
     body.classList.add("modal-open");
     if (lenis) lenis.stop();
+    attachYouTubeQualityController();
   }
 
   function closeVideoModal() {
     if (!vmodal || !vmodalFrame) return;
     vmodal.classList.remove("is-open");
     vmodal.setAttribute("aria-hidden", "true");
+    ytPlayer = null;
     vmodalFrame.src = "";
     body.classList.remove("modal-open");
     if (lenis) lenis.start();
@@ -4028,8 +4230,13 @@
 
   $$("[data-video-trigger]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      if (btn.tagName === "A" && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) {
+        return;
+      }
+      e.preventDefault();
       e.stopPropagation();
-      openVideoModal(btn.dataset.videoTrigger, btn.dataset.videoTitle || "Film cinematográfico");
+      const url = btn.dataset.videoTrigger || btn.getAttribute("href");
+      openVideoModal(url, btn.dataset.videoTitle || "Film cinematográfico");
     });
   });
 
