@@ -1312,9 +1312,18 @@
       this.isBufferReady = false;
       this.bufferBadge = this.isHybrid ? createBufferBadge(this.stage) : null;
 
-      if (this.isHybrid && !this.isTrace && this.media) {
-        this.media.addEventListener("click", (e) => {
+      if (this.isHybrid && !this.isTrace && (this.stage || this.media)) {
+        const clickTarget = this.isHero ? this.stage : this.media;
+        clickTarget.addEventListener("click", (e) => {
           if (e.target.closest("button, a, [data-video-trigger], .seq__outro-card, .seq__scrub")) return;
+          if (this.isHero && (this.progress || 0) < 0.02) {
+            this.autoPlayPaused = false;
+            this.autoPlaySuspended = false;
+            const step = Math.max(window.innerHeight * 0.32, 240);
+            scrollToTarget(scrollY() + step, { duration: 1.0 });
+            playTactileTick(660, 0.02, 0.015);
+            return;
+          }
           this.togglePlayPause();
         });
       }
@@ -1818,8 +1827,8 @@
       if (this.traceYawEl) this.traceYawEl.textContent = `${pad(yawReading, 3)}° E`;
       if (this.traceTcEl) this.traceTcEl.textContent = `00:${pad(Math.min(14, Math.floor(tp * 14)))}`;
 
-      const phaseLabels = ["01 · Aproximación", "02 · Acceso y umbral", "03 · Recorrido interior", "04 · Salida al parque"];
-      const roomLabels = ["Aproximación Exterior", "Ingreso Principal", "Espacio Central", "Jardín & Agua"];
+      const phaseLabels = ["01 · Estudio previo", "02 · Cruce de acceso", "03 · Recorrido interior", "04 · Cierre exterior"];
+      const roomLabels = ["Aproximación exterior", "Umbral de ingreso", "Ambientes centrales", "Salida al parque"];
       const planStates = ["Exterior", "Ingreso", "Interior", "Completado"];
       if (this.tracePhasePill) this.tracePhasePill.textContent = phaseLabels[zoneIdx];
       if (this.traceRoomNameEl) this.traceRoomNameEl.textContent = roomLabels[zoneIdx];
@@ -2201,7 +2210,7 @@
         if (this.kPhase) {
           const ph = p < 0.22
             ? "Apertura"
-            : (p < 0.56 ? "Aproximación" : (p < 0.84 ? "Interior" : "Film Máster 4K"));
+            : (p < 0.56 ? "Exterior" : (p < 0.84 ? "Interior" : "Film completo 4K"));
           setTextCached(this.kPhase, this._txtCache, "kPhase", ph);
         }
 
@@ -4256,8 +4265,8 @@
         const activeRoomNum = zoneIdx === 1 ? "2" : (zoneIdx === 2 ? "3" : (zoneIdx === 3 ? "4" : "1"));
         this.traceRooms.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoom === activeRoomNum));
         this.traceRoomsV.forEach((r) => r.classList.toggle("is-active", r.dataset.traceRoomV === activeRoomNum));
-        const phaseLabels = ["01 · Aproximación", "02 · Acceso y umbral", "03 · Recorrido interior", "04 · Salida al parque"];
-        const roomLabels = ["Aproximación Exterior", "Ingreso Principal", "Espacio Central", "Jardín & Agua"];
+        const phaseLabels = ["01 · Estudio previo", "02 · Cruce de acceso", "03 · Recorrido interior", "04 · Cierre exterior"];
+        const roomLabels = ["Aproximación exterior", "Umbral de ingreso", "Ambientes centrales", "Salida al parque"];
         const planStates = ["Exterior", "Ingreso", "Interior", "Completado"];
         setTextCached(this.tracePhasePill, tc, "pill", phaseLabels[zoneIdx]);
         setTextCached(this.traceRoomNameEl, tc, "room", roomLabels[zoneIdx]);
@@ -4413,25 +4422,25 @@
         const c0Bank = firstCard ? attachCardBank(firstCard, this.pickReelSet(0)) : null;
         if (c0Bank) {
           this.firstCardBufferReady = this.firstCardBufferReady
-            ? c0Bank.hasReadyBuffer(firstCard.from - 1, 6, 3)
-            : c0Bank.hasReadyBuffer(firstCard.from - 1, 36, 12);
+            ? c0Bank.hasReadyBuffer(firstCard.from - 1, 4, 2)
+            : c0Bank.hasReadyBuffer(firstCard.from - 1, 14, 4);
         } else {
           this.firstCardBufferReady = false;
         }
 
-        const inBridge = rawP >= BRIDGE_START_P;
+        const inBridge = rawP >= BRIDGE_START_P + 0.02;
         const readyToAdvance = inBridge
           ? (this.traceBufferReady && this.firstCardBufferReady)
           : this.traceBufferReady;
 
         const blobsMissing = !traceBank.hasContiguousBlobs(curTraceIdx, 36)
-          || (inBridge && c0Bank && !c0Bank.hasContiguousBlobs(firstCard.from - 1, 36));
+          || (inBridge && c0Bank && !c0Bank.hasContiguousBlobs(firstCard.from - 1, 14));
         const isWaitingBuf = !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
         let waitPct = 100;
         if (isWaitingBuf) {
           const tPct = traceBank.getBufferPercent(curTraceIdx, 36);
           waitPct = inBridge && c0Bank
-            ? Math.min(tPct, c0Bank.getBufferPercent(firstCard.from - 1, 36))
+            ? Math.min(tPct, c0Bank.getBufferPercent(firstCard.from - 1, 14))
             : tPct;
         }
         syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
@@ -4446,9 +4455,9 @@
           viewportEntry,
           rawP: traceRawP,
           baseDuration: this.baseDuration * BRIDGE_END_P,
-          speedScale: rawP < REEL_WAKE_P ? 0.85 : 0.92,
+          speedScale: rawP < REEL_WAKE_P ? 0.85 : 0.96,
           peekPx: 0,
-          minSpeed: 0.42,
+          minSpeed: 0.65,
           state: this,
           hasFrames: readyToAdvance,
           isHero: false,
@@ -4499,8 +4508,8 @@
         this.traceFrameCur += (targetTraceF - this.traceFrameCur) * tk;
         if (Math.abs(targetTraceF - this.traceFrameCur) < 0.002) this.traceFrameCur = targetTraceF;
 
-        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.015));
-        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.018));
+        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.065));
+        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, 0.0, 0.085));
         const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeT, 0.22, 0.56)));
         const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeT, 0.0, 0.56) * 0.045;
         const traceMediaGray = (reduce ? 0 : (1 - traceEntryWake) * 0.55) + smooth(range(bridgeT, 0.10, 0.48)) * 0.5;
@@ -5297,7 +5306,7 @@
      Referencias editoriales & Medidas
      --------------------------------------------------------- */
   const navEl = $(".nav");
-  const lightSections = ["#estudio", "#film-03", "#metodo"]
+  const lightSections = ["#estudio", "#film-03", "#contacto"]
     .map((sel) => ({ el: $(sel), docTop: 0, height: 0 }))
     .filter((item) => item.el);
   const navSecLinks = $$("[data-nav-sec]").map((a) => ({
@@ -5315,25 +5324,10 @@
   const principlesFill = $("[data-principles-fill]");
   const principleCards = $$("[data-principle]");
 
-  const metodoSec = $("#metodo");
-  const stepsGrid = metodoSec ? $(".steps", metodoSec) : null;
-  const methodBar = $("[data-method-bar]");
-  const methodNodes = $$("[data-method-node]");
-  const methodSteps = $$("[data-method-step]");
-  const methodPhase = $("[data-method-phase]");
-  const METHOD_PHASE_NAMES = [
-    "01 · Análisis espacial",
-    "02 · Diseño de trayectoria",
-    "03 · Rodaje FPV",
-    "04 · Máster y entrega 4K",
-  ];
-  let lastMethodIdx = -1;
-
   const footSec = $(".foot");
   const footMark = $("[data-foot-mark]");
 
   let estudioDocTop = 0, estudioHeight = 0;
-  let stepsGridDocTop = 0, stepsGridHeight = 0;
   let footDocTop = 0, footHeight = 0;
 
   function measureEditorial() {
@@ -5356,10 +5350,6 @@
       c._docTop = c.getBoundingClientRect().top + scroll;
       c._height = c.offsetHeight;
     });
-    if (stepsGrid) {
-      stepsGridDocTop = stepsGrid.getBoundingClientRect().top + scroll;
-      stepsGridHeight = stepsGrid.offsetHeight;
-    }
     if (footSec) {
       footDocTop = footSec.getBoundingClientRect().top + scroll;
       footHeight = footSec.offsetHeight;
@@ -5528,22 +5518,6 @@
           if (litMask !== lastEstLitMask) {
             lastEstLitMask = litMask;
             principleCards.forEach((card, idx) => card.classList.toggle("is-lit", (litMask & (1 << idx)) !== 0));
-          }
-        }
-      }
-
-      if (metodoSec && stepsGrid) {
-        const mrTop = stepsGridDocTop - y;
-        const mrBottom = mrTop + stepsGridHeight;
-        if (mrBottom > -80 && mrTop < vh + 80) {
-          const mp = clamp((vh * 0.65 - mrTop) / Math.max(1, stepsGridHeight * 0.92));
-          if (methodBar) methodBar.style.transform = `scaleX(${mp.toFixed(4)})`;
-          const activeIdx = clamp(Math.floor(mp * 3.99), 0, 3);
-          if (activeIdx !== lastMethodIdx) {
-            lastMethodIdx = activeIdx;
-            methodNodes.forEach((n, idx) => n.classList.toggle("is-active", idx <= activeIdx));
-            methodSteps.forEach((s, idx) => s.classList.toggle("is-active-step", idx === activeIdx));
-            if (methodPhase && METHOD_PHASE_NAMES[activeIdx]) methodPhase.textContent = METHOD_PHASE_NAMES[activeIdx];
           }
         }
       }

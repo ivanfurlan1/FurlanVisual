@@ -975,10 +975,11 @@ body.is-ready .hero__line > span { transform: none; }
 
 /* ---------- 10. Secciones de papel ---------- */
 .paper { position: relative; background: var(--paper); color: var(--ink); }
-#estudio, #propiedad, #repertorio, #film-03, #film-04, #metodo { position: relative; z-index: 10; }
+#estudio, #propiedad, #repertorio, #film-03, #film-04, #contacto { position: relative; z-index: 10; }
 #estudio { background: var(--paper); box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.48); }
 #film-03 { box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.45); }
 #film-04 { box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.25); }
+#contacto { box-shadow: 0 -24px 64px rgba(0, 0, 0, 0.28); }
 
 .runhead { display: grid; grid-template-columns: 1fr 1fr auto; gap: 20px; padding-top: 14px; border-top: 1px solid var(--line-l2); color: var(--stone-d); }
 .runhead span:last-child { text-align: right; font-family: var(--serif); font-style: italic; font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--ink); }
@@ -1088,7 +1089,7 @@ body.is-ready .hero__line > span { transform: none; }
   inset: -12%;
   z-index: 4;
   pointer-events: none;
-  background: radial-gradient(ellipse 56% 48% at 50% 50%, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.78) 46%, #000000 78%);
+  background: radial-gradient(ellipse 62% 54% at 50% 50%, rgba(0, 0, 0, 0.58) 0%, rgba(0, 0, 0, 0.88) 46%, #000000 80%);
   opacity: var(--trace-entry-veil-op, 1);
   transform: scale(var(--trace-entry-veil-s, 1));
   will-change: opacity, transform;
@@ -2181,14 +2182,15 @@ body.is-ready .hero__line > span { transform: none; }
 .step p { font-size: 15px; line-height: 1.6; color: var(--stone-d); }
 
 /* ---------- 17. Contacto y pie ---------- */
-.contact { background: var(--ink); padding-top: clamp(56px, 8.5vh, 100px); overflow: hidden; }
-.contact__title { margin-top: clamp(32px, 5.5vh, 68px); font-family: var(--serif); font-weight: 400; font-size: clamp(46px, 8.8vw, 144px); line-height: 0.92; letter-spacing: -0.035em; }
+.contact { background: var(--paper); color: var(--ink); padding-top: clamp(56px, 8.5vh, 100px); overflow: hidden; }
+.contact__title { margin-top: clamp(32px, 5.5vh, 68px); font-family: var(--serif); font-weight: 400; font-size: clamp(46px, 8.8vw, 144px); line-height: 0.92; letter-spacing: -0.035em; color: var(--ink); }
 .contact__grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: clamp(24px, 3vw, 40px); margin-top: clamp(36px, 6vh, 68px); align-items: start; }
 .contact__cta { grid-column: 1 / 7; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; min-width: 0; }
-.contact__eyebrow { font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--oxide-light); }
-.contact__mail { display: inline-flex; align-items: center; gap: 14px; font-family: var(--serif); font-size: clamp(18.5px, 2.05vw, 34px); line-height: 1.15; padding-bottom: 10px; position: relative; max-width: 100%; overflow-wrap: anywhere; }
-.contact__mail::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line-d2); }
-.contact__mail::before { content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 100%; background: var(--oxide-light); transform-origin: 100% 50%; transform: scaleX(0); transition: transform 0.7s var(--ease-io); z-index: 1; }
+.contact__eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--oxide); }
+.contact__note { max-width: 42ch; font-size: 15.5px; line-height: 1.58; color: var(--stone-d); margin-top: -6px; }
+.contact__mail { display: inline-flex; align-items: center; gap: 14px; font-family: var(--serif); font-size: clamp(18.5px, 2.05vw, 34px); line-height: 1.15; padding-bottom: 10px; position: relative; max-width: 100%; overflow-wrap: anywhere; color: var(--ink); }
+.contact__mail::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line-l2); }
+.contact__mail::before { content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 100%; background: var(--oxide); transform-origin: 100% 50%; transform: scaleX(0); transition: transform 0.7s var(--ease-io); z-index: 1; }
 .contact__mail:hover::before { transform-origin: 0 50%; transform: scaleX(1); }
 .contact__mail i { position: relative; flex: 0 0 auto; display: block; width: 0.56em; height: 0.56em; transition: transform 0.55s var(--ease); }
 .contact__mail i::before { content: ""; position: absolute; inset: 0; border-top: 1.5px solid currentColor; border-right: 1.5px solid currentColor; }
@@ -2203,39 +2205,39 @@ body.is-ready .hero__line > span { transform: none; }
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
-  border: 1px solid var(--line-d);
+  border: 1px solid var(--line-l2);
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--stone);
+  color: var(--stone-d);
   transition: color 0.3s var(--ease), border-color 0.3s var(--ease), background-color 0.3s var(--ease), transform 0.3s var(--ease);
 }
 .contact__copy:hover,
 .contact__wa:hover {
-  color: var(--bone);
-  border-color: var(--oxide-light);
-  background: rgba(236, 232, 225, 0.05);
+  color: var(--ink);
+  border-color: var(--oxide);
+  background: rgba(168, 117, 79, 0.08);
   transform: translateY(-1px);
 }
-.contact__wa { color: var(--bone); border-color: rgba(236, 232, 225, 0.24); }
-.contact__copy-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--oxide-light); }
-.contact__copy.is-copied { color: var(--bone); border-color: var(--oxide-light); }
-.contact__copy.is-copied .contact__copy-dot { background: #84b582; }
+.contact__wa { color: var(--ink); border-color: rgba(13, 13, 12, 0.28); }
+.contact__copy-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--oxide); }
+.contact__copy.is-copied { color: var(--ink); border-color: var(--oxide); }
+.contact__copy.is-copied .contact__copy-dot { background: #3e7d3c; }
 
 .contact__list { grid-column: 8 / 13; }
-.contact__list div { display: grid; grid-template-columns: 116px 1fr; gap: 16px; padding: 15px 0; border-top: 1px solid var(--line-d); transition: border-color 0.35s var(--ease); }
-.contact__list div:hover { border-top-color: rgba(209, 155, 110, 0.45); }
-.contact__list div:last-child { border-bottom: 1px solid var(--line-d); }
-.contact__list dt { font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--stone); padding-top: 3px; }
-.contact__list dd { font-size: 15.5px; color: rgba(236, 232, 225, 0.94); word-break: break-word; }
+.contact__list div { display: grid; grid-template-columns: 116px 1fr; gap: 16px; padding: 15px 0; border-top: 1px solid var(--line-l); transition: border-color 0.35s var(--ease); }
+.contact__list div:hover { border-top-color: rgba(168, 117, 79, 0.55); }
+.contact__list div:last-child { border-bottom: 1px solid var(--line-l); }
+.contact__list dt { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--stone-d); padding-top: 3px; }
+.contact__list dd { font-size: 15.5px; color: var(--ink); word-break: break-word; }
 
 .foot { margin-top: clamp(56px, 9vh, 110px); }
-.foot__row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; padding-block: 16px; border-top: 1px solid var(--line-d); color: var(--stone); }
+.foot__row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; padding-block: 16px; border-top: 1px solid var(--line-l); color: var(--stone-d); }
 .foot__row > :last-child { justify-self: end; }
-.foot__row a:hover { color: var(--bone); }
-.foot__mark { font-family: var(--serif); font-size: clamp(88px, 23vw, 330px); line-height: 0.84; letter-spacing: -0.045em; text-align: center; user-select: none; white-space: nowrap; margin-top: 8px; margin-bottom: -0.04em; background: linear-gradient(115deg, var(--ink-3) 0%, #272420 38%, rgba(236, 232, 225, 0.24) 50%, #272420 62%, var(--ink-3) 100%); background-size: 220% 100%; background-position: var(--foot-shine, 50%) 0%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; transform: translate3d(0, var(--foot-y, 0px), 0); }
+.foot__row a:hover { color: var(--ink); }
+.foot__mark { font-family: var(--serif); font-size: clamp(88px, 23vw, 330px); line-height: 0.84; letter-spacing: -0.045em; text-align: center; user-select: none; white-space: nowrap; margin-top: 8px; margin-bottom: -0.04em; background: linear-gradient(115deg, rgba(13, 13, 12, 0.07) 0%, rgba(13, 13, 12, 0.14) 38%, rgba(168, 117, 79, 0.34) 50%, rgba(13, 13, 12, 0.14) 62%, rgba(13, 13, 12, 0.07) 100%); background-size: 220% 100%; background-position: var(--foot-shine, 50%) 0%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; transform: translate3d(0, var(--foot-y, 0px), 0); }
 
 /* ---------- 18. Revelados ---------- */
 [data-reveal] { opacity: 0; transform: translate3d(0, 18px, 0); transition: opacity 0.9s var(--ease) var(--d, 0s), transform 1s var(--ease) var(--d, 0s); }
