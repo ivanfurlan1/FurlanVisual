@@ -4428,21 +4428,11 @@
           this.firstCardBufferReady = false;
         }
 
-        const inBridge = rawP >= BRIDGE_START_P + 0.02;
-        const readyToAdvance = inBridge
-          ? (this.traceBufferReady && this.firstCardBufferReady)
-          : this.traceBufferReady;
+        const readyToAdvance = this.traceBufferReady;
 
-        const blobsMissing = !traceBank.hasContiguousBlobs(curTraceIdx, 36)
-          || (inBridge && c0Bank && !c0Bank.hasContiguousBlobs(firstCard.from - 1, 14));
+        const blobsMissing = !traceBank.hasContiguousBlobs(curTraceIdx, 36);
         const isWaitingBuf = !readyToAdvance && blobsMissing && !this.autoPlayPaused && !this.autoPlaySuspended && viewportEntry >= 0.94;
-        let waitPct = 100;
-        if (isWaitingBuf) {
-          const tPct = traceBank.getBufferPercent(curTraceIdx, 36);
-          waitPct = inBridge && c0Bank
-            ? Math.min(tPct, c0Bank.getBufferPercent(firstCard.from - 1, 14))
-            : tPct;
-        }
+        const waitPct = isWaitingBuf ? traceBank.getBufferPercent(curTraceIdx, 36) : 100;
         syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
 
         const traceEndLen = Math.max(1, this.len * BRIDGE_END_P);
