@@ -62,7 +62,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body.is-loading { overflow: hidden; }
@@ -1305,7 +1305,7 @@ body.is-ready .hero__line > span { transform: none; }
   overflow: hidden;
   background: #020202;
   opacity: var(--cinema-frame-op, 1);
-  clip-path: inset(var(--cinema-clip-y, 48.2%) var(--cinema-clip-x, 8%) var(--cinema-clip-y, 48.2%) var(--cinema-clip-x, 8%) round 3px);
+  clip-path: var(--cinema-clip, inset(48.2% 8% 48.2% 8% round 3px));
   box-shadow:
     0 34px 90px rgba(0, 0, 0, calc(0.45 + var(--cinema-shadow, 0.5) * 0.4)),
     0 0 0 1px rgba(236, 232, 225, var(--cinema-border, 0.1));
@@ -1517,14 +1517,12 @@ body.is-ready .hero__line > span { transform: none; }
 [data-rep-head] {
   opacity: 0;
   transform: translate3d(0, 14px, 0);
-  transition: opacity 0.65s var(--ease), transform 0.78s var(--ease), filter 0.9s var(--ease);
-  filter: grayscale(100%) brightness(0.55);
+  transition: opacity 0.65s var(--ease), transform 0.78s var(--ease);
 }
 [data-rep-intro] {
   opacity: 0;
   transform: translate3d(0, 18px, 0);
-  transition: opacity 0.72s var(--ease) 0.05s, transform 0.85s var(--ease) 0.05s, filter 0.9s var(--ease) 0.05s;
-  filter: grayscale(100%) brightness(0.54);
+  transition: opacity 0.72s var(--ease) 0.05s, transform 0.85s var(--ease) 0.05s;
 }
 .repertorio.is-rep-wake [data-rep-head],
 .repertorio.is-rep-wake [data-rep-intro] {
@@ -1535,11 +1533,6 @@ body.is-ready .hero__line > span { transform: none; }
 .repertorio.is-rep-color [data-rep-intro] {
   opacity: 1;
   transform: none;
-  filter: grayscale(0%) brightness(1);
-}
-.repertorio.is-rep-settled [data-rep-head],
-.repertorio.is-rep-settled [data-rep-intro] {
-  filter: none;
 }
 .repertorio__intro {
   display: grid;
@@ -1581,11 +1574,9 @@ body.is-ready .hero__line > span { transform: none; }
 .rep-card[data-rep-card] {
   opacity: 0;
   transform: translate3d(0, 20px, 0) scale(0.988);
-  filter: grayscale(100%) brightness(0.45) contrast(1.06);
   transition:
     opacity 0.72s var(--ease) var(--rc-d, 0s),
     transform 0.82s var(--ease) var(--rc-d, 0s),
-    filter 0.95s var(--ease) var(--rc-dc, 0s),
     border-color 0.38s var(--ease),
     box-shadow 0.42s var(--ease),
     background-color 0.38s var(--ease);
@@ -1602,7 +1593,6 @@ body.is-ready .hero__line > span { transform: none; }
 .repertorio.is-rep-color .rep-card[data-rep-card] {
   opacity: 1;
   transform: translate3d(0, 0, 0) scale(1);
-  filter: grayscale(0%) brightness(1) contrast(1);
 }
 @media (min-width: 901px) and (min-aspect-ratio: 1/1) {
   .rep-card[data-rep-card="1"] { --rc-x0: 10px; --rc-y0: 34px; --rc-s0: 0.968; --rc-xw: 8px; --rc-yw: 14px; --rc-sw: 0.986; --rc-d: 0.00s; --rc-dc: 0.02s; }
@@ -1624,7 +1614,6 @@ body.is-ready .hero__line > span { transform: none; }
     transition:
       opacity 0.78s var(--ease) var(--rc-dc, 0s),
       transform 0.96s var(--ease) var(--rc-dc, 0s),
-      filter 0.98s var(--ease) var(--rc-dc, 0s),
       border-color 0.38s var(--ease),
       box-shadow 0.42s var(--ease),
       background-color 0.38s var(--ease);
@@ -1641,7 +1630,6 @@ body.is-ready .hero__line > span { transform: none; }
   }
 }
 .repertorio.is-rep-settled .rep-card[data-rep-card] {
-  filter: none;
   --rc-d: 0s;
   --rc-dc: 0s;
   transition:
@@ -1689,8 +1677,7 @@ body.is-ready .hero__line > span { transform: none; }
 .rep-card--lead .rep-card__info {
   opacity: 0;
   transform: translate3d(0, 12px, 0);
-  filter: grayscale(100%) brightness(0.55);
-  transition: opacity 0.7s var(--ease), transform 0.8s var(--ease), filter 0.9s var(--ease);
+  transition: opacity 0.7s var(--ease), transform 0.8s var(--ease);
 }
 .repertorio.is-rep-wake .rep-card--lead .rep-card__info {
   opacity: 0.44;
@@ -1699,10 +1686,6 @@ body.is-ready .hero__line > span { transform: none; }
 .repertorio.is-rep-color .rep-card--lead .rep-card__info {
   opacity: 1;
   transform: none;
-  filter: grayscale(0%) brightness(1);
-}
-.repertorio.is-rep-settled .rep-card--lead .rep-card__info {
-  filter: none;
 }
 .repertorio.is-rep-docked .rep-card--lead .rep-card__hud-top {
   opacity: 1;
@@ -1808,10 +1791,9 @@ body.is-ready .hero__line > span { transform: none; }
 .rep-card:hover .rep-card__title { color: #f6ede0; }
 .rep-card__sub { font-size: 13.5px; line-height: 1.58; color: rgba(236, 232, 225, 0.72); }
 
-.repertorio__foot { margin-top: clamp(32px, 5vh, 52px); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--stone); padding-top: 20px; border-top: 1px solid var(--line-d); opacity: 0; transform: translate3d(0, 14px, 0); filter: grayscale(100%) brightness(0.55); transition: opacity 0.7s var(--ease) 0.14s, transform 0.8s var(--ease) 0.14s, filter 0.9s var(--ease); }
+.repertorio__foot { margin-top: clamp(32px, 5vh, 52px); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--stone); padding-top: 20px; border-top: 1px solid var(--line-d); opacity: 0; transform: translate3d(0, 14px, 0); transition: opacity 0.7s var(--ease) 0.14s, transform 0.8s var(--ease) 0.14s; }
 .repertorio.is-rep-wake .repertorio__foot { opacity: 0.66; transform: none; }
-.repertorio.is-rep-color .repertorio__foot { opacity: 1; transform: none; filter: grayscale(0%) brightness(1); }
-.repertorio.is-rep-settled .repertorio__foot { filter: none; }
+.repertorio.is-rep-color .repertorio__foot { opacity: 1; transform: none; }
 .repertorio__foot-item { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .repertorio__pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--oxide-light); box-shadow: 0 0 8px rgba(209, 155, 110, 0.7); }
 .repertorio__foot-line { flex: 1; height: 1px; background: var(--line-d); }
@@ -1880,7 +1862,7 @@ body.is-ready .hero__line > span { transform: none; }
   z-index: 4;
   width: var(--kseq-w, min(68vw, 980px));
   height: var(--kseq-h, min(58vh, 550px));
-  clip-path: inset(var(--kseq-clip-y, 0%) var(--kseq-clip-x, 0%) var(--kseq-clip-y, 0%) var(--kseq-clip-x, 0%) round 4px);
+  clip-path: var(--kseq-clip, inset(8% 49.4% 8% 49.4% round 4px));
   transform: translate3d(0, var(--kseq-ty, 0px), 0) scale(var(--kseq-scale, 1));
   box-shadow: 0 28px 75px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(13, 13, 12, 0.12);
   border-radius: 4px;
@@ -2216,4 +2198,63 @@ body.is-ready .hero__line > span { transform: none; }
 @keyframes seqBufPulse {
   0%, 100% { opacity: 0.35; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* ---------- 22. Entrada sincronizada en hilo compositor (Secciones 3 y 6) ---------- */
+.cinema__prelude,
+.cinema__topbar,
+.cinema__botbar,
+.kseq__topbar,
+.kseq__botbar,
+.kseq__curtain,
+.kseq__wing {
+  will-change: transform, opacity;
+}
+
+@supports (animation-timeline: view()) and (timeline-scope: --a) {
+  @keyframes seqEntrySettle {
+    0%   { translate: 0 var(--seq-max-ty, 0px); }
+    25%  { translate: 0 calc(var(--seq-max-ty, 0px) * 0.9375); }
+    50%  { translate: 0 calc(var(--seq-max-ty, 0px) * 0.75); }
+    75%  { translate: 0 calc(var(--seq-max-ty, 0px) * 0.4375); }
+    100% { translate: 0 0px; }
+  }
+  .seq--cinema {
+    view-timeline: --cinema-entry block;
+    timeline-scope: --cinema-entry;
+  }
+  .seq--cinema .cinema__frame-wrap {
+    transform: scale(var(--cinema-scale, 1));
+    animation: seqEntrySettle linear both;
+    animation-timeline: --cinema-entry;
+    animation-range: entry 60% entry 100%;
+    will-change: transform, translate;
+  }
+  .seq--cinema .cinema__prelude {
+    --seq-max-ty: var(--cinema-max-ty, 0px);
+    transform: translate3d(-50%, calc(-50% - 14px + var(--cinema-prelude-y, 0px)), 0);
+    animation: seqEntrySettle linear both;
+    animation-timeline: --cinema-entry;
+    animation-range: entry 60% entry 100%;
+    will-change: transform, translate, opacity;
+  }
+  .seq--kinetic {
+    view-timeline: --kseq-entry block;
+    timeline-scope: --kseq-entry;
+  }
+  .seq--kinetic .kseq__media {
+    transform: scale(var(--kseq-scale, 1));
+    animation: seqEntrySettle linear both;
+    animation-timeline: --kseq-entry;
+    animation-range: entry 60% entry 100%;
+    will-change: transform, translate, clip-path;
+  }
+  .seq--kinetic .kseq__curtain {
+    --seq-max-ty: var(--kseq-max-ty, 0px);
+    transform: none;
+    animation: seqEntrySettle linear both;
+    animation-timeline: --kseq-entry;
+    animation-range: entry 60% entry 100%;
+    will-change: transform, translate;
+  }
 }

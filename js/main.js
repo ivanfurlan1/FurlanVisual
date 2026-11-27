@@ -78,6 +78,10 @@
 
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const supportsViewTimeline = typeof CSS !== "undefined"
+    && typeof CSS.supports === "function"
+    && CSS.supports("animation-timeline", "view()")
+    && CSS.supports("timeline-scope", "--a");
   const body = document.body;
   const root = document.documentElement;
 
@@ -176,14 +180,43 @@
     vw <= 900 || (window.matchMedia && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
 
   let isUserTouching = false;
+  let isScrollbarDragging = false;
+  let lastNativeScrollAt = 0;
+  let lastTouchEndAt = 0;
+  let lastDownInputAt = 0;
   let navigatingUntil = 0;
   let lastUpInputAt = 0;
   let lastTouchY = 0;
   let hybridFrameId = 0;
   let hybridOwnerFrame = -1;
+  window.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button === 0) {
+      const onWinEdge = e.clientX >= vw - 22;
+      const onRootTarget = e.target === document.documentElement || e.target === document.body || e.target === scrollContainer;
+      if (onWinEdge || onRootTarget) {
+        isScrollbarDragging = true;
+        navigatingUntil = 0;
+      }
+    }
+  }, { passive: true });
+  const endScrollbarDrag = () => {
+    if (isScrollbarDragging) {
+      isScrollbarDragging = false;
+      lastNativeScrollAt = performance.now();
+    }
+  };
+  window.addEventListener("pointerup", endScrollbarDrag, { passive: true });
+  window.addEventListener("pointercancel", endScrollbarDrag, { passive: true });
+  window.addEventListener("blur", endScrollbarDrag, { passive: true });
   window.addEventListener("wheel", (e) => {
     navigatingUntil = 0;
-    if (e.deltaY < -0.5) lastUpInputAt = performance.now();
+    if (e.deltaY < -0.5) {
+      lastUpInputAt = performance.now();
+      lastDownInputAt = 0;
+    } else if (e.deltaY > 0.5) {
+      lastUpInputAt = 0;
+      lastDownInputAt = performance.now();
+    }
   }, { passive: true });
   window.addEventListener("touchstart", (e) => {
     isUserTouching = true;
@@ -193,15 +226,30 @@
   window.addEventListener("touchmove", (e) => {
     if (!e.touches || !e.touches[0]) return;
     const cy = e.touches[0].clientY;
-    if (cy - lastTouchY > 2) lastUpInputAt = performance.now();
+    if (cy - lastTouchY > 2) {
+      lastUpInputAt = performance.now();
+      lastDownInputAt = 0;
+    } else if (cy - lastTouchY < -2) {
+      lastUpInputAt = 0;
+      lastDownInputAt = performance.now();
+    }
     lastTouchY = cy;
   }, { passive: true });
-  window.addEventListener("touchend", () => { isUserTouching = false; }, { passive: true });
-  window.addEventListener("touchcancel", () => { isUserTouching = false; }, { passive: true });
+  window.addEventListener("touchend", () => {
+    isUserTouching = false;
+    lastTouchEndAt = performance.now();
+  }, { passive: true });
+  window.addEventListener("touchcancel", () => {
+    isUserTouching = false;
+    lastTouchEndAt = performance.now();
+  }, { passive: true });
 
   const scrollY = () => {
     if (scrollContainer && isVerticalScroller()) return scrollContainer.scrollTop;
-    if (lenis) return lenis.scroll;
+    if (lenis) {
+      if (lenis.isScrolling === "native" || isScrollbarDragging || isUserTouching) return window.scrollY;
+      return lenis.scroll;
+    }
     return window.scrollY;
   };
 
@@ -400,37 +448,55 @@
     lines: $$(".ln", el),
   }));
 
+  const smootherstep = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+
+  // Curva C1 continua: arranque suave con derivada 0 en pStart, enlace sin salto de velocidad en pBlend y pendiente constante hasta pEnd
+  function smoothEntryProg(p, pStart, pBlend, pEnd) {
+    if (p <= pStart) return 0;
+    if (p >= pEnd) return 1;
+    const spanBlend = Math.max(0.01, pBlend - pStart);
+    const m = 1 / Math.max(0.01, pEnd - 0.5 * (pStart + pBlend));
+    if (p < pBlend) {
+      const u = (p - pStart) / spanBlend;
+      return 0.5 * m * spanBlend * u * u;
+    }
+    return 0.5 * m * spanBlend + m * (p - pBlend);
+  }
+
   /* ---------------------------------------------------------
      MOTOR HÍBRIDO DE AUTO-REPRODUCCIÓN Y CONTROL DE SCROLL
      --------------------------------------------------------- */
   function runHybridScrollEngine({ top, len, dt, viewportEntry, rawP, baseDuration, speedScale = 1, peekPx: customPeekPx, minSpeed = 0.45, state, hasFrames, isHero }) {
-    if (reduce) return;
-    if (hybridOwnerFrame === hybridFrameId) return;
+    if (reduce) return undefined;
+    if (hybridOwnerFrame === hybridFrameId) return undefined;
     const now = performance.now();
     if (now < navigatingUntil) {
       state.lastTrackedY = scrollY();
       state.subpixelAcc = 0;
       state.upScrollAcc = 0;
-      return;
+      state.autoRamp = 0;
+      return undefined;
     }
     const dtSec = Math.min(dt || 0.016, 0.04);
     const peekPx = customPeekPx !== undefined ? customPeekPx : Math.round(Math.min(vh * 0.13, 105));
     const endY = top + len + peekPx;
     const y = scrollY();
-    const isFullyInView = isHero ? (rawP >= 0.012) : (viewportEntry >= 0.94 || rawP >= -0.06);
+    const isFullyInView = isHero ? (rawP >= 0.008) : (viewportEntry >= 0.94 || rawP >= -0.06);
     const inActiveZone = isFullyInView && y < endY - 0.5;
 
     if (!inActiveZone || state.autoPlayPaused || !hasFrames) {
-      if (y >= endY - 0.5 || (!isHero && viewportEntry < 0.8) || (isHero && rawP < 0.01)) {
+      if (y >= endY - 0.5 || (!isHero && viewportEntry < 0.8) || (isHero && rawP < 0.005)) {
         state.autoPlaySuspended = false;
         state.subpixelAcc = 0;
         state.upScrollAcc = 0;
+        state.autoRamp = 0;
         state.lastTrackedY = undefined;
       } else if (!hasFrames && inActiveZone) {
         state.lastTrackedY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : y;
         state.subpixelAcc = 0;
+        state.autoRamp = 0;
       }
-      return;
+      return undefined;
     }
 
     hybridOwnerFrame = hybridFrameId;
@@ -448,26 +514,52 @@
       const targetY = lenis.targetScroll !== undefined ? lenis.targetScroll : y;
       const userDiff = targetY - y;
       const recentUp = (now - lastUpInputAt) < 420;
+      const recentDown = (now - lastDownInputAt) < 550;
+
+      if (isUserTouching || isScrollbarDragging || (now - lastTouchEndAt) < 140 || (now - lastNativeScrollAt) < 140 || lenis.isScrolling === "native") {
+        if (recentDown && !recentUp) state.autoPlaySuspended = false;
+        state.subpixelAcc = 0;
+        state.autoRamp = 0;
+        return undefined;
+      }
 
       if (userDiff < -6.0 || recentUp) {
         if (userDiff < -6.0) state.autoPlaySuspended = true;
-        return;
+        state.subpixelAcc = 0;
+        state.autoRamp = 0;
+        return undefined;
       }
-      if (state.autoPlaySuspended && userDiff > 8.0) {
+      if (state.autoPlaySuspended && (userDiff > 3.0 || (recentDown && userDiff >= -1.5))) {
         state.autoPlaySuspended = false;
       }
 
-      // Si el usuario scrollea rápido hacia adelante con la rueda, dejamos a Lenis correr nativo sin amplificar ni saltear secciones
-      if (userDiff > 10.0) return;
+      // Si el usuario scrollea rápido hacia adelante, dejamos correr Lenis nativo pero mantenemos autoRamp=1 para retomar sin frenado
+      if (userDiff > 10.0) {
+        state.subpixelAcc = 0;
+        state.autoRamp = 1;
+        return undefined;
+      }
 
       if (!state.autoPlaySuspended && userDiff >= -1.5) {
+        state.autoRamp = Math.min(1, (state.autoRamp || 0) + dtSec / 0.22);
+        const ramp = smooth(state.autoRamp);
         const userForwardLead = Math.max(0, userDiff);
         const userDy = userForwardLead * (1 - Math.exp(-8 * dtSec));
-        const nextY = Math.min(endY, y + autoDy + userDy);
         const remainingLead = Math.max(0, userForwardLead - userDy);
-        lenis.scrollTo(nextY, { immediate: true });
-        if (remainingLead > 0.5) lenis.targetScroll = nextY + remainingLead;
+        const baseIntY = Math.round(y);
+        state.subpixelAcc = (state.subpixelAcc || 0) + autoDy * ramp + userDy;
+
+        if (state.subpixelAcc >= 1) {
+          const intStep = Math.floor(state.subpixelAcc);
+          state.subpixelAcc -= intStep;
+          const nextIntY = Math.min(Math.round(endY), baseIntY + intStep);
+          lenis.scrollTo(nextIntY, { immediate: true });
+          if (remainingLead > 0.5) lenis.targetScroll = nextIntY + remainingLead;
+          return Math.min(endY, nextIntY + state.subpixelAcc);
+        }
+        return Math.min(endY, baseIntY + state.subpixelAcc);
       }
+      return undefined;
     } else {
       const scroller = (scrollContainer && isVerticalScroller()) ? scrollContainer : window;
       const currentY = (scrollContainer && isVerticalScroller()) ? scrollContainer.scrollTop : window.scrollY;
@@ -478,29 +570,50 @@
 
       if (scrollDelta < -0.5) {
         state.upScrollAcc = (state.upScrollAcc || 0) + scrollDelta;
-        if (state.upScrollAcc <= -8.0) {
+        if (state.upScrollAcc <= -5.0) {
           state.autoPlaySuspended = true;
-          state.subpixelAcc = 0;
         }
-      } else if (scrollDelta > 4.0 && (now - lastUpInputAt) > 360) {
+        state.subpixelAcc = 0;
+        state.autoRamp = 0;
+        return undefined;
+      } else if (scrollDelta > 1.5 && (now - lastUpInputAt) > 250) {
         state.upScrollAcc = 0;
         state.autoPlaySuspended = false;
       }
 
-      if (!state.autoPlaySuspended && (now - lastUpInputAt) > 360 && currentY < endY - 0.5) {
-        if (isUserTouching) {
-          state.subpixelAcc = 0;
-        } else {
-          state.subpixelAcc = (state.subpixelAcc || 0) + autoDy;
-          if (state.subpixelAcc >= 1) {
-            const intStep = Math.floor(state.subpixelAcc);
-            state.subpixelAcc -= intStep;
-            const nextY = Math.min(endY, currentY + intStep);
-            if (scroller === window) window.scrollTo(0, nextY);
-            else scroller.scrollTop = nextY;
-          }
+      if (isUserTouching || isScrollbarDragging || (now - lastTouchEndAt) < 140 || (now - lastNativeScrollAt) < 140) {
+        if ((now - lastDownInputAt) < 550 && (now - lastUpInputAt) > 250) {
+          state.autoPlaySuspended = false;
         }
+        state.subpixelAcc = 0;
+        state.autoRamp = 0;
+        return undefined;
       }
+
+      // Durante inercia rápida hacia abajo, no competir con scrollTop y mantener autoRamp=1 para retomar sin frenado
+      if (scrollDelta > Math.max(1.8, autoDy * 2.5 + 0.8)) {
+        state.subpixelAcc = 0;
+        state.autoRamp = 1;
+        return undefined;
+      }
+
+      if (!state.autoPlaySuspended && (now - lastUpInputAt) > 300 && currentY < endY - 0.5) {
+        state.autoRamp = Math.min(1, (state.autoRamp || 0) + dtSec / 0.24);
+        const ramp = smooth(state.autoRamp);
+        state.subpixelAcc = (state.subpixelAcc || 0) + autoDy * ramp;
+        if (state.subpixelAcc >= 1) {
+          const intStep = Math.floor(state.subpixelAcc);
+          state.subpixelAcc -= intStep;
+          const nextY = Math.min(endY, currentY + intStep);
+          if (scroller === window) window.scrollTo(0, nextY);
+          else scroller.scrollTop = nextY;
+          const actualY = (scroller === window) ? window.scrollY : scroller.scrollTop;
+          state.lastTrackedY = actualY;
+          return Math.min(endY, actualY + state.subpixelAcc);
+        }
+        return Math.min(endY, currentY + state.subpixelAcc);
+      }
+      return undefined;
     }
   }
 
@@ -1228,12 +1341,14 @@
       this.lead = $("[data-seq-lead]", el);
 
       if (this.isKinetic) {
+        this.kCurtain = $("[data-kseq-curtain]", el);
         this.kWingL = $("[data-kseq-wing-l]", el);
         this.kWingR = $("[data-kseq-wing-r]", el);
         this.kPhase = $("[data-kseq-phase]", el);
       }
 
       if (this.isCinema) {
+        this.cinemaFrameWrap = $(".cinema__frame-wrap", el);
         this.cinemaPrelude = $("[data-cinema-prelude]", el);
       }
 
@@ -1471,6 +1586,16 @@
         this.kMaxShift = Math.round(Math.min(maxSafeShift, vh * (isMob ? 0.30 : 0.20)));
         this.stage.style.setProperty("--kseq-w", `${this.kw}px`);
         this.stage.style.setProperty("--kseq-h", `${this.kh}px`);
+        if (supportsViewTimeline) {
+          const settleStartPct = clamp(100 - ((2 * this.kMaxShift) / Math.max(1, vh)) * 100, 0, 99.5).toFixed(2);
+          const rangeStr = `entry ${settleStartPct}% entry 100%`;
+          this.el.style.setProperty("--kseq-max-ty", `${-this.kMaxShift}px`);
+          if (this.media) {
+            this.media.style.setProperty("--seq-max-ty", `${-this.kMaxShift}px`);
+            this.media.style.animationRange = rangeStr;
+          }
+          if (this.kCurtain) this.kCurtain.style.animationRange = rangeStr;
+        }
 
         const cw = Math.round(this.kw * dpr);
         const ch = Math.round(this.kh * dpr);
@@ -1508,6 +1633,16 @@
         this.cinemaMaxShift = Math.round(Math.min(maxSafeShift, vh * (isMob ? 0.30 : 0.20)));
         this.el.style.setProperty("--cinema-w", `${this.cwBox}px`);
         this.el.style.setProperty("--cinema-h", `${this.chBox}px`);
+        if (supportsViewTimeline) {
+          const settleStartPct = clamp(100 - ((2 * this.cinemaMaxShift) / Math.max(1, vh)) * 100, 0, 99.5).toFixed(2);
+          const rangeStr = `entry ${settleStartPct}% entry 100%`;
+          this.el.style.setProperty("--cinema-max-ty", `${-this.cinemaMaxShift}px`);
+          if (this.cinemaFrameWrap) {
+            this.cinemaFrameWrap.style.setProperty("--seq-max-ty", `${-this.cinemaMaxShift}px`);
+            this.cinemaFrameWrap.style.animationRange = rangeStr;
+          }
+          if (this.cinemaPrelude) this.cinemaPrelude.style.animationRange = rangeStr;
+        }
 
         const cw = Math.round(this.cwBox * dpr);
         const ch = Math.round(this.chBox * dpr);
@@ -1886,9 +2021,9 @@
 
     update(dt, isScrolling = true) {
       const n = this.count;
-      const y = scrollY();
-      const rawP = (y - this.top) / this.len;
-      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+      let y = scrollY();
+      let rawP = (y - this.top) / this.len;
+      let viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
       const st = this.stage.style;
       const sv = this._stageVars;
 
@@ -1936,11 +2071,10 @@
             }
           }
           if (this.isKinetic) {
-            const preShift = -(this.kMaxShift || 0);
-            setCssVar(st, sv, "--kseq-clip-x", "49.4%");
-            setCssVar(st, sv, "--kseq-clip-y", "8%");
+            const preShift = supportsViewTimeline ? 0 : -(this.kMaxShift || 0);
+            setCssVar(st, sv, "--kseq-clip", "inset(8% 49.4% 8% 49.4% round 4px)");
             setCssVar(st, sv, "--kseq-ty", `${preShift.toFixed(1)}px`);
-            setCssVar(st, sv, "--kseq-curtain-y", `${(preShift * 0.94).toFixed(1)}px`);
+            setCssVar(st, sv, "--kseq-curtain-y", `${preShift.toFixed(1)}px`);
             setCssVar(st, sv, "--kseq-scale", "0.94");
             setCssVar(st, sv, "--kseq-hud-op", "0");
             setCssVar(st, sv, "--kseq-inner-hud", "0");
@@ -1959,19 +2093,18 @@
             }
           } else if (this.isCinema) {
             const isMob = vw <= 900 || (vw / vh < 0.95);
-            const preShift = -(this.cinemaMaxShift || 0);
+            const preShift = supportsViewTimeline ? 0 : -(this.cinemaMaxShift || 0);
             const cs = this.el.style;
             const ev = this._elVars;
             setCssVar(cs, ev, "--cinema-line", "0");
             setCssVar(cs, ev, "--cinema-line-op", "0");
-            setCssVar(cs, ev, "--cinema-clip-x", isMob ? "8%" : "10%");
-            setCssVar(cs, ev, "--cinema-clip-y", "48.2%");
+            setCssVar(cs, ev, "--cinema-clip", `inset(48.2% ${isMob ? "8%" : "10%"} 48.2% ${isMob ? "8%" : "10%"} round 3px)`);
             setCssVar(cs, ev, "--cinema-ty", `${preShift.toFixed(1)}px`);
             setCssVar(cs, ev, "--cinema-scale", "1.035");
             setCssVar(cs, ev, "--cinema-beam-op", "0.35");
             setCssVar(cs, ev, "--cinema-beam-s", "0.35");
             setCssVar(cs, ev, "--cinema-prelude-op", "0");
-            setCssVar(cs, ev, "--cinema-prelude-y", `${(preShift * 0.86).toFixed(1)}px`);
+            setCssVar(cs, ev, "--cinema-prelude-y", `${preShift.toFixed(1)}px`);
             setCssVar(cs, ev, "--cinema-hud-op", "0");
             setCssVar(cs, ev, "--cinema-marks-op", "0");
             setCssVar(cs, ev, "--cinema-ambient", "0");
@@ -2037,8 +2170,7 @@
             this.updateTrace(1, 1.0 + exitRange, 1, 0.016);
           }
           if (this.isKinetic) {
-            setCssVar(st, sv, "--kseq-clip-x", "0%");
-            setCssVar(st, sv, "--kseq-clip-y", "0%");
+            setCssVar(st, sv, "--kseq-clip", "none");
             setCssVar(st, sv, "--kseq-scale", "1");
             setCssVar(st, sv, "--kseq-hud-op", "0.2");
             setCssVar(st, sv, "--kseq-inner-hud", "0");
@@ -2051,8 +2183,7 @@
             const ev = this._elVars;
             setCssVar(cs, ev, "--cinema-line", "1");
             setCssVar(cs, ev, "--cinema-line-op", "0");
-            setCssVar(cs, ev, "--cinema-clip-x", "0%");
-            setCssVar(cs, ev, "--cinema-clip-y", "0%");
+            setCssVar(cs, ev, "--cinema-clip", "none");
             setCssVar(cs, ev, "--cinema-scale", "0.982");
             setCssVar(cs, ev, "--cinema-beam-op", "0");
             setCssVar(cs, ev, "--cinema-prelude-op", "0");
@@ -2099,8 +2230,8 @@
 
       const wasActive = this.lastRenderedState === "active";
       this.lastRenderedState = "active";
-      const p = rawP;
       let prog = 0;
+      let autoSubpixelMoved = false;
 
       if (this.isHybrid) {
         const baseDuration = this.customDuration || (this.isHero ? 7.2 : (this.isKinetic ? 12.5 : (this.isCinema ? 13.5 : (this.isTrace ? 10.8 : 9.8))));
@@ -2117,14 +2248,14 @@
           && !bank.hasContiguousBlobs(curIdx, startNeed)
           && !this.autoPlayPaused
           && !this.autoPlaySuspended
-          && (this.isHero ? (rawP >= 0.012) : (viewportEntry >= 0.94 || rawP >= -0.06))
+          && (this.isHero ? (rawP >= 0.008) : (viewportEntry >= 0.94 || rawP >= -0.06))
           && y < (this.top + this.len + (cinemaPeek || 10))
           && !(this.isCinema && y >= nextTraceTop);
         const bufPct = isWaitingBuf ? bank.getBufferPercent(curIdx, startNeed) : 100;
         syncBufferBadge(this.bufferBadge, isWaitingBuf, bufPct);
 
         if (!(this.isCinema && y >= nextTraceTop)) {
-          runHybridScrollEngine({
+          const hybridY = runHybridScrollEngine({
             top: this.top,
             len: this.len,
             dt,
@@ -2137,6 +2268,12 @@
             hasFrames: this.isBufferReady,
             isHero: this.isHero,
           });
+          if (hybridY !== undefined) {
+            if (Math.abs(hybridY - y) > 0.0005) autoSubpixelMoved = true;
+            y = hybridY;
+            rawP = (y - this.top) / this.len;
+            viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+          }
         }
 
         if (this.isHero) {
@@ -2144,25 +2281,23 @@
           else if (rawP <= 1.0) prog = rawP * pinMaxProg;
           else prog = pinMaxProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinMaxProg);
         } else if (this.isCinema) {
-          const pPlayStart = -Math.min(0.5, (vh * 0.8) / this.len);
-          const preShare = 0.055;
+          const pPlayStart = -Math.min(0.32, (vh * 0.48) / this.len);
+          const pBlend = 0.09;
           const cinemaPlayEndP = 0.875;
-
-          if (rawP < pPlayStart) prog = 0;
-          else if (rawP < 0.0) prog = preShare * Math.pow(clamp((rawP - pPlayStart) / (-pPlayStart)), 1.35);
-          else if (rawP < cinemaPlayEndP) prog = preShare + (rawP / cinemaPlayEndP) * (1.0 - preShare);
-          else prog = 1.0;
+          prog = smoothEntryProg(rawP, pPlayStart, pBlend, cinemaPlayEndP);
         } else {
-          const pPlayStart = -Math.min(0.5, (vh * 0.8) / this.len);
-          const preShare = 0.055;
+          const pPlayStart = -Math.min(0.32, (vh * 0.48) / this.len);
+          const pBlend = 0.09;
           const pinEndProg = 0.95;
 
-          if (rawP < pPlayStart) prog = 0;
-          else if (rawP < 0.0) prog = preShare * Math.pow(clamp((rawP - pPlayStart) / (-pPlayStart)), 1.35);
-          else if (rawP <= 1.0) prog = preShare + rawP * (pinEndProg - preShare);
-          else prog = pinEndProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinEndProg);
+          if (rawP <= 1.0) {
+            prog = smoothEntryProg(rawP, pPlayStart, pBlend, 1.0) * pinEndProg;
+          } else {
+            prog = pinEndProg + Math.sin(clamp((rawP - 1.0) / exitRange) * Math.PI * 0.5) * (1.0 - pinEndProg);
+          }
         }
       }
+      const p = rawP;
 
       prog = clamp(prog, 0, 1);
       this.progress = prog;
@@ -2202,7 +2337,7 @@
       const morph = (!this.isFullscreen && !this.isKinetic && !this.isCinema) ? smooth(range(p, 0.0, 0.26)) : 0;
       const outro = (!this.isFullscreen && !this.isKinetic && !this.isCinema) ? smooth(range(prog, 0.86, 1.0)) : 0;
 
-      if (wasActive && !this.needsVisualSync && !isScrolling && !curChanged) {
+      if (wasActive && !this.needsVisualSync && !isScrolling && !autoSubpixelMoved && !curChanged) {
         return;
       }
       this.needsVisualSync = false;
@@ -2219,11 +2354,16 @@
 
       if (this.isKinetic) {
         const isMob = vw <= 900 || (vw / vh < 0.95);
-        // Paralaje temprano + apertura gradual que arranca un poco después y continúa tras centrarse
-        const kOpenProg = clamp((y - (this.top - vh * 0.62)) / Math.max(1, vh * 0.62 + this.len * 0.30), 0, 1);
-        const openT = reduce ? 1 : smooth(kOpenProg);
-        setCssVar(st, sv, "--kseq-clip-x", `${((1 - openT) * 49.4).toFixed(2)}%`);
-        setCssVar(st, sv, "--kseq-clip-y", `${((1 - openT) * 8).toFixed(2)}%`);
+        // Apertura unificada con suavizado C2 y sincronizada con el telón
+        const kOpenProg = clamp((y - (this.top - vh * 0.68)) / Math.max(1, vh * 0.68 + this.len * 0.16), 0, 1);
+        const openT = reduce ? 1 : smootherstep(kOpenProg);
+        if (openT >= 0.999) {
+          setCssVar(st, sv, "--kseq-clip", "none");
+        } else {
+          const cx = ((1 - openT) * 49.4).toFixed(2);
+          const cy = ((1 - openT) * 8).toFixed(2);
+          setCssVar(st, sv, "--kseq-clip", `inset(${cy}% ${cx}% ${cy}% ${cx}% round 4px)`);
+        }
 
         const wakeT = smooth(range(viewportEntry, 0.06, 0.72));
         const kOutro = smooth(range(prog, 0.88, 1.0));
@@ -2231,9 +2371,10 @@
         setCssVar(st, sv, "--frame-opacity", "1");
         this.setVisualFilter(0, 1 - wakeT);
 
-        const wingMove = smooth(range(kOpenProg, 0.06, 1.0));
-        const wingOp = 1 - smooth(range(kOpenProg, 0.50, 0.94));
-        const wingShiftX = wingMove * (isMob ? vw * 0.30 : vw * 0.26);
+        const wingMove = smootherstep(range(kOpenProg, 0.04, 0.96));
+        const wingOp = 1 - smooth(range(kOpenProg, 0.48, 0.90));
+        const wingTravel = Math.max((this.kw || 500) * 0.54, isMob ? vw * 0.34 : vw * 0.30);
+        const wingShiftX = wingMove * wingTravel;
         const wingVis = wingOp <= 0.005 ? "hidden" : "visible";
         const wingOpStr = wingOp.toFixed(3);
         if (this.kWingL) {
@@ -2257,13 +2398,23 @@
           }
         }
 
-        const entryEase = reduce ? 1 : smooth(range(viewportEntry, 0.04, 1.0));
-        const entryShiftY = reduce ? 0 : -(1 - entryEase) * (this.kMaxShift ?? (vh * (isMob ? 0.26 : 0.18)));
-        setCssVar(st, sv, "--kseq-ty", `${entryShiftY.toFixed(1)}px`);
-        setCssVar(st, sv, "--kseq-curtain-y", `${(entryShiftY * 0.94).toFixed(1)}px`);
+        const kMaxShift = this.kMaxShift ?? Math.round(vh * (isMob ? 0.30 : 0.20));
+        if (!supportsViewTimeline) {
+          let entryShiftY = 0;
+          if (!reduce && kMaxShift > 0.5) {
+            const settleSpan = 2 * kMaxShift;
+            const settleT = clamp((y - (this.top - settleSpan)) / settleSpan, 0, 1);
+            entryShiftY = -kMaxShift * (1 - settleT * settleT);
+          }
+          setCssVar(st, sv, "--kseq-ty", `${entryShiftY.toFixed(1)}px`);
+          setCssVar(st, sv, "--kseq-curtain-y", `${entryShiftY.toFixed(1)}px`);
+        } else {
+          setCssVar(st, sv, "--kseq-ty", "0px");
+          setCssVar(st, sv, "--kseq-curtain-y", "0px");
+        }
         setCssVar(st, sv, "--kseq-scale", (0.94 + openT * 0.06).toFixed(4));
 
-        const hudOp = smooth(range(kOpenProg, 0.62, 1.0)) * (1 - smooth(range(p, 0.88, 0.96)));
+        const hudOp = smooth(range(kOpenProg, 0.56, 0.98)) * (1 - smooth(range(p, 0.88, 0.96)));
         setCssVar(st, sv, "--kseq-hud-op", hudOp.toFixed(3));
         setCssVar(st, sv, "--kseq-hud-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
         setCssVar(st, sv, "--kseq-bot-y", `${((1 - hudOp) * 8).toFixed(1)}px`);
@@ -2296,21 +2447,33 @@
           this.lastCinemaPassed = passed;
           this.el.classList.toggle("is-cinema-passed", passed);
         }
-        // Apertura anamórfica que arranca un poco después y se prolonga suavemente tras centrarse la sala
-        const cinemaOpenProg = clamp((y - (this.top - vh * 0.62)) / Math.max(1, vh * 0.62 + this.len * 0.28), 0, 1);
-        const openT = reduce ? 1 : smooth(cinemaOpenProg);
+        // Apertura anamórfica C2 continua sincronizada con el aterrizaje del escenario
+        const cinemaOpenProg = clamp((y - (this.top - vh * 0.68)) / Math.max(1, vh * 0.68 + this.len * 0.16), 0, 1);
+        const openT = reduce ? 1 : smootherstep(cinemaOpenProg);
 
         const lineT = reduce ? 1 : smooth(range(viewportEntry, 0.08, 0.72));
         const lineFade = reduce ? 0 : smooth(range(cinemaOpenProg, 0.56, 0.94));
         setCssVar(cs, ev, "--cinema-line", lineT.toFixed(3));
         setCssVar(cs, ev, "--cinema-line-op", (lineT * (1 - lineFade)).toFixed(3));
 
-        const entryEase = reduce ? 1 : smooth(range(viewportEntry, 0.04, 1.0));
-        const entryTy = reduce ? 0 : -(1 - entryEase) * (this.cinemaMaxShift ?? (vh * (isMob ? 0.26 : 0.18)));
-        setCssVar(cs, ev, "--cinema-ty", `${entryTy.toFixed(1)}px`);
+        const cMaxShift = this.cinemaMaxShift ?? Math.round(vh * (isMob ? 0.30 : 0.20));
+        let entryTy = 0;
+        if (!supportsViewTimeline) {
+          if (!reduce && cMaxShift > 0.5) {
+            const settleSpan = 2 * cMaxShift;
+            const settleT = clamp((y - (this.top - settleSpan)) / settleSpan, 0, 1);
+            entryTy = -cMaxShift * (1 - settleT * settleT);
+          }
+          setCssVar(cs, ev, "--cinema-ty", `${entryTy.toFixed(1)}px`);
+        }
 
-        setCssVar(cs, ev, "--cinema-clip-x", `${((1 - openT) * (isMob ? 8 : 10)).toFixed(2)}%`);
-        setCssVar(cs, ev, "--cinema-clip-y", `${((1 - openT) * 48.2).toFixed(2)}%`);
+        if (openT >= 0.999) {
+          setCssVar(cs, ev, "--cinema-clip", "none");
+        } else {
+          const cx = ((1 - openT) * (isMob ? 8 : 10)).toFixed(2);
+          const cy = ((1 - openT) * 48.2).toFixed(2);
+          setCssVar(cs, ev, "--cinema-clip", `inset(${cy}% ${cx}% ${cy}% ${cx}% round 3px)`);
+        }
 
         const beamOp = reduce ? 0 : Math.sin(clamp(openT, 0, 1) * Math.PI) * 0.92 * (1 - openT * 0.75);
         setCssVar(cs, ev, "--cinema-beam-op", beamOp.toFixed(3));
@@ -2320,7 +2483,7 @@
         const preludeOut = reduce ? 1 : smooth(range(cinemaOpenProg, 0.42, 0.84));
         const preludeOp = preludeIn * (1 - preludeOut);
         setCssVar(cs, ev, "--cinema-prelude-op", preludeOp.toFixed(3));
-        setCssVar(cs, ev, "--cinema-prelude-y", `${(entryTy * 0.86 - preludeOut * 16).toFixed(1)}px`);
+        setCssVar(cs, ev, "--cinema-prelude-y", `${(entryTy - preludeOut * 16).toFixed(1)}px`);
         if (this.cinemaPrelude) {
           const pVis = preludeOp <= 0.005 ? "hidden" : "visible";
           if (this.cinemaPrelude._vis !== pVis) {
@@ -2341,7 +2504,7 @@
         const endScale = reduce ? 1 : (1 - outroCardOut * 0.018);
         setCssVar(cs, ev, "--cinema-scale", (openScale * endScale).toFixed(4));
 
-        const hudIn = reduce ? 1 : smooth(range(cinemaOpenProg, 0.66, 1.0));
+        const hudIn = reduce ? 1 : smooth(range(cinemaOpenProg, 0.60, 0.98));
         const hudOp = hudIn * (1 - cinemaDarken);
         setCssVar(cs, ev, "--cinema-hud-op", hudOp.toFixed(3));
         setCssVar(cs, ev, "--cinema-hud-top-y", `${((1 - hudOp) * -8).toFixed(1)}px`);
@@ -2734,11 +2897,10 @@
       this.dockStartP = this.shrinkEndP;
       this.dockEndP = 1 - 0.008 * (1 - this.traceSplitP);
 
-      // Cuadro centrado siempre en formato horizontal 16:9
+      // Cuadro centrado siempre en formato horizontal 16:9 (misma proporción exacta que la 1ª tarjeta)
       this.centerW = isPortraitLayout
         ? clamp(Math.round(vw * 0.78), 268, 460)
         : clamp(Math.round(Math.min(vw * 0.42, vh * 0.42 * (16 / 9))), 340, 620);
-      this.centerH = Math.round(this.centerW * (9 / 16));
 
       if (this.repEl && this.leadScreen) {
         const repRect = this.repEl.getBoundingClientRect();
@@ -2750,6 +2912,8 @@
           this.leadRelCenterY = (leadRect.top - repRect.top) + leadRect.height * 0.5;
         }
       }
+      const leadRatio = (this.leadW > 20 && this.leadH > 20) ? (this.leadH / this.leadW) : (9 / 16);
+      this.centerH = this.centerW * leadRatio;
 
       this.needsVisualSync = true;
 
@@ -2981,7 +3145,8 @@
       this.traceUnifiedCur += (unifiedTarget - this.traceUnifiedCur) * k;
       if (Math.abs(unifiedTarget - this.traceUnifiedCur) < 0.001) this.traceUnifiedCur = unifiedTarget;
       const utp = clamp(this.traceUnifiedCur, 0, 1);
-      const preTp = clamp(utp / preRatio, 0, 1);
+      const preStartRatio = clamp((overlapEndP * 0.18) / Math.max(0.001, this.planEndP || 0.42), 0, preRatio * 0.55);
+      const preTp = clamp((utp - preStartRatio) / Math.max(0.001, preRatio - preStartRatio), 0, 1);
       const tp = clamp((utp - preRatio) / Math.max(0.001, 1 - preRatio), 0, 1);
       this.traceCur = tp;
 
@@ -2992,11 +3157,13 @@
 
       const exitHud = reduce ? (bridgeT > 0.1 ? 1 : 0) : smooth(range(bridgeT, 0.00, 0.34));
       const exitSvgFade = reduce ? (bridgeT > 0.2 ? 1 : 0) : smooth(range(bridgeT, 0.08, 0.44));
-      const preWake = rawEntryP >= 0 ? 1 : 0;
+      const preWake = reduce
+        ? (rawEntryP >= 0 ? 1 : 0)
+        : smooth(range(rawEntryP, overlapEndP * 0.16, overlapEndP * 0.30));
       const droneScale = 1;
       const hudWake = reduce
         ? (rawEntryP >= 0 ? 1 : 0)
-        : smooth(range(rawEntryP, overlapEndP + 0.014, overlapEndP + 0.068));
+        : smooth(range(rawEntryP, overlapEndP + 0.035, overlapEndP + 0.085));
       const hudOp = hudWake * (1 - exitHud);
       const hudEnterY = !reduce ? (1 - hudWake) * 10 : 0;
       const svgOp = (1 - exitSvgFade) * preWake;
@@ -3118,23 +3285,23 @@
         }
       }
 
-      const retract3 = 1 - smooth(range(bridgeT, 0.00, 0.24));
-      const retract2 = 1 - smooth(range(bridgeT, 0.04, 0.30));
-      const retract1 = 1 - smooth(range(bridgeT, 0.08, 0.36));
-      const retractGrid = 1 - smooth(range(bridgeT, 0.02, 0.34));
-      const retractPlan = 1 - smooth(range(bridgeT, 0.10, 0.42));
+      const retract3 = 1 - smooth(range(bridgeT, 0.04, 0.30));
+      const retract2 = 1 - smooth(range(bridgeT, 0.08, 0.36));
+      const retract1 = 1 - smooth(range(bridgeT, 0.12, 0.40));
+      const retractGrid = 1 - smooth(range(bridgeT, 0.10, 0.44));
+      const retractPlan = 1 - smooth(range(bridgeT, 0.12, 0.46));
 
-      const darkenBase = reduce ? 1 : smooth(range(tp, 0.08, 0.24));
+      const darkenBase = 1;
       const darkenBridge = smooth(range(bridgeT, 0.02, 0.42)) * 0.34;
       setCssVar(this.traceMediaWrap.style, mwc, "--trace-darken-op", clamp(darkenBase + darkenBridge, 0, 1).toFixed(3));
-      setCssVar(this.traceMediaWrap.style, mwc, "--trace-base-veil-op", (0.38 + 0.62 * darkenBase).toFixed(3));
+      setCssVar(this.traceMediaWrap.style, mwc, "--trace-base-veil-op", "1.000");
 
-      const extOp = (reduce ? 1 : smooth(range(rawEntryP, overlapEndP + 0.008, preEndP + 0.045))) * retractGrid;
-      const gridOp = (reduce ? 1 : smooth(range(rawEntryP, overlapEndP + 0.016, preEndP + 0.058))) * retractGrid;
+      const extOp = (reduce ? 1 : smooth(range(tp, 0.12, 0.26))) * retractGrid;
+      const gridOp = (reduce ? 1 : smooth(range(tp, 0.13, 0.28))) * retractGrid;
       const flightOp = preWake * (1 - exitSvgFade);
       const preGhostOp = (reduce ? 0 : smooth(range(rawEntryP, overlapEndP * 0.55, overlapEndP * 0.98)) * (1 - smooth(range(tp, 0.02, 0.24)))) * 0.30 * (1 - exitSvgFade);
       const originOp = (reduce ? 1 : smooth(range(preTp, 0.72, 0.98))) * retractGrid;
-      const wpOp = (reduce ? 1 : smooth(range(tp, 0.02, 0.20))) * retractGrid;
+      const wpOp = (reduce ? 1 : smooth(range(tp, 0.14, 0.28))) * retractGrid;
 
       setCssVar(ov, ovc, "--trace-ext-op", extOp.toFixed(3));
       setCssVar(ov, ovc, "--trace-flight-op", flightOp.toFixed(3));
@@ -3142,13 +3309,13 @@
       setCssVar(ov, ovc, "--trace-origin-op", originOp.toFixed(3));
       setCssVar(ov, ovc, "--trace-wp-op", wpOp.toFixed(3));
       setCssVar(ov, ovc, "--trace-grid-op", gridOp.toFixed(3));
-      setCssVar(ov, ovc, "--trace-plan-op", ((reduce ? 1 : smooth(range(tp, 0.01, 0.14))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-1", ((reduce ? 1 : smooth(range(tp, 0.01, 0.22))) * retract1).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-2", ((reduce ? 1 : smooth(range(tp, 0.10, 0.30))) * retract2).toFixed(3));
-      setCssVar(ov, ovc, "--trace-draw-3", ((reduce ? 1 : smooth(range(tp, 0.18, 0.38))) * retract3).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec1-op", ((reduce ? 1 : smooth(range(tp, 0.01, 0.14))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec2-op", ((reduce ? 1 : smooth(range(tp, 0.08, 0.23))) * retractPlan).toFixed(3));
-      setCssVar(ov, ovc, "--trace-sec3-op", ((reduce ? 1 : smooth(range(tp, 0.16, 0.32))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-plan-op", ((reduce ? 1 : smooth(range(tp, 0.14, 0.28))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-1", ((reduce ? 1 : smooth(range(tp, 0.15, 0.32))) * retract1).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-2", ((reduce ? 1 : smooth(range(tp, 0.22, 0.40))) * retract2).toFixed(3));
+      setCssVar(ov, ovc, "--trace-draw-3", ((reduce ? 1 : smooth(range(tp, 0.28, 0.46))) * retract3).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec1-op", ((reduce ? 1 : smooth(range(tp, 0.14, 0.27))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec2-op", ((reduce ? 1 : smooth(range(tp, 0.21, 0.35))) * retractPlan).toFixed(3));
+      setCssVar(ov, ovc, "--trace-sec3-op", ((reduce ? 1 : smooth(range(tp, 0.27, 0.42))) * retractPlan).toFixed(3));
       setCssVar(ov, ovc, "--trace-ghost-op", ((reduce ? 0.42 : 0.42 * smooth(range(tp, 0.03, 0.22))) * (1 - smooth(range(tp, 0.92, 0.99))) * retractGrid).toFixed(3));
 
       const wakeWave = range(tp, 0.16, 0.32);
@@ -3284,9 +3451,9 @@
     }
 
     update(dt, isScrolling = true) {
-      const y = scrollY();
-      const rawP = (y - this.top) / this.len;
-      const viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+      let y = scrollY();
+      let rawP = (y - this.top) / this.len;
+      let viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
 
       if (viewportEntry > 0 && !this.traceSet) this.loadTrace();
 
@@ -3431,15 +3598,19 @@
         const waitPct = isWaitingBuf ? activeBank.getBufferPercent(activeIdx, activeNeed) : 100;
         syncBufferBadge(this.bufferBadge, isWaitingBuf, waitPct);
 
-        const overlapEase = smooth(range(rawP, overlapEndP * 0.85, overlapEndP + 0.04));
-        const bridgeBlend = smooth(range(rawP, this.bridgeStartP - 0.04, this.bridgeStartP + 0.04));
-        const endDecel = smooth(range(rawP, 0.78, 0.985));
-        const smoothSpeedScale = (0.58 + overlapEase * 0.40) + bridgeBlend * 0.24 - endDecel * 0.36;
+        const videoDuration = (this.count / Math.max(1, this.fps)) / 1.2;
+        const videoSpanP = Math.max(0.05, this.traceMediaEndP - overlapEndP);
+        const videoSpeedScale = (videoSpanP * this.baseDuration) / videoDuration;
+        const enterVideo = smooth(range(rawP, overlapEndP, overlapEndP + 0.035));
+        const exitVideo = smooth(range(rawP, this.bridgeStartP - 0.03, this.portalStartP + 0.02));
+        const endDecel = smooth(range(rawP, 0.80, 0.99));
+        const portalSpeedScale = 1.10 - endDecel * 0.26;
+        const smoothSpeedScale = (0.54 + (videoSpeedScale - 0.54) * enterVideo) * (1 - exitVideo) + portalSpeedScale * exitVideo;
 
         const lenisLead = (lenis && !isVerticalScroller()) ? ((lenis.targetScroll || 0) - y) : 0;
         const userPushingPastEnd = rawP >= 0.965 && lenisLead > 4;
         if (!userPushingPastEnd) {
-          runHybridScrollEngine({
+          const hybridY = runHybridScrollEngine({
             top: this.top,
             len: this.len,
             dt,
@@ -3448,11 +3619,16 @@
             baseDuration: this.baseDuration,
             speedScale: smoothSpeedScale,
             peekPx: 0,
-            minSpeed: 0.42,
+            minSpeed: 0.45,
             state: this,
             hasFrames: readyToAdvance,
             isHero: false,
           });
+          if (hybridY !== undefined) {
+            y = hybridY;
+            rawP = (y - this.top) / this.len;
+            viewportEntry = clamp((y + vh - this.top) / vh, 0, 1);
+          }
         }
       } else {
         syncBufferBadge(this.bufferBadge, false, 100);
@@ -3462,16 +3638,9 @@
       this.prog = targetProg;
 
       const dtSec = Math.min(dt || 0.016, 0.05);
-      const isDirectSeek = this.isScrubbing || performance.now() <= (this.seekingUntil || 0);
-      const useDirectProg = reduce || isDirectSeek || (!!lenis && !isVerticalScroller()) || isUserTouching;
       const prevProgCur = this.progCur;
-      if (useDirectProg) {
-        this.progCur = targetProg;
-      } else {
-        const damp = 1 - Math.exp(-32 * dtSec);
-        this.progCur += (targetProg - this.progCur) * damp;
-        if (Math.abs(targetProg - this.progCur) < 0.00025) this.progCur = targetProg;
-      }
+      // Seguimiento exacto 1:1 con el scroll (ya suavizado sub-píxel) para acople perfecto sin desfase respecto a Card 1
+      this.progCur = targetProg;
       const progMoved = Math.abs(this.progCur - prevProgCur) > 0.0001 || wasPre || this.needsVisualSync;
 
       const overlapEndP = this.overlapEndP ?? 0.078;
@@ -3496,8 +3665,8 @@
         this.traceFrameCur += (targetTraceF - this.traceFrameCur) * tk;
         if (Math.abs(targetTraceF - this.traceFrameCur) < 0.002) this.traceFrameCur = targetTraceF;
 
-        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP, videoWakeStartP + 0.056));
-        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP + 0.004, videoWakeStartP + 0.076));
+        const traceEntryWake = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP, videoWakeStartP + 0.022));
+        const veilOpen = reduce ? (rawP >= 0 ? 1 : 0) : smooth(range(rawP, videoWakeStartP, videoWakeStartP + 0.028));
         const traceMediaFade = traceEntryWake * (1 - smooth(range(bridgeWakeT, 0.16, 0.48)));
         const traceMediaScale = (reduce ? 1.02 : (1.075 - traceEntryWake * 0.055)) + range(bridgeWakeT, 0.0, 0.48) * 0.045;
 
@@ -3556,25 +3725,28 @@
 
       const shrinkRaw = range(this.progCur, this.shrinkStartP, this.shrinkEndP);
       const dockRaw = range(this.progCur, this.dockStartP, this.dockEndP);
-      const shrinkT = smooth(shrinkRaw);
-      const dockGeoT = smooth(dockRaw);
+      const shrinkT = smootherstep(shrinkRaw);
+      const dockGeoT = smootherstep(dockRaw);
 
-      // Cero parpadeo ida/vuelta: al salir hacia arriba el portal enciende sólido ANTES de soltar Card 1
-      const escapingUp = dockRaw < 0.995;
+      // Relevo progresivo y sin parpadeos: Card 1 enciende sólido antes de disolver el portal
+      const escapingUp = dockRaw < 0.975;
       if (escapingUp) {
         this.portalFade = 1;
         this.leadSolidFrames = 0;
-      } else if (this.leadSolidFrames >= 2) {
-        this.portalFade = Math.max(0, this.portalFade - dtSec / 0.16);
+      } else {
+        this.leadSolidFrames++;
+        const scrollCrossfade = 1 - smooth(range(dockRaw, 0.975, 0.999));
+        if (this.leadSolidFrames >= 1) {
+          this.portalFade = Math.min(scrollCrossfade, Math.max(0, this.portalFade - dtSec / 0.12));
+        }
       }
 
       const portalReady = this.hasPortalCanvas && this.portalFade >= 0.99;
-      const isWake = shrinkT >= 0.30;
-      const isColor = dockRaw >= (this.isPortraitLayout ? 0.44 : 0.36);
-      const isLeadSolid = dockRaw >= 0.990 || (escapingUp && !portalReady);
-      if (dockRaw >= 0.992 && isLeadSolid) this.leadSolidFrames++;
-      const isDocked = dockRaw >= 0.994;
-      const isSettled = dockRaw >= 0.996 && this.portalFade <= 0.05;
+      const isWake = shrinkT >= 0.28;
+      const isColor = dockRaw >= (this.isPortraitLayout ? 0.42 : 0.34);
+      const isLeadSolid = dockRaw >= 0.960 || (escapingUp && !portalReady);
+      const isDocked = dockRaw >= 0.985 || this.portalFade <= 0.65;
+      const isSettled = dockRaw >= 0.994 && this.portalFade <= 0.05;
       this.setRepertorioReveal(isWake, isColor, isLeadSolid, isDocked, isSettled);
 
       const portalActive = bridgeWakeT > 0.10 && !(dockRaw >= 0.996 && this.portalFade <= 0.005);
@@ -3601,10 +3773,10 @@
       }
 
       // Toma 1 (casona-lago): sigue 1:1 al scroll y asienta en el frame 118 justo antes del relevo en Card 1
-      const portalEndP = this.dockStartP + 0.85 * (this.dockEndP - this.dockStartP);
+      const portalEndP = this.dockStartP + 0.88 * (this.dockEndP - this.dockStartP);
       const portalPlayT = clamp((this.progCur - this.portalStartP) / Math.max(0.001, portalEndP - this.portalStartP), 0, 1);
       const targetPortalF = portalPlayT * (this.portalCount - 1);
-      const pk = 1 - Math.exp(-38 * dtSec);
+      const pk = 1 - Math.exp(-36 * dtSec);
       this.portalFrameCur += (targetPortalF - this.portalFrameCur) * pk;
       if (Math.abs(targetPortalF - this.portalFrameCur) < 0.002 || (portalPlayT >= 0.995 && Math.abs(targetPortalF - this.portalFrameCur) < 0.35)) {
         this.portalFrameCur = targetPortalF;
@@ -3623,20 +3795,18 @@
       const tpOp = wakeOp * this.portalFade;
       const tpVeil = (1 - smooth(range(bridgeWakeT, 0.16, 0.54))) * 0.86;
 
-      // 1) Fullscreen exacto al nacer (0.5*vh) -> Cuadro horizontal 16:9 centrado
+      // 1) Fullscreen exacto al nacer -> Cuadro horizontal 16:9 centrado con desaceleración C2
       const stage1W = vw + (this.centerW - vw) * shrinkT;
       const stage1H = vh + (this.centerH - vh) * shrinkT;
       const stage1Cx = vw * 0.5;
-      const stage1Cy = vh * (0.5 - shrinkT * (this.isPortraitLayout ? 0.06 : 0.03));
+      const stage1Cy = vh * (0.5 - shrinkT * (this.isPortraitLayout ? 0.05 : 0.025));
 
-      // 2) Cuadro horizontal centrado -> 1ª Tarjeta (100% compositor GPU scale + bloqueo al scroll real sin techo en 0)
+      // 2) Cuadro horizontal centrado -> 1ª Tarjeta (trayectoria continua directa al centro real de Card 1)
       const finalCx = this.leadCenterX || (vw * 0.5);
       const finalCy = this.leadRelCenterY || (vh * 0.45);
       const actualScrollRemain = this.repTop - y;
-      const endCx = finalCx;
-
-      const followT = smooth(range(dockRaw, 0.18, 0.90));
-      const arcLift = -Math.sin(dockGeoT * Math.PI) * Math.round(vh * 0.052);
+      const cardScreenCy = finalCy + actualScrollRemain;
+      const dockCyT = smootherstep(Math.pow(dockRaw, 1.35));
       const dockImgEase = smooth(range(dockRaw, 0, 0.90));
 
       const curW = dockRaw > 0
@@ -3645,9 +3815,9 @@
       const curH = dockRaw > 0
         ? (this.centerH + (this.leadH - this.centerH) * dockGeoT)
         : stage1H;
-      const curCx = stage1Cx + (endCx - stage1Cx) * dockGeoT;
+      const curCx = stage1Cx + (finalCx - stage1Cx) * dockGeoT;
       const curCy = dockRaw > 0
-        ? (stage1Cy + (finalCy - stage1Cy) * dockGeoT + actualScrollRemain * followT + arcLift)
+        ? (stage1Cy + (cardScreenCy - stage1Cy) * dockCyT)
         : stage1Cy;
 
       let frameW, frameH, scaleX, scaleY;
@@ -3668,11 +3838,11 @@
       const rScaleComp = Math.max(0.5, scaleX);
       const rTop = (shrinkT * 10) / rScaleComp;
       const rBot = (shrinkT * 10 * (1 - dockGeoT)) / rScaleComp;
-      const borderOp = shrinkT * 0.22 * (1 - smooth(range(dockRaw, 0.28, 0.86)));
-      const shadowOp = shrinkT * 0.68 * (1 - smooth(range(dockRaw, 0.35, 0.90)));
-      const marksOp = smooth(range(shrinkT, 0.32, 0.90)) * (1 - smooth(range(dockRaw, 0.10, 0.58)));
-      const auraOp = smooth(range(shrinkT, 0.22, 0.86)) * (1 - smooth(range(dockRaw, 0.12, 0.76)));
-      const cardShadeOp = smooth(range(dockRaw, 0.32, 0.88));
+      const borderOp = shrinkT * 0.22 * (1 - smooth(range(dockRaw, 0.22, 0.82)));
+      const shadowOp = shrinkT * 0.68 * (1 - smooth(range(dockRaw, 0.28, 0.86)));
+      const marksOp = smooth(range(shrinkT, 0.26, 0.78)) * (1 - smooth(range(shrinkRaw, 0.82, 1.0))) * (dockRaw > 0 ? 0 : 1);
+      const auraOp = smooth(range(shrinkT, 0.22, 0.82)) * (1 - smooth(range(dockRaw, 0.10, 0.72)));
+      const cardShadeOp = smooth(range(dockRaw, 0.30, 0.88));
       const imgScale = 1.035 - shrinkT * 0.025 - dockImgEase * 0.010 + (1 - wakeOp) * 0.02;
 
       const ps = this.portalEl.style;
